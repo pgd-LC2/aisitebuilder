@@ -83,7 +83,8 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
         </svg>
 
         <div className="relative z-10 max-w-3xl w-full px-8 space-y-8">
-          <div className="text-center space-y-5">
+          <div className="text-center space-y-3">
+            <p className="text-sm font-semibold text-gray-500 tracking-[0.3em] uppercase">thanku</p>
             <h1
               className="text-5xl font-extrabold text-gray-900 tracking-tight"
               style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.12)' }}
@@ -98,13 +99,13 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-1.5">
             <div className="flex items-center gap-1">
               <button
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
                 title="添加"
               >
                 <Plus className="w-5 h-5 text-gray-600" />
               </button>
 
-              <div className="flex-1 relative py-2 pl-1 pr-3 overflow-hidden">
+              <div className="flex-1 relative h-10 pl-1 pr-3 overflow-hidden">
                 <input
                   type="text"
                   value={input}
@@ -112,18 +113,16 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
                   onKeyDown={handleKeyPress}
                   placeholder=""
                   disabled={isCreating}
-                  className="w-full outline-none text-gray-800 bg-transparent relative z-10 disabled:opacity-50"
+                  className="w-full h-full outline-none text-gray-800 bg-transparent relative z-10 disabled:opacity-50"
                 />
                 {!input && (
-                  <div className="absolute left-0 top-2 pointer-events-none overflow-hidden h-6">
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden">
                     <div
-                      className={`transition-transform duration-300 ease-in-out ${
+                      className={`h-10 flex items-center text-sm text-gray-400 transition-transform duration-300 ease-in-out ${
                         isAnimating ? '-translate-y-full' : 'translate-y-0'
                       }`}
                     >
-                      <div className="text-gray-400 h-6 flex items-center">
-                        让我们构建一个{placeholders[currentPlaceholder]}
-                      </div>
+                      让我们构建一个{placeholders[currentPlaceholder]}
                     </div>
                   </div>
                 )}
@@ -132,7 +131,7 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
               <button
                 onClick={handleSubmit}
                 disabled={!input.trim() || isCreating}
-                className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="h-10 px-5 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-full font-medium transition-colors flex items-center gap-2"
               >
                 {isCreating ? '创建中...' : '立即构建'}
                 {!isCreating && (

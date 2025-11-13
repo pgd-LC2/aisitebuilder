@@ -55,7 +55,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
             <p className="text-gray-600 mb-6">你的账户已创建，现在可以登录了</p>
             <button
               onClick={onSwitchToLogin}
-              className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
+              className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-full transition-colors"
             >
               前往登录
             </button>
@@ -97,7 +97,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="your@email.com"
                 />
               </div>
@@ -115,7 +115,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="至少 6 个字符"
                 />
               </div>
@@ -133,7 +133,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="再次输入密码"
                 />
               </div>
@@ -142,7 +142,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
+              className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-full transition-colors"
             >
               {loading ? '注册中...' : '注册'}
             </button>
