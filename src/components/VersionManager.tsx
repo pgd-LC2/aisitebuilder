@@ -78,34 +78,66 @@ export default function VersionManager({
       children: []
     };
 
+    const folderMap = new Map<string, FileNode>();
+    folderMap.set('', root);
+
+    const ensureFolder = (parent: FileNode, folderName: string, fullPath: string) => {
+      let folder = folderMap.get(fullPath);
+      if (!folder) {
+        folder = {
+          name: folderName,
+          path: fullPath,
+          type: 'folder',
+          children: []
+        };
+        parent.children?.push(folder);
+        folderMap.set(fullPath, folder);
+      }
+      return folder;
+    };
+
     files.forEach(file => {
-      const parts = file.file_name.split('/');
-      let current = root;
+      const parts = file.file_name.split('/').filter(Boolean);
+      if (parts.length === 0) return;
+
+      let currentPath = '';
+      let currentNode = root;
 
       parts.forEach((part, index) => {
-        if (index === parts.length - 1) {
-          current.children?.push({
-            name: part,
-            path: file.file_name,
-            type: 'file',
-            file
-          });
-        } else {
-          let folder = current.children?.find(c => c.name === part && c.type === 'folder');
-          if (!folder) {
-            folder = {
+        const isFile = index === parts.length - 1;
+
+        if (isFile) {
+          const alreadyExists = currentNode.children?.some(
+            child => child.type === 'file' && child.path === file.file_name
+          );
+          if (!alreadyExists) {
+            currentNode.children?.push({
               name: part,
-              path: parts.slice(0, index + 1).join('/'),
-              type: 'folder',
-              children: []
-            };
-            current.children?.push(folder);
+              path: file.file_name,
+              type: 'file',
+              file
+            });
           }
-          current = folder;
+          return;
         }
+
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        currentNode = ensureFolder(currentNode, part, currentPath);
       });
     });
 
+    const sortTree = (node: FileNode) => {
+      if (!node.children) return;
+      node.children.forEach(sortTree);
+      node.children.sort((a, b) => {
+        if (a.type === b.type) {
+          return a.name.localeCompare(b.name, 'zh-CN');
+        }
+        return a.type === 'folder' ? -1 : 1;
+      });
+    };
+
+    sortTree(root);
     return root;
   };
 

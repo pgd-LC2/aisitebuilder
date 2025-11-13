@@ -84,8 +84,11 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
 
         <div className="relative z-10 max-w-3xl w-full px-8 space-y-8">
           <div className="text-center space-y-5">
-            <h1 className="text-5xl font-extrabold text-gray-900 tracking-tight" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.12)' }}>
-              What will you <span className="text-blue-600 italic">build</span> today?
+            <h1
+              className="text-5xl font-extrabold text-gray-900 tracking-tight"
+              style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.12)' }}
+            >
+              今天想 <span className="text-blue-600 italic">打造</span> 什么？
             </h1>
             <p className="text-gray-600 text-xl">
               通过与 AI 对话创建精美的应用和网站
