@@ -10,6 +10,7 @@ interface VersionManagerProps {
   currentVersionId?: string;
   onClose: () => void;
   onVersionRestore?: (version: ProjectVersion) => void;
+  onVersionChange?: () => void;
 }
 
 interface FileNode {
@@ -24,7 +25,8 @@ export default function VersionManager({
   projectId,
   currentVersionId,
   onClose,
-  onVersionRestore
+  onVersionRestore,
+  onVersionChange
 }: VersionManagerProps) {
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,13 +216,14 @@ export default function VersionManager({
       selectedVersion.id
     );
 
-    if (!error && data) {
-      alert(`成功创建版本 v${newVersionNumber}`);
-      await loadVersions();
-      setSelectedVersion(data);
-    } else {
-      alert('创建版本失败，请重试');
-    }
+      if (!error && data) {
+        alert(`成功创建版本 v${newVersionNumber}`);
+        await loadVersions();
+        setSelectedVersion(data);
+        onVersionChange?.();
+      } else {
+        alert('创建版本失败，请重试');
+      }
   };
 
   const handleRestore = async (version: ProjectVersion) => {
@@ -239,6 +242,7 @@ export default function VersionManager({
         alert(`成功回退到版本 v${version.version_number}，新版本号为 v${newVersionNumber}`);
         await loadVersions();
         onVersionRestore?.(data);
+        onVersionChange?.();
       } else {
         alert('回退失败，请重试');
       }
@@ -259,6 +263,7 @@ export default function VersionManager({
         if (selectedVersion?.id === version.id) {
           setSelectedVersion(versions[0]);
         }
+        onVersionChange?.();
       } else {
         alert('删除失败，请重试');
       }
