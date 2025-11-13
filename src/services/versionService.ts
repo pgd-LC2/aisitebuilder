@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ProjectVersion } from '../types/project';
+import { fileService } from './fileService';
 
 export const versionService = {
   async createVersion(
