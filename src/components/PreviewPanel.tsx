@@ -6,7 +6,11 @@ import FileManagerPanel from './FileManagerPanel';
 type ViewportMode = 'desktop' | 'tablet' | 'mobile';
 type PanelMode = 'preview' | 'files';
 
-export default function PreviewPanel() {
+interface PreviewPanelProps {
+  currentVersionId?: string;
+}
+
+export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   const [viewportMode, setViewportMode] = useState<ViewportMode>('desktop');
   const [panelMode, setPanelMode] = useState<PanelMode>('preview');
   const [previewContent] = useState('<h1>网站预览区</h1><p>AI 生成的网站将显示在这里</p>');
@@ -101,7 +105,7 @@ export default function PreviewPanel() {
       ) : (
         <div className="flex-1 overflow-hidden">
           {currentProject && (
-            <FileManagerPanel projectId={currentProject.id} />
+            <FileManagerPanel projectId={currentProject.id} versionId={currentVersionId} />
           )}
         </div>
       )}

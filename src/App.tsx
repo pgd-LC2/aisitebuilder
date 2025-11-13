@@ -1,5 +1,5 @@
 import { Home, LogOut, FolderOpen, GitBranch } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useProject } from './contexts/ProjectContext';
 import ChatPanel from './components/ChatPanel';
@@ -13,6 +13,8 @@ import InitializingPage from './components/InitializingPage';
 import { generateTitle } from './utils/titleGenerator';
 import { buildLogService } from './services/buildLogService';
 import { templateService } from './services/templateService';
+import { versionService } from './services/versionService';
+import { ProjectVersion } from './types/project';
 
 type ViewType = 'home' | 'projects' | 'building' | 'initializing';
 
@@ -21,8 +23,32 @@ function App() {
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [showVersionManager, setShowVersionManager] = useState(false);
   const [initializingProjectTitle, setInitializingProjectTitle] = useState('');
+  const [currentVersion, setCurrentVersion] = useState<ProjectVersion | null>(null);
   const { user, loading, signOut } = useAuth();
   const { createProject, currentProject, setCurrentProject, updateProjectStatus } = useProject();
+
+  const refreshCurrentVersion = async () => {
+    if (!currentProject) {
+      setCurrentVersion(null);
+      return;
+    }
+
+    const { data } = await versionService.getLatestVersion(currentProject.id);
+    if (data) {
+      setCurrentVersion(data);
+    } else {
+      setCurrentVersion(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentProject) {
+      setCurrentVersion(null);
+      return;
+    }
+
+    refreshCurrentVersion();
+  }, [currentProject]);
 
   const handleStartBuilding = async (prompt: string) => {
     try {
@@ -229,18 +255,20 @@ function App() {
         </div>
 
         <div className="flex-1 bg-gray-100">
-          <PreviewPanel />
+          <PreviewPanel currentVersionId={currentVersion?.id} />
         </div>
       </div>
 
       {showVersionManager && currentProject && (
         <VersionManager
           projectId={currentProject.id}
+          currentVersionId={currentVersion?.id}
           onClose={() => setShowVersionManager(false)}
           onVersionRestore={(version) => {
             setShowVersionManager(false);
             alert(`已回退到版本 v${version.version_number}`);
           }}
+          onVersionChange={refreshCurrentVersion}
         />
       )}
     </div>
