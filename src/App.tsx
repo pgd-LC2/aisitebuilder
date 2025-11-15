@@ -1,7 +1,9 @@
 import { Home, LogOut, FolderOpen, GitBranch } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { AnimatePresence, motion, type Transition } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useProject } from './contexts/ProjectContext';
+import { useSettings } from './contexts/SettingsContext';
 import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
 import HomePage from './components/HomePage';
@@ -10,6 +12,8 @@ import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
 import VersionManager from './components/VersionManager';
 import InitializingPage from './components/InitializingPage';
+import UserProfilePanel from './components/UserProfilePanel';
+import ParticleField from './components/ParticleField';
 import { generateTitle } from './utils/titleGenerator';
 import { buildLogService } from './services/buildLogService';
 import { templateService } from './services/templateService';
@@ -22,10 +26,16 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewType>('home');
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [showVersionManager, setShowVersionManager] = useState(false);
+  const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [initializingProjectTitle, setInitializingProjectTitle] = useState('');
   const [currentVersion, setCurrentVersion] = useState<ProjectVersion | null>(null);
   const { user, loading, signOut } = useAuth();
   const { createProject, currentProject, setCurrentProject, updateProjectStatus } = useProject();
+  const { preloadNodeModules, setPreloadNodeModules } = useSettings();
+  const buttonSpring = useMemo<Transition>(
+    () => ({ type: 'spring', stiffness: 450, damping: 30 }),
+    []
+  );
 
   const refreshCurrentVersion = async () => {
     if (!currentProject) {
@@ -120,98 +130,138 @@ function App() {
     return <InitializingPage projectTitle={initializingProjectTitle} />;
   }
 
-  if (currentView !== 'building') {
-    return (
-      <div className="h-screen flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 px-6 py-1.5 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="text-xl font-bold text-gray-900">AI BUILD</div>
-            <nav className="flex items-center gap-1">
-              <button
-                onClick={() => setCurrentView('home')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                  currentView === 'home'
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                主页
-              </button>
-              <button
-                onClick={() => setCurrentView('projects')}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                  currentView === 'projects'
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <FolderOpen className="w-4 h-4" />
-                我的项目
-              </button>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <span className="text-sm text-gray-600">{user.email}</span>
-            <button
-              onClick={signOut}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+  const homeView = (
+    <motion.div
+      key="home-view"
+      className="h-screen flex flex-col overflow-hidden bg-white"
+      initial={{ opacity: 0, scale: 0.94, y: 40 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9, y: -40 }}
+      transition={{ type: 'spring', stiffness: 160, damping: 26 }}
+    >
+      <header className="bg-white border-b border-gray-200 px-6 py-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <div className="text-xl font-bold text-gray-900">AI BUILD</div>
+          <nav className="flex items-center gap-1">
+            <motion.button
+              onClick={() => setCurrentView('home')}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={buttonSpring}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                currentView === 'home'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
             >
-              <LogOut className="w-4 h-4" />
-              退出登录
-            </button>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-hidden">
-          {currentView === 'home' ? (
-            <HomePage
-              onStartBuilding={handleStartBuilding}
-              onViewAllProjects={() => setCurrentView('projects')}
-              onProjectClick={handleProjectClick}
-            />
-          ) : (
-            <ProjectsPage
-              onCreateNew={() => setCurrentView('home')}
-              onProjectClick={handleProjectClick}
-            />
-          )}
+              主页
+            </motion.button>
+            <motion.button
+              onClick={() => setCurrentView('projects')}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={buttonSpring}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                currentView === 'projects'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              我的项目
+            </motion.button>
+          </nav>
         </div>
+
+        <div className="flex items-center gap-6">
+          <motion.button
+            onClick={() => setShowProfilePanel(true)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={buttonSpring}
+            className="text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1 rounded-lg transition-colors"
+            title="个人信息"
+          >
+            {user.email}
+          </motion.button>
+          <motion.button
+            onClick={signOut}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            transition={buttonSpring}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            退出登录
+          </motion.button>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-hidden">
+        {currentView === 'home' ? (
+          <HomePage
+            onStartBuilding={handleStartBuilding}
+            onViewAllProjects={() => setCurrentView('projects')}
+            onProjectClick={handleProjectClick}
+          />
+        ) : (
+          <ProjectsPage
+            onCreateNew={() => setCurrentView('home')}
+            onProjectClick={handleProjectClick}
+          />
+        )}
       </div>
-    );
-  }
+    </motion.div>
+  );
 
   const getStatusText = (status?: string) => {
     switch (status) {
-      case 'building': return '构建中';
-      case 'completed': return '已完成';
-      case 'draft': return '草稿';
-      case 'failed': return '失败';
-      default: return '草稿';
+      case 'building':
+        return '构建中';
+      case 'completed':
+        return '已完成';
+      case 'draft':
+        return '草稿';
+      case 'failed':
+        return '失败';
+      default:
+        return '草稿';
     }
   };
 
-  return (
-    <div className="h-screen flex flex-col bg-white overflow-hidden">
+  const buildingView = (
+    <motion.div
+      key="building-view"
+      className="h-screen flex flex-col bg-white overflow-hidden"
+      initial={{ opacity: 0, scale: 0.85, y: 60 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9, y: -60 }}
+      transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+    >
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button
+          <motion.button
             onClick={handleBackToHome}
+            whileTap={{ scale: 0.9 }}
+            transition={buttonSpring}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
             title="返回主页"
           >
             <Home className="w-5 h-5 text-gray-600" />
-          </button>
+          </motion.button>
           {currentProject && (
             <>
-              <button
+              <motion.button
                 onClick={() => setShowVersionManager(true)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                transition={buttonSpring}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
                 title="版本管理"
               >
                 <GitBranch className="w-4 h-4" />
                 版本管理
-              </button>
+              </motion.button>
               <div className="w-px h-6 bg-gray-300 flex-shrink-0"></div>
               <div className="min-w-0 flex-1">
                 <h1 className="text-base font-medium text-gray-900 truncate">
@@ -223,22 +273,37 @@ function App() {
         </div>
 
         <div className="flex items-center gap-4 flex-shrink-0">
-          <span className="text-sm text-gray-600">{user.email}</span>
-          <button
+          <motion.button
+            onClick={() => setShowProfilePanel(true)}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.95 }}
+            transition={buttonSpring}
+            className="text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1 rounded-lg transition-colors"
+            title="个人信息"
+          >
+            {user.email}
+          </motion.button>
+          <motion.button
             onClick={signOut}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            transition={buttonSpring}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
             退出
-          </button>
+          </motion.button>
           {currentProject && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
               <div
                 className={`w-2 h-2 rounded-full ${
-                  currentProject.status === 'building' ? 'bg-blue-500 animate-pulse' :
-                  currentProject.status === 'completed' ? 'bg-green-500' :
-                  currentProject.status === 'failed' ? 'bg-red-500' :
-                  'bg-gray-400'
+                  currentProject.status === 'building'
+                    ? 'bg-blue-500 animate-pulse'
+                    : currentProject.status === 'completed'
+                    ? 'bg-green-500'
+                    : currentProject.status === 'failed'
+                    ? 'bg-red-500'
+                    : 'bg-gray-400'
                 }`}
               />
               <span className="text-xs font-medium text-gray-700">
@@ -258,21 +323,68 @@ function App() {
           <PreviewPanel currentVersionId={currentVersion?.id} />
         </div>
       </div>
+    </motion.div>
+  );
 
-      {showVersionManager && currentProject && (
-        <VersionManager
-          projectId={currentProject.id}
-          currentVersionId={currentVersion?.id}
-          onClose={() => setShowVersionManager(false)}
-          onVersionRestore={(version) => {
-            setShowVersionManager(false);
-            alert(`已回退到版本 v${version.version_number}`);
-          }}
-          onVersionChange={refreshCurrentVersion}
-        />
-      )}
-    </div>
+  return (
+    <>
+      <AnimatePresence mode="wait">
+        {currentView !== 'building' ? homeView : buildingView}
+      </AnimatePresence>
+      <UserProfilePanel
+        open={showProfilePanel}
+        onClose={() => setShowProfilePanel(false)}
+        email={user.email ?? ''}
+        preloadNodeModules={preloadNodeModules}
+        onTogglePreload={setPreloadNodeModules}
+      />
+      <AnimatePresence>
+        {showVersionManager && currentProject && (
+          <VersionManagerPortal
+            projectId={currentProject.id}
+            currentVersionId={currentVersion?.id}
+            onClose={() => setShowVersionManager(false)}
+            onVersionRestore={(version) => {
+              setShowVersionManager(false);
+              alert(`已回退到版本 v${version.version_number}`);
+            }}
+            onVersionChange={refreshCurrentVersion}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
+interface VersionManagerPortalProps {
+  projectId: string;
+  currentVersionId?: string;
+  onClose: () => void;
+  onVersionRestore?: (version: ProjectVersion) => void;
+  onVersionChange?: () => void;
+}
+
+function VersionManagerPortal(props: VersionManagerPortalProps) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <div className="absolute inset-0 bg-black/60" />
+      <ParticleField />
+      <motion.div
+        className="relative z-10"
+        initial={{ scale: 0.75, opacity: 0, y: 40 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.85, opacity: 0, y: -20 }}
+        transition={{ type: 'spring', stiffness: 230, damping: 27 }}
+      >
+        <VersionManager {...props} />
+      </motion.div>
+    </motion.div>
+  );
+}
 export default App;

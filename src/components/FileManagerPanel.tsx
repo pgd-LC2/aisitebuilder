@@ -1,8 +1,58 @@
-import { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Upload, FilePlus, X, Download, Trash2, Search } from 'lucide-react';
 import { ProjectFile, FileUploadProgress, FileCategory, FileTreeNode } from '../types/project';
 import { fileService } from '../services/fileService';
 import FileUploader from './FileUploader';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const TEXTUAL_MIME_PREFIXES = ['text/', 'application/json', 'application/javascript', 'application/typescript', 'application/xml'];
+const TEXTUAL_MIME_SUFFIXES = ['+json', '+xml'];
+
+const LANGUAGE_EXTENSION_MAP: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  jsx: 'jsx',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  json: 'json',
+  css: 'css',
+  scss: 'scss',
+  sass: 'sass',
+  html: 'markup',
+  htm: 'markup',
+  svg: 'markup',
+  xml: 'markup',
+  md: 'markdown',
+  mdx: 'markdown',
+  yml: 'yaml',
+  yaml: 'yaml',
+  env: 'bash',
+  sh: 'bash',
+  bash: 'bash',
+  txt: 'plaintext',
+  conf: 'bash',
+  ini: 'ini'
+};
+
+const isTextLikeFile = (file: ProjectFile | null) => {
+  if (!file) return false;
+  if (!file.mime_type) return true;
+  return (
+    TEXTUAL_MIME_PREFIXES.some(prefix => file.mime_type.startsWith(prefix)) ||
+    TEXTUAL_MIME_SUFFIXES.some(suffix => file.mime_type.endsWith(suffix))
+  );
+};
+
+const getSyntaxLanguage = (file: ProjectFile | null) => {
+  if (!file) return null;
+  const parts = file.file_name.split('.');
+  const ext = parts.length > 1 ? parts.pop()?.toLowerCase() : undefined;
+  if (!ext) return null;
+  return LANGUAGE_EXTENSION_MAP[ext] || null;
+};
 
 interface FileManagerPanelProps {
   projectId: string;
@@ -24,6 +74,16 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
   const [newFileContent, setNewFileContent] = useState('');
   const [creatingFile, setCreatingFile] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const term = searchQuery.toLowerCase();
+    return files.filter(file => file.file_name.toLowerCase().includes(term)).slice(0, 8);
+  }, [searchQuery, files]);
+  const syntaxLanguage = useMemo(() => getSyntaxLanguage(selectedFile), [selectedFile]);
+  const enableSyntaxHighlight = useMemo(
+    () => Boolean(selectedFile && isTextLikeFile(selectedFile) && syntaxLanguage),
+    [selectedFile, syntaxLanguage]
+  );
 
   useEffect(() => {
     loadFiles();
@@ -167,15 +227,35 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
     });
   };
 
+  const focusFile = useCallback((file: ProjectFile) => {
+    const pathParts = file.file_path.split('/').filter(Boolean);
+    if (pathParts.length > 2) {
+      setExpandedFolders(prev => {
+        const next = new Set(prev);
+        const relativeParts = pathParts.slice(2, -1);
+        let current = '';
+        relativeParts.forEach(part => {
+          current = current ? `${current}/${part}` : part;
+          next.add(current);
+        });
+        return next;
+      });
+    }
+    setSelectedFile(file);
+  }, []);
+
   const renderTreeNode = (node: FileTreeNode, depth: number = 0) => {
     const isExpanded = expandedFolders.has(node.path || 'root');
     const isSelected = selectedFile?.id === node.file?.id;
 
     if (node.type === 'folder') {
       return (
-        <div key={node.path || 'root'}>
+        <motion.div key={node.path || 'root'} layout>
           {node.name !== 'root' && (
-            <div
+            <motion.div
+              whileHover={{ x: 4 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               onClick={() => toggleFolder(node.path)}
               className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm ${
                 depth === 0 ? '' : ''
@@ -193,21 +273,32 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
                 <Folder className="w-4 h-4 text-blue-500 flex-shrink-0" />
               )}
               <span className="text-gray-700 truncate">{node.name}</span>
-            </div>
+            </motion.div>
           )}
-          {isExpanded && node.children && (
-            <div>
-              {node.children.map(child => renderTreeNode(child, depth + 1))}
-            </div>
-          )}
-        </div>
+          <AnimatePresence initial={false}>
+            {isExpanded && node.children && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: [0.25, 0.8, 0.25, 1] }}
+              >
+                {node.children.map(child => renderTreeNode(child, depth + 1))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       );
     }
 
     return (
-      <div
+      <motion.div
+        layout
+        whileHover={{ x: 6 }}
+        whileTap={{ scale: 0.99 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 26 }}
         key={node.file?.id}
-        onClick={() => node.file && setSelectedFile(node.file)}
+        onClick={() => node.file && focusFile(node.file)}
         className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm ${
           isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
         }`}
@@ -215,7 +306,7 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
       >
         <File className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
         <span className={`truncate ${isSelected ? 'font-medium' : ''}`}>{node.name}</span>
-      </div>
+      </motion.div>
     );
   };
 
@@ -418,6 +509,37 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
               </button>
             )}
           </div>
+          {searchQuery && (
+            <div className="mt-3 space-y-1">
+              <AnimatePresence>
+                {searchResults.length > 0 ? (
+                  searchResults.map((file, index) => (
+                    <motion.button
+                      key={file.id}
+                      onClick={() => focusFile(file)}
+                      className="w-full text-left text-xs px-2 py-1 rounded-lg flex items-center gap-2 bg-white/80 hover:bg-blue-50 border border-gray-200"
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 8 }}
+                      transition={{ duration: 0.25, delay: index * 0.05, ease: [0.4, 0, 0.2, 1] }}
+                    >
+                      <File className="w-3.5 h-3.5 text-blue-500" />
+                      <span className="truncate">{file.file_name}</span>
+                    </motion.button>
+                  ))
+                ) : (
+                  <motion.div
+                    className="text-[11px] text-gray-500 bg-white/70 border border-dashed border-gray-300 rounded px-2 py-1"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    未找到匹配文件
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
         {showUploader && (
@@ -497,6 +619,24 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
                     <p className="text-sm text-gray-600">加载中...</p>
                   </div>
                 </div>
+              ) : enableSyntaxHighlight ? (
+                <SyntaxHighlighter
+                  language={syntaxLanguage ?? undefined}
+                  style={oneLight}
+                  showLineNumbers
+                  wrapLongLines
+                  customStyle={{
+                    margin: 0,
+                    padding: '1rem',
+                    background: 'transparent',
+                    minHeight: '100%',
+                    fontSize: '0.875rem',
+                    lineHeight: '1.5'
+                  }}
+                  lineNumberStyle={{ minWidth: '2.5rem', marginRight: '1rem', color: '#9ca3af' }}
+                >
+                  {fileContent || ' '}
+                </SyntaxHighlighter>
               ) : (
                 <pre className="p-4 text-sm font-mono leading-6 text-gray-800 whitespace-pre-wrap break-words">
                   {fileContent.split('\n').map((line, index) => (
