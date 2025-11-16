@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
+import { aiTaskService } from '../services/aiTaskService';
 import { ChatMessage } from '../types/project';
 import { supabase } from '../lib/supabase';
 import BuildLogPanel from './BuildLogPanel';
@@ -108,34 +109,22 @@ export default function ChatPanel() {
       console.log('构建日志数据为空，无法触发事件');
     }
 
-    setTimeout(async () => {
-      const { data: aiMsg } = await messageService.addMessage(
+    if (userMsg) {
+      const { data: task, error: taskError } = await aiTaskService.addTask(
         currentProject.id,
-        'assistant',
-        '收到！我正在处理你的请求...'
+        'chat_reply',
+        {
+          messageId: userMsg.id,
+          content: messageContent
+        }
       );
 
-      if (aiMsg) {
-        console.log('添加AI消息到界面');
-        setMessages(prev => {
-          if (prev.some(m => m.id === aiMsg.id)) return prev;
-          return [...prev, aiMsg];
-        });
-      }
-
-      const aiLogResult = await buildLogService.addBuildLog(
-        currentProject.id,
-        'success',
-        'AI 响应已生成'
-      );
-
-      if (aiLogResult.data) {
-        console.log('触发AI日志事件:', aiLogResult.data);
-        window.dispatchEvent(new CustomEvent('buildlog-added', { detail: aiLogResult.data }));
+      if (taskError) {
+        console.error('创建 AI 任务失败:', taskError);
       } else {
-        console.log('AI日志数据为空，无法触发事件');
+        console.log('AI 任务已创建:', task);
       }
-    }, 1000);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
