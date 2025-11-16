@@ -76,18 +76,20 @@ async function fetchRecentChatMessages(
   return (data || []).reverse();
 }
 
-async function callOpenAI(
+async function callOpenRouter(
   messages: Array<{ role: string; content: string }>,
   apiKey: string
 ): Promise<string> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://aisitebuilder.app',
+      'X-Title': 'AI Site Builder',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'openai/gpt-4o-mini',
       messages: messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -96,7 +98,7 @@ async function callOpenAI(
 
   if (!response.ok) {
     const errorData = await response.text();
-    throw new Error(`OpenAI API 错误: ${response.status} - ${errorData}`);
+    throw new Error(`OpenRouter API 错误: ${response.status} - ${errorData}`);
   }
 
   const data = await response.json();
@@ -177,7 +179,7 @@ async function updateTaskStatus(
   }
 }
 
-async function processTask(task: AITask, supabase: any, openaiApiKey: string): Promise<void> {
+async function processTask(task: AITask, supabase: any, apiKey: string): Promise<void> {
   console.log(`开始处理任务: ${task.id}, 类型: ${task.type}`);
 
   try {
@@ -197,9 +199,9 @@ async function processTask(task: AITask, supabase: any, openaiApiKey: string): P
         }))
       ];
 
-      console.log(`调用 OpenAI API，消息数量: ${messages.length}`);
-      const aiResponse = await callOpenAI(messages, openaiApiKey);
-      console.log(`OpenAI 响应长度: ${aiResponse.length} 字符`);
+      console.log(`调用 OpenRouter API，消息数量: ${messages.length}`);
+      const aiResponse = await callOpenRouter(messages, apiKey);
+      console.log(`OpenRouter 响应长度: ${aiResponse.length} 字符`);
 
       const messageId = await writeAssistantMessage(supabase, task.project_id, aiResponse);
       
@@ -209,7 +211,7 @@ async function processTask(task: AITask, supabase: any, openaiApiKey: string): P
         await updateTaskStatus(supabase, task.id, 'completed', {
           messageId: messageId,
           text: aiResponse,
-          model: 'gpt-4o-mini'
+          model: 'openai/gpt-4o-mini'
         });
 
         console.log(`任务 ${task.id} 处理完成`);
@@ -264,11 +266,11 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')!;
+    const openrouterApiKey = Deno.env.get('OPENROUTER_KEY')!;
     const databaseUrl = Deno.env.get('SUPABASE_DB_URL')!;
 
-    if (!openaiApiKey) {
-      throw new Error('OPENAI_API_KEY 环境变量未设置');
+    if (!openrouterApiKey) {
+      throw new Error('OPENROUTER_KEY 环境变量未设置');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -292,7 +294,7 @@ Deno.serve(async (req: Request) => {
 
       console.log(`成功抢占任务: ${task.id}`);
 
-      await processTask(task, supabase, openaiApiKey);
+      await processTask(task, supabase, openrouterApiKey);
 
       return new Response(
         JSON.stringify({

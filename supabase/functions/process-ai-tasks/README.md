@@ -1,13 +1,13 @@
 # Process AI Tasks - Edge Function
 
-这个 Edge Function 用于处理 AI 任务队列，从 `ai_tasks` 表中抢占任务并调用 OpenAI API 生成响应。
+这个 Edge Function 用于处理 AI 任务队列，从 `ai_tasks` 表中抢占任务并调用 OpenRouter API 生成响应。
 
 ## 功能特性
 
 - **并发安全**: 使用 `SELECT FOR UPDATE SKIP LOCKED` 确保多个 Worker 实例不会重复处理同一任务
 - **重试机制**: 失败的任务会自动重试，直到达到最大重试次数
 - **错误处理**: 完整的错误日志记录到 `build_logs` 表
-- **OpenAI 集成**: 使用 GPT-4o-mini 模型生成 AI 响应
+- **OpenRouter 集成**: 使用 OpenRouter API (openai/gpt-4o-mini 模型) 生成 AI 响应
 - **实时更新**: 通过 Supabase Realtime 自动推送响应到前端
 
 ## 环境变量配置
@@ -23,8 +23,8 @@
    - 在 Supabase Dashboard > Project Settings > Database > Connection String 中获取
    - 选择 "URI" 格式，使用 "Session pooler" 模式
 
-4. **OPENAI_API_KEY** - OpenAI API 密钥
-   - 在 https://platform.openai.com/api-keys 获取
+4. **OPENROUTER_KEY** - OpenRouter API 密钥
+   - 在 https://openrouter.ai/keys 获取
    - 格式: `sk-...`
 
 ### 配置步骤
@@ -34,7 +34,7 @@
 3. 点击 "Settings" 或 "Secrets"
 4. 添加以下环境变量：
    - `SUPABASE_DB_URL`: 数据库连接字符串
-   - `OPENAI_API_KEY`: OpenAI API 密钥
+   - `OPENROUTER_KEY`: OpenRouter API 密钥
 
 ## 触发方式
 
@@ -88,7 +88,7 @@ curl -X POST \
 1. **任务抢占**: Edge Function 使用 `SELECT FOR UPDATE SKIP LOCKED` 原子性地抢占一个 `queued` 状态的任务
 2. **状态更新**: 将任务状态更新为 `running`，并增加 `attempts` 计数
 3. **获取上下文**: 从 `chat_messages` 表获取最近 10 条聊天历史
-4. **调用 OpenAI**: 使用 GPT-4o-mini 模型生成 AI 响应
+4. **调用 OpenRouter**: 使用 OpenRouter API (openai/gpt-4o-mini 模型) 生成 AI 响应
 5. **写入结果**: 
    - 将 AI 响应写入 `chat_messages` 表（role='assistant'）
    - 写入处理日志到 `build_logs` 表
@@ -166,14 +166,14 @@ LIMIT 20;
 
 - 使用索引优化任务查询：`idx_ai_tasks_status_attempts`
 - 使用连接池减少数据库连接开销
-- 限制聊天历史长度（默认 10 条）以控制 OpenAI API 成本
+- 限制聊天历史长度（默认 10 条）以控制 OpenRouter API 成本
 
 ## 安全注意事项
 
-- ⚠️ **不要将 OPENAI_API_KEY 或 SUPABASE_SERVICE_ROLE_KEY 提交到代码库**
+- ⚠️ **不要将 OPENROUTER_KEY 或 SUPABASE_SERVICE_ROLE_KEY 提交到代码库**
 - ✅ 所有密钥都应通过 Supabase Dashboard 的环境变量配置
 - ✅ Edge Function 使用 Service Role Key 绕过 RLS，确保数据访问安全
-- ✅ 前端只能创建任务，不能直接调用 OpenAI API
+- ✅ 前端只能创建任务，不能直接调用 OpenRouter API
 
 ## 故障排查
 
@@ -184,10 +184,10 @@ LIMIT 20;
 3. 确认 Database Webhook 或 Scheduled Function 已正确配置
 4. 手动调用 Edge Function 进行测试
 
-### 问题：OpenAI API 调用失败
+### 问题：OpenRouter API 调用失败
 
-1. 检查 OPENAI_API_KEY 是否有效
-2. 检查 OpenAI 账户余额是否充足
+1. 检查 OPENROUTER_KEY 是否有效
+2. 检查 OpenRouter 账户余额是否充足
 3. 查看 Edge Function 日志中的详细错误信息
 
 ### 问题：任务一直处于 running 状态
@@ -260,12 +260,12 @@ if (task.type === 'build_site') {
 }
 ```
 
-### 自定义 OpenAI 模型
+### 自定义 OpenRouter 模型
 
-修改 `callOpenAI` 函数中的 model 参数：
+修改 `callOpenRouter` 函数中的 model 参数：
 
 ```typescript
-model: 'gpt-4',  // 或 'gpt-3.5-turbo'
+model: 'openai/gpt-4',  // 或 'anthropic/claude-3-opus', 'google/gemini-pro' 等
 ```
 
 ### 调整重试策略
