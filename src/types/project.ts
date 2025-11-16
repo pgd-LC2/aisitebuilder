@@ -81,3 +81,21 @@ export interface FileTreeNode {
   children?: FileTreeNode[];
   file?: ProjectFile;
 }
+
+export type AITaskType = 'chat_reply' | 'build_site' | 'refactor_code';
+export type AITaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface AITask {
+  id: string;
+  project_id: string;
+  user_id: string;
+  type: AITaskType;
+  payload: Record<string, any>;
+  status: AITaskStatus;
+  result?: Record<string, any>;
+  model?: string;
+  error?: string;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+}
