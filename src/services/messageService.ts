@@ -32,6 +32,16 @@ export const messageService = {
     return { data, error };
   },
 
+  async getMessageById(messageId: string): Promise<{ data: ChatMessage | null; error: any }> {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('id', messageId)
+      .maybeSingle();
+
+    return { data, error };
+  },
+
   subscribeToMessages(projectId: string, callback: (message: ChatMessage) => void) {
     const channel = supabase
       .channel(`chat-messages-${projectId}`)

@@ -1,10 +1,10 @@
 import { Send } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
 import { aiTaskService } from '../services/aiTaskService';
-import { ChatMessage } from '../types/project';
+import { ChatMessage, AITask } from '../types/project';
 import { supabase } from '../lib/supabase';
 import BuildLogPanel from './BuildLogPanel';
 
@@ -13,13 +13,36 @@ export default function ChatPanel() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const { currentProject } = useProject();
+  const projectId = currentProject?.id;
+
+  const appendMessage = useCallback((message: ChatMessage) => {
+    setMessages(prev => {
+      if (prev.some(m => m.id === message.id)) {
+        console.log('消息已存在，跳过');
+        return prev;
+      }
+      console.log('添加消息到界面');
+      return [...prev, message];
+    });
+  }, []);
+
+  const loadMessages = useCallback(async () => {
+    if (!projectId) return;
+
+    setLoading(true);
+    const { data, error } = await messageService.getMessagesByProjectId(projectId);
+    if (!error && data) {
+      setMessages(data);
+    }
+    setLoading(false);
+  }, [projectId]);
 
   useEffect(() => {
-    if (!currentProject) return;
+    if (!projectId) return;
 
     loadMessages();
 
-    const channelName = `chat-messages-${currentProject.id}`;
+    const channelName = `chat-messages-${projectId}`;
 
     supabase.getChannels().forEach(channel => {
       if (channel.topic === channelName) {
@@ -36,16 +59,13 @@ export default function ChatPanel() {
           event: 'INSERT',
           schema: 'public',
           table: 'chat_messages',
-          filter: `project_id=eq.${currentProject.id}`
+          filter: `project_id=eq.${projectId}`
         },
         (payload) => {
           console.log('🔔 收到新消息 Realtime 推送:', payload);
           const newMessage = payload.new as ChatMessage;
           console.log('newMessage:', newMessage);
-          setMessages(prev => {
-            if (prev.some(m => m.id === newMessage.id)) return prev;
-            return [...prev, newMessage];
-          });
+          appendMessage(newMessage);
         }
       )
       .subscribe((status, err) => {
@@ -60,28 +80,75 @@ export default function ChatPanel() {
       console.log('清理聊天订阅');
       supabase.removeChannel(channel);
     };
-  }, [currentProject]);
+  }, [projectId, loadMessages, appendMessage]);
 
-  const loadMessages = async () => {
-    if (!currentProject) return;
+  useEffect(() => {
+    if (!projectId) return;
 
-    setLoading(true);
-    const { data, error } = await messageService.getMessagesByProjectId(currentProject.id);
-    if (!error && data) {
-      setMessages(data);
-    }
-    setLoading(false);
-  };
+    const tasksChannelName = `ai-tasks-${projectId}-updates`;
+
+    supabase.getChannels().forEach(channel => {
+      if (channel.topic === tasksChannelName) {
+        console.log('移除旧的任务订阅');
+        supabase.removeChannel(channel);
+      }
+    });
+
+    const tasksChannel = supabase
+      .channel(tasksChannelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ai_tasks',
+          filter: `project_id=eq.${projectId}`
+        },
+        async (payload) => {
+          const updatedTask = payload.new as AITask;
+          if (updatedTask.type !== 'chat_reply') {
+            return;
+          }
+
+          if (updatedTask.status === 'completed') {
+            const messageId = updatedTask.result?.messageId as string | undefined;
+            if (messageId) {
+              const { data } = await messageService.getMessageById(messageId);
+              if (data) {
+                appendMessage(data);
+                return;
+              }
+            }
+            await loadMessages();
+          } else if (updatedTask.status === 'failed') {
+            await buildLogService.addBuildLog(
+              projectId,
+              'error',
+              'AI 任务处理失败，请查看最新日志'
+            );
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        console.log('任务订阅状态:', status);
+        if (err) console.error('任务订阅错误:', err);
+      });
+
+    return () => {
+      console.log('清理任务订阅');
+      supabase.removeChannel(tasksChannel);
+    };
+  }, [projectId, appendMessage, loadMessages]);
 
   const handleSend = async () => {
-    if (!input.trim() || !currentProject) return;
+    if (!input.trim() || !projectId) return;
 
     const messageContent = input;
     setInput('');
 
     console.log('发送消息:', messageContent);
     const { data: userMsg, error } = await messageService.addMessage(
-      currentProject.id,
+      projectId,
       'user',
       messageContent
     );
@@ -89,15 +156,11 @@ export default function ChatPanel() {
     console.log('消息保存结果:', { userMsg, error });
 
     if (userMsg) {
-      console.log('添加用户消息到界面');
-      setMessages(prev => {
-        if (prev.some(m => m.id === userMsg.id)) return prev;
-        return [...prev, userMsg];
-      });
+      appendMessage(userMsg);
     }
 
     const logResult = await buildLogService.addBuildLog(
-      currentProject.id,
+      projectId,
       'info',
       `用户输入: ${messageContent}`
     );
@@ -111,7 +174,7 @@ export default function ChatPanel() {
 
     if (userMsg) {
       const { data: task, error: taskError } = await aiTaskService.addTask(
-        currentProject.id,
+        projectId,
         'chat_reply',
         {
           messageId: userMsg.id,
@@ -123,6 +186,17 @@ export default function ChatPanel() {
         console.error('创建 AI 任务失败:', taskError);
       } else {
         console.log('AI 任务已创建:', task);
+        const { error: triggerError } = await aiTaskService.triggerProcessor(projectId);
+        if (triggerError) {
+          console.error('触发 AI 任务处理失败:', triggerError);
+          await buildLogService.addBuildLog(
+            projectId,
+            'error',
+            '触发 AI 任务处理失败，请稍后重试'
+          );
+        } else {
+          console.log('已触发 Edge Function 处理任务');
+        }
       }
     }
   };

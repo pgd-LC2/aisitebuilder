@@ -28,6 +28,14 @@ export const aiTaskService = {
     return { data, error };
   },
 
+  async triggerProcessor(projectId: string): Promise<{ data: any; error: any }> {
+    const { data, error } = await supabase.functions.invoke('process-ai-tasks', {
+      body: { projectId }
+    });
+
+    return { data, error };
+  },
+
   async getTask(taskId: string): Promise<{ data: AITask | null; error: any }> {
     const { data, error } = await supabase
       .from('ai_tasks')

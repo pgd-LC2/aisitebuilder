@@ -25,25 +25,32 @@ interface ChatMessage {
   content: string;
 }
 
-async function claimTask(pgClient: Client): Promise<AITask | null> {
+async function claimTask(pgClient: Client, projectId?: string): Promise<AITask | null> {
   try {
-    const result = await pgClient.queryObject<AITask>`
+    const projectFilterSQL = projectId ? 'AND project_id = $1' : '';
+    const query = `
+      WITH next_task AS (
+        SELECT id
+        FROM ai_tasks
+        WHERE status = 'queued'
+          AND attempts < max_attempts
+          ${projectFilterSQL}
+        ORDER BY created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
       UPDATE ai_tasks
       SET 
         status = 'running',
         attempts = attempts + 1,
         started_at = now()
-      WHERE id = (
-        SELECT id
-        FROM ai_tasks
-        WHERE status = 'queued'
-          AND attempts < max_attempts
-        ORDER BY created_at ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT 1
-      )
+      WHERE id = (SELECT id FROM next_task)
       RETURNING *
     `;
+    const result = await pgClient.queryObject<AITask>({
+      text: query,
+      args: projectId ? [projectId] : []
+    });
 
     if (result.rows.length === 0) {
       return null;
@@ -279,7 +286,21 @@ Deno.serve(async (req: Request) => {
     await pgClient.connect();
 
     try {
-      const task = await claimTask(pgClient);
+      const body = await req.json().catch(() => null);
+      const projectId =
+        typeof body?.projectId === 'string' ? body.projectId.trim() : '';
+
+      if (!projectId) {
+        return new Response(
+          JSON.stringify({ error: 'projectId 为必填参数' }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      const task = await claimTask(pgClient, projectId);
 
       if (!task) {
         console.log('没有待处理的任务');

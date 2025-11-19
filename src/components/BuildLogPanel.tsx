@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronUp, Download, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { BuildLog } from '../types/project';
 import { buildLogService } from '../services/buildLogService';
@@ -27,6 +27,26 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
   const [loading, setLoading] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  const appendLog = useCallback((log: BuildLog) => {
+    setLogs(prev => {
+      if (prev.some(item => item.id === log.id)) {
+        console.log('日志已存在，跳过');
+        return prev;
+      }
+      console.log('添加日志到界面');
+      return [...prev, log];
+    });
+  }, []);
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await buildLogService.getBuildLogsByProjectId(projectId);
+    if (!error && data) {
+      setLogs(data);
+    }
+    setLoading(false);
+  }, [projectId]);
+
   useEffect(() => {
     loadLogs();
 
@@ -50,13 +70,13 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
           filter: `project_id=eq.${projectId}`
         },
         (payload) => {
-          console.log('🔔 收到新日志 Realtime 推送:', payload);
+          console.log('🔔 收到新日志 Realtime 推送', payload);
           console.log('payload.new:', payload.new);
-          setLogs(prev => [...prev, payload.new as BuildLog]);
+          appendLog(payload.new as BuildLog);
         }
       )
       .subscribe((status, err) => {
-        console.log('日志订阅状态:', status);
+        console.log('日志订阅状态', status);
         if (err) console.error('订阅错误:', err);
         if (status === 'SUBSCRIBED') {
           console.log('✅ 日志 Realtime 订阅成功');
@@ -66,14 +86,7 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
     const handleBuildLogAdded = ((e: CustomEvent) => {
       const log = e.detail as BuildLog;
       console.log('📢 通过 CustomEvent 接收日志:', log);
-      setLogs(prev => {
-        if (prev.some(l => l.id === log.id)) {
-          console.log('日志已存在，跳过');
-          return prev;
-        }
-        console.log('添加日志到界面');
-        return [...prev, log];
-      });
+      appendLog(log);
       if (onLogAdded) {
         onLogAdded(log);
       }
@@ -87,22 +100,13 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
       supabase.removeChannel(channel);
       window.removeEventListener('buildlog-added', handleBuildLogAdded);
     };
-  }, [projectId, onLogAdded]);
+  }, [projectId, onLogAdded, appendLog, loadLogs]);
 
   useEffect(() => {
     if (isExpanded && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs, isExpanded]);
-
-  const loadLogs = async () => {
-    setLoading(true);
-    const { data, error } = await buildLogService.getBuildLogsByProjectId(projectId);
-    if (!error && data) {
-      setLogs(data);
-    }
-    setLoading(false);
-  };
 
   const handleExportLogs = () => {
     const logText = logs
