@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { AITask, AITaskType } from '../types/project';
+import { AITask, AITaskType, ProjectFilesContext } from '../types/project';
 
 export const aiTaskService = {
   async addTask(
@@ -28,9 +28,12 @@ export const aiTaskService = {
     return { data, error };
   },
 
-  async triggerProcessor(projectId: string): Promise<{ data: any; error: any }> {
+  async triggerProcessor(
+    projectId: string,
+    projectFilesContext?: ProjectFilesContext
+  ): Promise<{ data: any; error: any }> {
     const { data, error } = await supabase.functions.invoke('process-ai-tasks', {
-      body: { projectId }
+      body: { projectId, projectFilesContext }
     });
 
     return { data, error };

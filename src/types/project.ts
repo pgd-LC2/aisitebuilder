@@ -82,6 +82,13 @@ export interface FileTreeNode {
   file?: ProjectFile;
 }
 
+export interface ProjectFilesContext {
+  bucket: string;
+  path: string;
+  versionId?: string;
+  versionNumber?: number;
+}
+
 export type AITaskType = 'chat_reply' | 'build_site' | 'refactor_code';
 export type AITaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 

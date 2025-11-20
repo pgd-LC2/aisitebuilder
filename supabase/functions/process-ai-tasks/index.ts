@@ -25,6 +25,18 @@ interface ChatMessage {
   content: string;
 }
 
+interface ProjectFilesContext {
+  bucket?: string;
+  path?: string;
+  versionId?: string;
+  versionNumber?: number;
+}
+
+interface ProcessRequestBody {
+  projectId?: string;
+  projectFilesContext?: ProjectFilesContext;
+}
+
 async function claimTask(pgClient: Client, projectId?: string): Promise<AITask | null> {
   try {
     const projectFilterSQL = projectId ? 'AND project_id = $1' : '';
@@ -116,7 +128,8 @@ async function writeBuildLog(
   supabase: any,
   projectId: string,
   logType: string,
-  message: string
+  message: string,
+  metadata: Record<string, any> = {}
 ): Promise<void> {
   const { error } = await supabase
     .from('build_logs')
@@ -124,7 +137,7 @@ async function writeBuildLog(
       project_id: projectId,
       log_type: logType,
       message: message,
-      metadata: {}
+      metadata
     });
 
   if (error) {
@@ -186,11 +199,26 @@ async function updateTaskStatus(
   }
 }
 
-async function processTask(task: AITask, supabase: any, apiKey: string): Promise<void> {
+async function processTask(
+  task: AITask,
+  supabase: any,
+  apiKey: string,
+  projectFilesContext?: ProjectFilesContext
+): Promise<void> {
   console.log(`开始处理任务: ${task.id}, 类型: ${task.type}`);
 
   try {
     await writeBuildLog(supabase, task.project_id, 'info', `开始处理 AI 任务: ${task.type}`);
+    if (projectFilesContext?.path) {
+      await writeBuildLog(
+        supabase,
+        task.project_id,
+        'info',
+        `当前项目文件路径: ${projectFilesContext.path}`,
+        { projectFilesContext }
+      );
+      console.log('收到项目文件路径:', projectFilesContext);
+    }
 
     if (task.type === 'chat_reply') {
       const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 10);
@@ -286,9 +314,27 @@ Deno.serve(async (req: Request) => {
     await pgClient.connect();
 
     try {
-      const body = await req.json().catch(() => null);
-      const projectId =
-        typeof body?.projectId === 'string' ? body.projectId.trim() : '';
+      const body = await req.json().catch(() => null) as ProcessRequestBody | null;
+      const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : '';
+      const rawProjectFilesContext = body?.projectFilesContext && typeof body.projectFilesContext === 'object'
+        ? body.projectFilesContext
+        : undefined;
+      const projectFilesContext = rawProjectFilesContext
+        ? {
+            bucket: typeof rawProjectFilesContext.bucket === 'string'
+              ? rawProjectFilesContext.bucket.trim()
+              : undefined,
+            path: typeof rawProjectFilesContext.path === 'string'
+              ? rawProjectFilesContext.path.trim().replace(/^\/+|\/+$/g, '')
+              : undefined,
+            versionId: typeof rawProjectFilesContext.versionId === 'string'
+              ? rawProjectFilesContext.versionId.trim()
+              : undefined,
+            versionNumber: typeof rawProjectFilesContext.versionNumber === 'number'
+              ? rawProjectFilesContext.versionNumber
+              : undefined
+          }
+        : undefined;
 
       if (!projectId) {
         return new Response(
@@ -315,13 +361,14 @@ Deno.serve(async (req: Request) => {
 
       console.log(`成功抢占任务: ${task.id}`);
 
-      await processTask(task, supabase, openrouterApiKey);
+      await processTask(task, supabase, openrouterApiKey, projectFilesContext);
 
       return new Response(
         JSON.stringify({
           success: true,
           taskId: task.id,
-          message: '任务处理完成'
+          message: '任务处理完成',
+          projectFilesPath: projectFilesContext?.path
         }),
         {
           status: 200,

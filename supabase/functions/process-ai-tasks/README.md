@@ -10,6 +10,25 @@
 - **OpenRouter 集成**: 使用 OpenRouter API (openai/gpt-4o-mini 模型) 生成 AI 响应
 - **实时更新**: 通过 Supabase Realtime 自动推送响应到前端
 
+## 请求参数
+
+调用 Edge Function 时应在请求体中传入以下字段：
+
+- `projectId`（必填）：当前项目 ID
+- `projectFilesContext`（可选）：当前正在使用的 `project-files` 存储信息，包含版本等上下文  
+  示例：
+  ```json
+  {
+    "projectId": "project-uuid",
+    "projectFilesContext": {
+      "bucket": "project-files",
+      "path": "project-uuid/vversion-uuid",
+      "versionId": "version-uuid",
+      "versionNumber": 3
+    }
+  }
+  ```
+
 ## 环境变量配置
 
 在 Supabase Dashboard 的 Edge Functions 设置中配置以下环境变量：

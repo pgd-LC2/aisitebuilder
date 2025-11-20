@@ -4,11 +4,15 @@ import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
 import { aiTaskService } from '../services/aiTaskService';
-import { ChatMessage, AITask } from '../types/project';
+import { ChatMessage, AITask, ProjectFilesContext } from '../types/project';
 import { supabase } from '../lib/supabase';
 import BuildLogPanel from './BuildLogPanel';
 
-export default function ChatPanel() {
+interface ChatPanelProps {
+  projectFilesContext?: ProjectFilesContext;
+}
+
+export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -186,7 +190,10 @@ export default function ChatPanel() {
         console.error('创建 AI 任务失败:', taskError);
       } else {
         console.log('AI 任务已创建:', task);
-        const { error: triggerError } = await aiTaskService.triggerProcessor(projectId);
+        const { error: triggerError } = await aiTaskService.triggerProcessor(
+          projectId,
+          projectFilesContext
+        );
         if (triggerError) {
           console.error('触发 AI 任务处理失败:', triggerError);
           await buildLogService.addBuildLog(

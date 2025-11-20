@@ -36,6 +36,17 @@ function App() {
     () => ({ type: 'spring', stiffness: 450, damping: 30 }),
     []
   );
+  const projectFilesContext = useMemo(() => {
+    if (!currentProject) return undefined;
+
+    const versionSegment = currentVersion ? `v${currentVersion.id}` : 'shared';
+    return {
+      bucket: 'project-files',
+      path: `${currentProject.id}/${versionSegment}`,
+      versionId: currentVersion?.id,
+      versionNumber: currentVersion?.version_number
+    };
+  }, [currentProject, currentVersion]);
 
   const refreshCurrentVersion = async () => {
     if (!currentProject) {
@@ -316,7 +327,7 @@ function App() {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="w-[400px] border-r border-gray-200 flex-shrink-0 bg-gray-50">
-          <ChatPanel />
+          <ChatPanel projectFilesContext={projectFilesContext} />
         </div>
 
         <div className="flex-1 bg-gray-100">
