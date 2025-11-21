@@ -868,7 +868,9 @@ function PreviewLoadingScreen({ status, error, logs, projectName }: PreviewLoadi
         </div>
 
         {shouldShowMiniGame ? (
-          <LoadingMiniGame />
+          <div className="mx-auto w-full max-w-[560px] md:max-w-[680px] lg:max-w-[720px] max-h-[520px] overflow-auto">
+            <LoadingMiniGame />
+          </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-inner p-6 text-center">
             {status === 'idle' && (
@@ -967,13 +969,13 @@ function LoadingMiniGame() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 max-h-[480px] overflow-auto">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-purple-600" />
-          <h2 className="text-lg font-medium text-gray-900">翻牌小游戏</h2>
+          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+          <h2 className="text-base sm:text-lg font-medium text-gray-900">翻牌小游戏</h2>
         </div>
-        <div className="flex gap-4 text-sm text-gray-600">
+        <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
           <div>
             步数:{' '}
             <span className="font-medium text-gray-900">{moves}</span>
@@ -988,12 +990,12 @@ function LoadingMiniGame() {
       </div>
 
       {matchedPairs === totalPairs && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center text-sm text-green-800">
+        <div className="mb-4 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-xl text-center text-xs sm:text-sm text-green-800">
           🎉 恭喜完成！共计 {moves} 步
           <div>
             <button
               onClick={resetGame}
-              className="mt-3 px-4 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors"
+              className="mt-2 sm:mt-3 px-3 sm:px-4 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors"
             >
               再玩一次
             </button>
@@ -1001,13 +1003,13 @@ function LoadingMiniGame() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3">
         {cards.map(card => (
           <button
             key={card.id}
             onClick={() => handleCardClick(card.id)}
             disabled={card.matched || card.flipped}
-            className={`aspect-square rounded-xl text-3xl font-bold transition-all duration-300 transform flex items-center justify-center shadow-md hover:shadow-lg ${
+            className={`aspect-square rounded-xl text-2xl sm:text-3xl font-bold transition-all duration-300 transform flex items-center justify-center shadow-md hover:shadow-lg ${
               card.flipped || card.matched
                 ? 'bg-gradient-to-br from-blue-400 to-purple-500 text-white scale-105'
                 : 'bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:scale-105'
