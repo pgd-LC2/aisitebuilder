@@ -26,6 +26,12 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const lastFetchAtRef = useRef<number>(0);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   const appendMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => {
@@ -288,6 +294,10 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   };
 
   useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
     return () => {
       if (watchdogTimerRef.current) {
         clearTimeout(watchdogTimerRef.current);
@@ -311,30 +321,33 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
             </div>
           </div>
         ) : (
-          messages.map(message => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+          <>
+            {messages.map(message => (
               <div
-                className={`max-w-[85%] rounded-xl px-3 py-2 ${
-                  message.role === 'user'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white text-gray-900 border border-gray-200'
-                }`}
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                  {message.content}
-                </p>
-                <span className="text-[10px] opacity-60 mt-1 block">
-                  {new Date(message.created_at).toLocaleTimeString('zh-CN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
+                <div
+                  className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                    message.role === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white text-gray-900 border border-gray-200'
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                    {message.content}
+                  </p>
+                  <span className="text-[10px] opacity-60 mt-1 block">
+                    {new Date(message.created_at).toLocaleTimeString('zh-CN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+            <div ref={messagesEndRef} />
+          </>
         )}
       </div>
 
