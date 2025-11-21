@@ -6,13 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey'
 };
-// 根据任务类型配置模型
+// 根据任务类型配置模型 - 统一使用 Google Gemini 3 Pro Preview
 const MODEL_CONFIG = {
-  chat_reply: 'openai/gpt-4o-mini',
-  build_site: 'anthropic/claude-3.5-sonnet',
-  refactor_code: 'openai/gpt-4o',
-  default: 'openai/gpt-4o-mini'
+  chat_reply: 'google/gemini-3-pro-preview',
+  build_site: 'google/gemini-3-pro-preview',
+  refactor_code: 'google/gemini-3-pro-preview',
+  default: 'google/gemini-3-pro-preview'
 };
+
+const IMAGE_MODEL = 'google/gemini-3-pro-image-preview';
 // --- 数据库操作函数 ---
 async function claimTask(pgClient, projectId) {
   try {
@@ -103,8 +105,44 @@ async function getProjectFileContext(supabase, bucket, path) {
     return ""; // 失败不阻断流程，只是没上下文
   }
 }
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: '图片生成的详细描述,用英文描述'
+          },
+          aspect_ratio: {
+            type: 'string',
+            description: '图片的宽高比',
+            enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+          }
+        },
+        required: ['prompt']
+      }
+    }
+  }
+];
+
 // --- API 调用与日志 ---
-async function callOpenRouter(messages, apiKey, model) {
+async function callOpenRouter(messages, apiKey, model, tools = null) {
+  const requestBody: any = {
+    model: model,
+    messages: messages,
+    temperature: 0.7,
+    max_tokens: 4000
+  };
+  
+  if (tools) {
+    requestBody.tools = tools;
+  }
+  
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -113,20 +151,98 @@ async function callOpenRouter(messages, apiKey, model) {
       'HTTP-Referer': 'https://aisitebuilder.app',
       'X-Title': 'AI Site Builder'
     },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 4000 // 增加 Token 限制以适应代码生成
-    })
+    body: JSON.stringify(requestBody)
   });
   if (!response.ok) {
     const errorData = await response.text();
     throw new Error(`OpenRouter API 错误: ${response.status} - ${errorData}`);
   }
   const data = await response.json();
-  return data.choices[0].message.content;
+  return data.choices[0].message;
 }
+async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
+  const requestBody: any = {
+    model: IMAGE_MODEL,
+    messages: [
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    modalities: ['image', 'text'],
+    image_config: {
+      aspect_ratio: aspectRatio
+    }
+  };
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://aisitebuilder.app',
+      'X-Title': 'AI Site Builder'
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.text();
+    throw new Error(`图片生成API错误: ${response.status} - ${errorData}`);
+  }
+
+  const data = await response.json();
+  const message = data.choices[0].message;
+  
+  if (message.images && message.images.length > 0) {
+    const imageUrl = message.images[0].image_url.url;
+    return imageUrl;
+  }
+  
+  throw new Error('未能生成图片');
+}
+
+async function saveImageToStorage(supabase, projectId: string, versionId: string, imageDataUrl: string, fileName: string) {
+  const base64Data = imageDataUrl.split(',')[1];
+  const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+  
+  const bucket = 'project-files';
+  const path = `${projectId}/${versionId}/${fileName}`;
+  
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(path, buffer, {
+      contentType: 'image/png',
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`保存图片失败: ${error.message}`);
+  }
+  
+  const { error: dbError } = await supabase
+    .from('project_files')
+    .insert({
+      project_id: projectId,
+      version_id: versionId,
+      file_name: fileName,
+      file_path: path,
+      file_size: buffer.length,
+      mime_type: 'image/png',
+      file_category: 'asset',
+      source_type: 'ai_generated',
+      is_public: false
+    })
+    .select()
+    .maybeSingle();
+  
+  if (dbError) {
+    console.error('保存文件记录失败:', dbError);
+  }
+  
+  return path;
+}
+
 async function writeBuildLog(supabase, projectId, logType, message, metadata = {}) {
   const { error } = await supabase.from('build_logs').insert({
     project_id: projectId,
@@ -159,25 +275,24 @@ async function updateTaskStatus(supabase, taskId, status, result, errorMsg) {
   const { error } = await supabase.from('ai_tasks').update(updateData).eq('id', taskId);
   if (error) console.error('更新任务状态失败:', error);
 }
-// --- 核心处理逻辑 ---
 async function processTask(task, supabase, apiKey, projectFilesContext) {
   console.log(`开始处理任务: ${task.id}, 类型: ${task.type}`);
-  // 1. 确定模型
   const model = MODEL_CONFIG[task.type] || MODEL_CONFIG.default;
+  
   try {
     await writeBuildLog(supabase, task.project_id, 'info', `开始处理 AI 任务: ${task.type} (Model: ${model})`);
-    // 2. 获取文件上下文 (如果提供了 bucket 和 path)
+    
     let fileContextStr = "";
     if (task.type !== 'chat_reply' && projectFilesContext?.bucket && projectFilesContext?.path) {
       await writeBuildLog(supabase, task.project_id, 'info', `正在读取项目文件...`);
       fileContextStr = await getProjectFileContext(supabase, projectFilesContext.bucket, projectFilesContext.path);
     }
-    // 3. 构建消息
+    
     let messages = [];
-    const baseSystemPrompt = '你是一个专业的全栈开发 AI 助手。请用简体中文回复。';
+    const baseSystemPrompt = '你是一个专业的全栈开发 AI 助手。请用简体中文回复。你可以使用generate_image工具来生成图片。';
+    
     if (task.type === 'chat_reply') {
       const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 10);
-      // 聊天模式下，如果前端传了上下文，简单附加即可
       const contextPrompt = fileContextStr ? `\n参考现有代码: ${fileContextStr}` : '';
       messages = [
         {
@@ -190,7 +305,6 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
           }))
       ];
     } else if (task.type === 'build_site') {
-      // 构建模式：核心是根据需求生成代码结构
       const requirement = task.payload?.requirement || "创建基础着陆页";
       messages = [
         {
@@ -203,7 +317,6 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
         }
       ];
     } else if (task.type === 'refactor_code') {
-      // 重构模式
       const code = task.payload?.code || "";
       messages = [
         {
@@ -218,33 +331,108 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     } else {
       throw new Error(`不支持的任务类型: ${task.type}`);
     }
+    
     console.log(`调用 OpenRouter API, Model: ${model}, Msg Count: ${messages.length}`);
-    // 4. 调用 AI
-    const aiResponse = await callOpenRouter(messages, apiKey, model);
-    // 5. 结果处理与写回
-    let resultData = {
-      text: aiResponse,
+    
+    const maxIterations = 10;
+    let iteration = 0;
+    let finalResponse = '';
+    const generatedImages: string[] = [];
+    
+    while (iteration < maxIterations) {
+      iteration++;
+      console.log(`Agent 迭代 ${iteration}/${maxIterations}`);
+      
+      const assistantMessage = await callOpenRouter(messages, apiKey, model, TOOLS);
+      messages.push(assistantMessage);
+      
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        for (const toolCall of assistantMessage.tool_calls) {
+          if (toolCall.function.name === 'generate_image') {
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              const prompt = args.prompt;
+              const aspectRatio = args.aspect_ratio || '1:1';
+              
+              await writeBuildLog(supabase, task.project_id, 'info', `正在生成图片: ${prompt}`);
+              
+              const imageDataUrl = await generateImage(prompt, apiKey, aspectRatio);
+              
+              const timestamp = Date.now();
+              const fileName = `generated_image_${timestamp}.png`;
+              const versionId = projectFilesContext?.versionId || 'default';
+              
+              const imagePath = await saveImageToStorage(
+                supabase,
+                task.project_id,
+                versionId,
+                imageDataUrl,
+                fileName
+              );
+              
+              generatedImages.push(imagePath);
+              
+              await writeBuildLog(supabase, task.project_id, 'success', `图片已生成并保存: ${imagePath}`);
+              
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify({
+                  success: true,
+                  image_path: imagePath,
+                  file_name: fileName,
+                  message: '图片已成功生成并保存到项目文件夹'
+                })
+              });
+            } catch (error) {
+              console.error('图片生成失败:', error);
+              await writeBuildLog(supabase, task.project_id, 'error', `图片生成失败: ${error.message}`);
+              
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify({
+                  success: false,
+                  error: error.message
+                })
+              });
+            }
+          }
+        }
+      } else {
+        finalResponse = assistantMessage.content || '';
+        break;
+      }
+    }
+    
+    if (iteration >= maxIterations) {
+      finalResponse = '处理超时，已达到最大迭代次数';
+    }
+    
+    const resultData = {
+      text: finalResponse,
       model: model,
-      processed_files: !!fileContextStr
+      processed_files: !!fileContextStr,
+      generated_images: generatedImages,
+      iterations: iteration
     };
+    
     if (task.type === 'chat_reply') {
-      const messageId = await writeAssistantMessage(supabase, task.project_id, aiResponse);
+      const messageId = await writeAssistantMessage(supabase, task.project_id, finalResponse);
       if (!messageId) throw new Error('写入助手消息失败');
       resultData.messageId = messageId;
     }
-    // 可以在这里添加逻辑：如果是 build_site，将 AI 返回的代码直接写入 Storage
+    
     await writeBuildLog(supabase, task.project_id, 'success', 'AI 任务处理完成');
     await updateTaskStatus(supabase, task.id, 'completed', resultData);
+    
   } catch (error) {
     console.error(`处理任务 ${task.id} 失败:`, error);
     await writeBuildLog(supabase, task.project_id, 'error', `AI 任务处理失败: ${error.message}`);
-    // 检查是否应该放弃
+    
     if (task.attempts >= task.max_attempts) {
       await updateTaskStatus(supabase, task.id, 'failed', undefined, error.message);
     } else {
-      // 保持 partial error 状态，但不标记为 failed，等待下一次 claimTask 拾取 (状态改回 queued 或保持 running 等待超时清理机制? 
-      // 这里简单起见，将其改回 queued 供重试)
-      // 注意：claimTask 已经加了 attempts，所以这里只需要改状态
       await supabase.from('ai_tasks').update({
         status: 'queued',
         error: `Attempt ${task.attempts} failed: ${error.message}`
