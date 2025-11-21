@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
@@ -18,6 +18,14 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [loading, setLoading] = useState(true);
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
+
+  const chatSubscribedRef = useRef(false);
+  const tasksSubscribedRef = useRef(false);
+  const [isSubscribedReady, setIsSubscribedReady] = useState(false);
+  
+  const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const lastFetchAtRef = useRef<number>(0);
 
   const appendMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => {
@@ -39,10 +47,14 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       setMessages(data);
     }
     setLoading(false);
+    lastFetchAtRef.current = Date.now();
   }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
+
+    chatSubscribedRef.current = false;
+    setIsSubscribedReady(false);
 
     loadMessages();
 
@@ -54,6 +66,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         supabase.removeChannel(channel);
       }
     });
+
+    const subscribeTimestamp = Date.now();
 
     const channel = supabase
       .channel(channelName)
@@ -70,24 +84,41 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           const newMessage = payload.new as ChatMessage;
           console.log('newMessage:', newMessage);
           appendMessage(newMessage);
+          
+          if (watchdogTimerRef.current) {
+            clearTimeout(watchdogTimerRef.current);
+            watchdogTimerRef.current = null;
+          }
         }
       )
       .subscribe((status, err) => {
-        console.log('聊天订阅状态:', status);
+        console.log('聊天订阅状态:', status, '时间:', new Date().toISOString());
         if (err) console.error('订阅错误:', err);
         if (status === 'SUBSCRIBED') {
           console.log('✅ 聊天 Realtime 订阅成功');
+          chatSubscribedRef.current = true;
+          setIsSubscribedReady(chatSubscribedRef.current && tasksSubscribedRef.current);
+          
+          if (subscribeTimestamp > lastFetchAtRef.current) {
+            console.log('执行 catch-up 刷新消息');
+            loadMessages();
+          }
         }
       });
 
     return () => {
       console.log('清理聊天订阅');
+      chatSubscribedRef.current = false;
+      setIsSubscribedReady(false);
       supabase.removeChannel(channel);
     };
   }, [projectId, loadMessages, appendMessage]);
 
   useEffect(() => {
     if (!projectId) return;
+
+    tasksSubscribedRef.current = false;
+    setIsSubscribedReady(false);
 
     const tasksChannelName = `ai-tasks-${projectId}-updates`;
 
@@ -97,6 +128,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         supabase.removeChannel(channel);
       }
     });
+
+    const subscribeTimestamp = Date.now();
 
     const tasksChannel = supabase
       .channel(tasksChannelName)
@@ -120,6 +153,17 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
               const { data } = await messageService.getMessageById(messageId);
               if (data) {
                 appendMessage(data);
+                
+                if (watchdogTimerRef.current) {
+                  clearTimeout(watchdogTimerRef.current);
+                  watchdogTimerRef.current = null;
+                }
+                return;
+              } else {
+                console.log('getMessageById 未获取到消息，500ms 后重试');
+                setTimeout(() => {
+                  loadMessages();
+                }, 500);
                 return;
               }
             }
@@ -134,12 +178,24 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         }
       )
       .subscribe((status, err) => {
-        console.log('任务订阅状态:', status);
+        console.log('任务订阅状态:', status, '时间:', new Date().toISOString());
         if (err) console.error('任务订阅错误:', err);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ 任务 Realtime 订阅成功');
+          tasksSubscribedRef.current = true;
+          setIsSubscribedReady(chatSubscribedRef.current && tasksSubscribedRef.current);
+          
+          if (subscribeTimestamp > lastFetchAtRef.current) {
+            console.log('执行 catch-up 刷新消息');
+            loadMessages();
+          }
+        }
       });
 
     return () => {
       console.log('清理任务订阅');
+      tasksSubscribedRef.current = false;
+      setIsSubscribedReady(false);
       supabase.removeChannel(tasksChannel);
     };
   }, [projectId, appendMessage, loadMessages]);
@@ -150,7 +206,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     const messageContent = input;
     setInput('');
 
-    console.log('发送消息:', messageContent);
+    console.log('发送消息:', messageContent, '时间:', new Date().toISOString());
+    
     const { data: userMsg, error } = await messageService.addMessage(
       projectId,
       'user',
@@ -177,6 +234,21 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
 
     if (userMsg) {
+      if (watchdogTimerRef.current) {
+        clearTimeout(watchdogTimerRef.current);
+      }
+      
+      watchdogTimerRef.current = setTimeout(() => {
+        console.log('watchdog 触发：5秒内未收到 AI 回复，执行刷新');
+        loadMessages();
+        
+        watchdogTimerRef.current = setTimeout(() => {
+          console.log('watchdog 二次触发：15秒内仍未收到 AI 回复，再次刷新');
+          loadMessages();
+          watchdogTimerRef.current = null;
+        }, 10000);
+      }, 5000);
+
       const { data: task, error: taskError } = await aiTaskService.addTask(
         projectId,
         'chat_reply',
@@ -214,6 +286,15 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       handleSend();
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (watchdogTimerRef.current) {
+        clearTimeout(watchdogTimerRef.current);
+        watchdogTimerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -260,19 +341,25 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       {currentProject && <BuildLogPanel projectId={currentProject.id} />}
 
       <div className="px-4 py-2 bg-gray-50">
+        {!isSubscribedReady && projectId && (
+          <div className="mb-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-xs text-yellow-700">连接中，请稍候...</p>
+          </div>
+        )}
         <div className="flex items-center gap-1 bg-white rounded-full pl-3 py-1 pr-1 border border-gray-300 focus-within:border-blue-500 transition-colors">
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="输入指令..."
-            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 text-sm outline-none resize-none leading-tight py-1.5 overflow-hidden"
+            placeholder={isSubscribedReady ? "输入指令..." : "连接中..."}
+            disabled={!isSubscribedReady}
+            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 text-sm outline-none resize-none leading-tight py-1.5 overflow-hidden disabled:cursor-not-allowed"
             rows={1}
             style={{ height: '28px', maxHeight: '120px' }}
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || !isSubscribedReady}
             className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors flex-shrink-0"
           >
             <Send className="w-3.5 h-3.5 text-white" />
