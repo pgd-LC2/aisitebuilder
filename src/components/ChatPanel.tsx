@@ -16,6 +16,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [taskType, setTaskType] = useState<'chat_reply' | 'build_site' | 'refactor_code'>('chat_reply');
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
 
@@ -260,7 +261,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
       const { data: task, error: taskError } = await aiTaskService.addTask(
         projectId,
-        'chat_reply',
+        taskType,
         {
           messageId: userMsg.id,
           content: messageContent
@@ -362,6 +363,18 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
             <p className="text-xs text-yellow-700">连接中，请稍候...</p>
           </div>
         )}
+        <div className="mb-2">
+          <label className="text-xs text-gray-600 mb-1 block">AI 任务类型</label>
+          <select
+            value={taskType}
+            onChange={(e) => setTaskType(e.target.value as 'chat_reply' | 'build_site' | 'refactor_code')}
+            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+          >
+            <option value="chat_reply">💬 聊天回复 (Chat Reply)</option>
+            <option value="build_site">🏗️ 构建网站 (Build Site)</option>
+            <option value="refactor_code">🔧 重构代码 (Refactor Code)</option>
+          </select>
+        </div>
         <div className="flex items-center gap-1 bg-white rounded-full pl-3 py-1 pr-1 border border-gray-300 focus-within:border-blue-500 transition-colors">
           <textarea
             value={input}
