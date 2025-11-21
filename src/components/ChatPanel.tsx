@@ -224,6 +224,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
     if (userMsg) {
       appendMessage(userMsg);
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     }
 
     const logResult = await buildLogService.addBuildLog(
