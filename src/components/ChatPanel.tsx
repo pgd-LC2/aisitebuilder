@@ -1,6 +1,7 @@
 import { Send } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useProject } from '../contexts/ProjectContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
 import { aiTaskService } from '../services/aiTaskService';
@@ -18,6 +19,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [loading, setLoading] = useState(true);
   const [taskType, setTaskType] = useState<'chat_reply' | 'build_site' | 'refactor_code'>('chat_reply');
   const { currentProject } = useProject();
+  const { enableWatchdog } = useSettings();
   const projectId = currentProject?.id;
 
   const chatSubscribedRef = useRef(false);
@@ -261,16 +263,18 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         clearTimeout(watchdogTimerRef.current);
       }
       
-      watchdogTimerRef.current = setTimeout(() => {
-        console.log('watchdog 触发：5秒内未收到 AI 回复，执行刷新');
-        loadMessages();
-        
+      if (enableWatchdog) {
         watchdogTimerRef.current = setTimeout(() => {
-          console.log('watchdog 二次触发：15秒内仍未收到 AI 回复，再次刷新');
+          console.log('watchdog 触发：5秒内未收到 AI 回复，执行刷新');
           loadMessages();
-          watchdogTimerRef.current = null;
-        }, 10000);
-      }, 5000);
+          
+          watchdogTimerRef.current = setTimeout(() => {
+            console.log('watchdog 二次触发：15秒内仍未收到 AI 回复，再次刷新');
+            loadMessages();
+            watchdogTimerRef.current = null;
+          }, 10000);
+        }, 5000);
+      }
 
       const { data: task, error: taskError } = await aiTaskService.addTask(
         projectId,
