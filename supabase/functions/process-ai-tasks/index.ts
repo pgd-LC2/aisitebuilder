@@ -417,11 +417,10 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
       iterations: iteration
     };
     
-    if (task.type === 'chat_reply') {
-      const messageId = await writeAssistantMessage(supabase, task.project_id, finalResponse);
-      if (!messageId) throw new Error('写入助手消息失败');
-      resultData.messageId = messageId;
-    }
+    // 所有任务类型的 AI 回复都保存到 chat_messages 表
+    const messageId = await writeAssistantMessage(supabase, task.project_id, finalResponse);
+    if (!messageId) throw new Error('写入助手消息失败');
+    resultData.messageId = messageId;
     
     await writeBuildLog(supabase, task.project_id, 'success', 'AI 任务处理完成');
     await updateTaskStatus(supabase, task.id, 'completed', resultData);
