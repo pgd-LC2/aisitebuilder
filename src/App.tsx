@@ -31,7 +31,7 @@ function App() {
   const [currentVersion, setCurrentVersion] = useState<ProjectVersion | null>(null);
   const { user, loading, signOut } = useAuth();
   const { createProject, currentProject, setCurrentProject, updateProjectStatus } = useProject();
-  const { preloadNodeModules, setPreloadNodeModules } = useSettings();
+  const { preloadNodeModules, setPreloadNodeModules, enableWatchdog, setEnableWatchdog } = useSettings();
   const buttonSpring = useMemo<Transition>(
     () => ({ type: 'spring', stiffness: 450, damping: 30 }),
     []
@@ -348,6 +348,8 @@ function App() {
         email={user.email ?? ''}
         preloadNodeModules={preloadNodeModules}
         onTogglePreload={setPreloadNodeModules}
+        enableWatchdog={enableWatchdog}
+        onToggleWatchdog={setEnableWatchdog}
       />
       <AnimatePresence>
         {showVersionManager && currentProject && (
