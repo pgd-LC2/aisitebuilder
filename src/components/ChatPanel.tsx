@@ -5,7 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
 import { aiTaskService } from '../services/aiTaskService';
-import { ChatMessage, AITask, ProjectFilesContext } from '../types/project';
+import { ChatMessage, AITask, ProjectFilesContext, BuildLog } from '../types/project';
 import { supabase } from '../lib/supabase';
 import BuildLogPanel from './BuildLogPanel';
 
@@ -389,6 +389,13 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     };
   }, []);
 
+  const handleBuildLogAdded = useCallback((log: BuildLog) => {
+    if (log.message === 'AI 任务处理完成' || log.message.includes('AI 任务处理完成')) {
+      console.log('检测到 AI 任务处理完成日志，强制刷新消息');
+      loadMessages();
+    }
+  }, [loadMessages]);
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -437,12 +444,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       {currentProject && (
         <BuildLogPanel
           projectId={currentProject.id}
-          onLogAdded={(log) => {
-            if (log.message === 'AI 任务处理完成' || log.message.includes('AI 任务处理完成')) {
-              console.log('检测到 AI 任务处理完成日志，强制刷新消息');
-              loadMessages();
-            }
-          }}
+          onLogAdded={handleBuildLogAdded}
         />
       )}
 
