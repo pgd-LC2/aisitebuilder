@@ -5,6 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
 import { aiTaskService } from '../services/aiTaskService';
+import { imageProxyService } from '../services/imageProxyService';
 import { ChatMessage, AITask, ProjectFilesContext, BuildLog } from '../types/project';
 import { supabase } from '../lib/supabase';
 import BuildLogPanel from './BuildLogPanel';
@@ -18,6 +19,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [taskType, setTaskType] = useState<'chat_reply' | 'build_site' | 'refactor_code'>('chat_reply');
+  const [messageImages, setMessageImages] = useState<Record<string, string[]>>({});
+  const [imageBlobUrls, setImageBlobUrls] = useState<Record<string, string>>({});
   const { currentProject } = useProject();
   const { enableWatchdog } = useSettings();
   const projectId = currentProject?.id;
@@ -69,6 +72,38 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     if (!error && data) {
       console.log(`loadMessages 版本 ${currentVersion} 更新状态，消息数: ${data.length}`);
       setMessages(data);
+      
+      const { data: tasks } = await aiTaskService.getTasksByProjectId(projectId);
+      if (tasks) {
+        const newMessageImages: Record<string, string[]> = {};
+        const newImageBlobUrls: Record<string, string> = {};
+        
+        for (const task of tasks) {
+          if (task.status === 'completed' && task.result) {
+            const messageId = task.result.messageId as string | undefined;
+            const generatedImages = task.result.generated_images as string[] | undefined;
+            if (messageId && generatedImages && generatedImages.length > 0) {
+              newMessageImages[messageId] = generatedImages;
+              
+              for (const imagePath of generatedImages) {
+                const { data: blob, error } = await imageProxyService.fetchImage(imagePath);
+                if (blob && !error) {
+                  const blobUrl = URL.createObjectURL(blob);
+                  newImageBlobUrls[imagePath] = blobUrl;
+                } else {
+                  console.error('获取图片失败:', imagePath, error);
+                }
+              }
+            }
+          }
+        }
+        
+        if (Object.keys(newMessageImages).length > 0) {
+          console.log('从任务结果中加载生成的图片:', newMessageImages);
+          setMessageImages(newMessageImages);
+          setImageBlobUrls(newImageBlobUrls);
+        }
+      }
     }
     setLoading(false);
     lastFetchAtRef.current = Date.now();
@@ -199,6 +234,28 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           if (updatedTask.status === 'completed') {
             console.log('AI 任务已完成，准备获取消息');
             const messageId = updatedTask.result?.messageId as string | undefined;
+            const generatedImages = updatedTask.result?.generated_images as string[] | undefined;
+            
+            if (generatedImages && generatedImages.length > 0 && messageId) {
+              console.log('任务包含生成的图片:', generatedImages);
+              setMessageImages(prev => ({
+                ...prev,
+                [messageId]: generatedImages
+              }));
+              
+              const newImageBlobUrls: Record<string, string> = {};
+              for (const imagePath of generatedImages) {
+                const { data: blob, error } = await imageProxyService.fetchImage(imagePath);
+                if (blob && !error) {
+                  const blobUrl = URL.createObjectURL(blob);
+                  newImageBlobUrls[imagePath] = blobUrl;
+                } else {
+                  console.error('获取图片失败:', imagePath, error);
+                }
+              }
+              setImageBlobUrls(prev => ({ ...prev, ...newImageBlobUrls }));
+            }
+            
             if (messageId) {
               console.log('从 result 中获取 messageId:', messageId);
               const { data } = await messageService.getMessageById(messageId);
@@ -415,7 +472,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
             {messages.map(message => (
               <div
                 key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
                   className={`max-w-[85%] rounded-xl px-3 py-2 ${
@@ -434,6 +491,30 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                     })}
                   </span>
                 </div>
+                {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
+                    {messageImages[message.id].map((imagePath, index) => (
+                      <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
+                        {imageBlobUrls[imagePath] ? (
+                          <img
+                            src={imageBlobUrls[imagePath]}
+                            alt={`生成的图片 ${index + 1}`}
+                            className="max-w-full h-auto max-h-64 object-contain"
+                            loading="lazy"
+                            onError={(e) => {
+                              console.error('图片加载失败:', imagePath);
+                              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
+                            <p className="text-xs text-gray-500">加载中...</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             <div ref={messagesEndRef} />
