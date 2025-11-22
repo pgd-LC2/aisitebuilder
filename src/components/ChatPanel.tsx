@@ -20,6 +20,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [loading, setLoading] = useState(true);
   const [taskType, setTaskType] = useState<'chat_reply' | 'build_site' | 'refactor_code'>('chat_reply');
   const [messageImages, setMessageImages] = useState<Record<string, string[]>>({});
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const { currentProject } = useProject();
   const { enableWatchdog } = useSettings();
   const projectId = currentProject?.id;
@@ -71,6 +72,33 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     if (!error && data) {
       console.log(`loadMessages 版本 ${currentVersion} 更新状态，消息数: ${data.length}`);
       setMessages(data);
+      
+      const { data: tasks } = await aiTaskService.getTasksByProjectId(projectId);
+      if (tasks) {
+        const newMessageImages: Record<string, string[]> = {};
+        const newImageUrls: Record<string, string> = {};
+        
+        for (const task of tasks) {
+          if (task.status === 'completed' && task.result) {
+            const messageId = task.result.messageId as string | undefined;
+            const generatedImages = task.result.generated_images as string[] | undefined;
+            if (messageId && generatedImages && generatedImages.length > 0) {
+              newMessageImages[messageId] = generatedImages;
+              
+              for (const imagePath of generatedImages) {
+                const proxyUrl = await imageProxyService.getProxyUrl(imagePath);
+                newImageUrls[imagePath] = proxyUrl;
+              }
+            }
+          }
+        }
+        
+        if (Object.keys(newMessageImages).length > 0) {
+          console.log('从任务结果中加载生成的图片:', newMessageImages);
+          setMessageImages(newMessageImages);
+          setImageUrls(newImageUrls);
+        }
+      }
     }
     setLoading(false);
     lastFetchAtRef.current = Date.now();
@@ -209,6 +237,13 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                 ...prev,
                 [messageId]: generatedImages
               }));
+              
+              const newImageUrls: Record<string, string> = {};
+              for (const imagePath of generatedImages) {
+                const proxyUrl = await imageProxyService.getProxyUrl(imagePath);
+                newImageUrls[imagePath] = proxyUrl;
+              }
+              setImageUrls(prev => ({ ...prev, ...newImageUrls }));
             }
             
             if (messageId) {
@@ -450,16 +485,22 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                   <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
                     {messageImages[message.id].map((imagePath, index) => (
                       <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
-                        <img
-                          src={imageProxyService.getProxyUrl(imagePath)}
-                          alt={`生成的图片 ${index + 1}`}
-                          className="max-w-full h-auto max-h-64 object-contain"
-                          loading="lazy"
-                          onError={(e) => {
-                            console.error('图片加载失败:', imagePath);
-                            e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
-                          }}
-                        />
+                        {imageUrls[imagePath] ? (
+                          <img
+                            src={imageUrls[imagePath]}
+                            alt={`生成的图片 ${index + 1}`}
+                            className="max-w-full h-auto max-h-64 object-contain"
+                            loading="lazy"
+                            onError={(e) => {
+                              console.error('图片加载失败:', imagePath);
+                              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
+                            <p className="text-xs text-gray-500">加载中...</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

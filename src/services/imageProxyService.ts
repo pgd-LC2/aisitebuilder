@@ -1,25 +1,43 @@
 import { supabase } from '../lib/supabase';
 
 export const imageProxyService = {
-  getProxyUrl(filePath: string): string {
+  async getProxyUrl(filePath: string): Promise<string> {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.error('VITE_SUPABASE_URL 未配置');
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('VITE_SUPABASE_URL 或 VITE_SUPABASE_ANON_KEY 未配置');
+      return '';
+    }
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.error('未登录，无法获取图片代理 URL');
       return '';
     }
     
     const encodedPath = encodeURIComponent(filePath);
-    return `${supabaseUrl}/functions/v1/proxy-image?path=${encodedPath}`;
+    const encodedToken = encodeURIComponent(session.access_token);
+    const encodedApiKey = encodeURIComponent(supabaseAnonKey);
+    return `${supabaseUrl}/functions/v1/proxy-image?path=${encodedPath}&token=${encodedToken}&apikey=${encodedApiKey}`;
   },
 
-  getProxyUrlByFileId(fileId: string): string {
+  async getProxyUrlByFileId(fileId: string): Promise<string> {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.error('VITE_SUPABASE_URL 未配置');
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('VITE_SUPABASE_URL 或 VITE_SUPABASE_ANON_KEY 未配置');
       return '';
     }
     
-    return `${supabaseUrl}/functions/v1/proxy-image?fileId=${fileId}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.error('未登录，无法获取图片代理 URL');
+      return '';
+    }
+    
+    const encodedToken = encodeURIComponent(session.access_token);
+    const encodedApiKey = encodeURIComponent(supabaseAnonKey);
+    return `${supabaseUrl}/functions/v1/proxy-image?fileId=${fileId}&token=${encodedToken}&apikey=${encodedApiKey}`;
   },
 
   async fetchImage(
@@ -32,7 +50,7 @@ export const imageProxyService = {
         return { data: null, error: new Error('未登录') };
       }
 
-      const url = this.getProxyUrl(filePath);
+      const url = await this.getProxyUrl(filePath);
       
       const response = await fetch(url, {
         headers: {
@@ -63,7 +81,7 @@ export const imageProxyService = {
         return { data: null, error: new Error('未登录') };
       }
 
-      const url = this.getProxyUrlByFileId(fileId);
+      const url = await this.getProxyUrlByFileId(fileId);
       
       const response = await fetch(url, {
         headers: {
