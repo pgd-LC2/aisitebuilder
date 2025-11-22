@@ -10,6 +10,13 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 const TEXTUAL_MIME_PREFIXES = ['text/', 'application/json', 'application/javascript', 'application/typescript', 'application/xml'];
 const TEXTUAL_MIME_SUFFIXES = ['+json', '+xml'];
 
+const isImageFile = (file: ProjectFile | null) => {
+  if (!file) return false;
+  if (file.mime_type && file.mime_type.startsWith('image/')) return true;
+  const name = file.file_name.toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|ico)$/i.test(name);
+};
+
 const LANGUAGE_EXTENSION_MAP: Record<string, string> = {
   ts: 'typescript',
   tsx: 'tsx',
@@ -66,6 +73,8 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
   const [uploadProgress, setUploadProgress] = useState<FileUploadProgress[]>([]);
   const [selectedFile, setSelectedFile] = useState<ProjectFile | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [loadingContent, setLoadingContent] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']));
   const [showUploader, setShowUploader] = useState(false);
@@ -130,17 +139,27 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
   const loadFileContent = async (file: ProjectFile) => {
     setLoadingContent(true);
     setFileContent('');
+    setFileUrl(null);
+    setPreviewMessage(null);
 
     const { data, error } = await fileService.downloadFile(file.id);
     if (!error && data) {
       try {
-        const response = await fetch(data);
-        const text = await response.text();
-        setFileContent(text);
+        if (isImageFile(file)) {
+          setFileUrl(data);
+        } else if (isTextLikeFile(file)) {
+          const response = await fetch(data);
+          const text = await response.text();
+          setFileContent(text);
+        } else {
+          setPreviewMessage('当前文件类型暂不支持在线预览，请下载后查看。');
+        }
       } catch (err) {
         console.error('读取文件内容失败:', err);
-        setFileContent('无法读取文件内容');
+        setPreviewMessage('无法读取文件内容');
       }
+    } else if (error) {
+      setPreviewMessage('文件下载失败');
     }
     setLoadingContent(false);
   };
@@ -617,6 +636,25 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
                   <div className="text-center">
                     <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mb-2"></div>
                     <p className="text-sm text-gray-600">加载中...</p>
+                  </div>
+                </div>
+              ) : isImageFile(selectedFile) ? (
+                <div className="flex items-center justify-center h-full bg-gray-50 p-4">
+                  {fileUrl ? (
+                    <img
+                      src={fileUrl}
+                      alt={selectedFile?.file_name || '图片预览'}
+                      className="max-w-full max-h-full object-contain shadow-lg border border-gray-200 bg-white rounded"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-500">无法加载图片预览</p>
+                  )}
+                </div>
+              ) : previewMessage ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <File className="w-12 h-12 mx-auto mb-3 text-gray-400 opacity-50" />
+                    <p className="text-sm text-gray-500">{previewMessage}</p>
                   </div>
                 </div>
               ) : enableSyntaxHighlight ? (
