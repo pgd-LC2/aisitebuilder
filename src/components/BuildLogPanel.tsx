@@ -71,8 +71,12 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
         },
         (payload) => {
           console.log('🔔 收到新日志 Realtime 推送', payload);
-          console.log('payload.new:', payload.new);
-          appendLog(payload.new as BuildLog);
+          const log = payload.new as BuildLog;
+          console.log('payload.new:', log);
+          appendLog(log);
+          if (onLogAdded) {
+            onLogAdded(log);
+          }
         }
       )
       .subscribe((status, err) => {
