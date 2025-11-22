@@ -27,6 +27,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [isSubscribedReady, setIsSubscribedReady] = useState(false);
   
   const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const pendingReplyRef = useRef<{ messageId: string; startedAt: number } | null>(null);
   
   const lastFetchAtRef = useRef<number>(0);
   const loadMessagesVersionRef = useRef<number>(0);
@@ -71,6 +73,27 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     setLoading(false);
     lastFetchAtRef.current = Date.now();
   }, [projectId]);
+
+  const startPollingForReply = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+    }
+    const startedAt = Date.now();
+    console.log('开始轮询 AI 回复');
+    pollTimerRef.current = window.setInterval(() => {
+      if (!pendingReplyRef.current || Date.now() - startedAt > 60000) {
+        console.log('AI 回复轮询超时或已完成，停止轮询');
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        pendingReplyRef.current = null;
+        return;
+      }
+      console.log('轮询 AI 回复：调用 loadMessages()');
+      loadMessages();
+    }, 2500);
+  }, [loadMessages]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -164,16 +187,23 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           filter: `project_id=eq.${projectId}`
         },
         async (payload) => {
+          console.log('🔔 收到 ai_tasks UPDATE 推送:', payload);
           const updatedTask = payload.new as AITask;
+          console.log('updatedTask:', { id: updatedTask.id, type: updatedTask.type, status: updatedTask.status, result: updatedTask.result });
+          
           if (updatedTask.type !== 'chat_reply') {
+            console.log('任务类型不是 chat_reply，跳过');
             return;
           }
 
           if (updatedTask.status === 'completed') {
+            console.log('AI 任务已完成，准备获取消息');
             const messageId = updatedTask.result?.messageId as string | undefined;
             if (messageId) {
+              console.log('从 result 中获取 messageId:', messageId);
               const { data } = await messageService.getMessageById(messageId);
               if (data) {
+                console.log('成功获取消息，添加到界面');
                 appendMessage(data);
                 
                 if (watchdogTimerRef.current) {
@@ -189,8 +219,10 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                 return;
               }
             }
+            console.log('result 中没有 messageId，调用 loadMessages');
             await loadMessages();
           } else if (updatedTask.status === 'failed') {
+            console.log('AI 任务失败');
             await buildLogService.addBuildLog(
               projectId,
               'error',
@@ -302,6 +334,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           );
         } else {
           console.log('已触发 Edge Function 处理任务');
+          pendingReplyRef.current = { messageId: userMsg.id, startedAt: Date.now() };
+          startPollingForReply();
         }
       }
     }
@@ -315,8 +349,36 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   };
 
   useEffect(() => {
+    const pending = pendingReplyRef.current;
+    if (!pending) return;
+    
+    const hasAssistant = messages.some(m =>
+      m.role === 'assistant' &&
+      new Date(m.created_at).getTime() >= pending.startedAt - 1000
+    );
+    
+    if (hasAssistant) {
+      console.log('检测到 AI 回复已到达，停止轮询');
+      pendingReplyRef.current = null;
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    }
+  }, [messages]);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (pollTimerRef.current) {
+      console.log('项目切换，清理轮询定时器');
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pendingReplyRef.current = null;
+  }, [projectId]);
 
   useEffect(() => {
     return () => {
@@ -372,7 +434,17 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         )}
       </div>
 
-      {currentProject && <BuildLogPanel projectId={currentProject.id} />}
+      {currentProject && (
+        <BuildLogPanel
+          projectId={currentProject.id}
+          onLogAdded={(log) => {
+            if (log.message === 'AI 任务处理完成' || log.message.includes('AI 任务处理完成')) {
+              console.log('检测到 AI 任务处理完成日志，强制刷新消息');
+              loadMessages();
+            }
+          }}
+        />
+      )}
 
       <div className="px-4 py-2 bg-gray-50">
         {!isSubscribedReady && projectId && (
