@@ -27,6 +27,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const lastFetchAtRef = useRef<number>(0);
+  const loadMessagesVersionRef = useRef<number>(0);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -48,9 +49,21 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const loadMessages = useCallback(async () => {
     if (!projectId) return;
 
+    loadMessagesVersionRef.current += 1;
+    const currentVersion = loadMessagesVersionRef.current;
+    console.log(`loadMessages 开始 (版本 ${currentVersion})`);
+
     setLoading(true);
     const { data, error } = await messageService.getMessagesByProjectId(projectId);
+    
+    if (currentVersion < loadMessagesVersionRef.current) {
+      console.log(`loadMessages 版本 ${currentVersion} 已过期，忽略结果 (当前版本: ${loadMessagesVersionRef.current})`);
+      setLoading(false);
+      return;
+    }
+    
     if (!error && data) {
+      console.log(`loadMessages 版本 ${currentVersion} 更新状态，消息数: ${data.length}`);
       setMessages(data);
     }
     setLoading(false);
