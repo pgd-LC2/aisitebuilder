@@ -20,7 +20,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [loading, setLoading] = useState(true);
   const [taskType, setTaskType] = useState<'chat_reply' | 'build_site' | 'refactor_code'>('chat_reply');
   const [messageImages, setMessageImages] = useState<Record<string, string[]>>({});
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [imageBlobUrls, setImageBlobUrls] = useState<Record<string, string>>({});
   const { currentProject } = useProject();
   const { enableWatchdog } = useSettings();
   const projectId = currentProject?.id;
@@ -76,7 +76,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       const { data: tasks } = await aiTaskService.getTasksByProjectId(projectId);
       if (tasks) {
         const newMessageImages: Record<string, string[]> = {};
-        const newImageUrls: Record<string, string> = {};
+        const newImageBlobUrls: Record<string, string> = {};
         
         for (const task of tasks) {
           if (task.status === 'completed' && task.result) {
@@ -86,8 +86,13 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
               newMessageImages[messageId] = generatedImages;
               
               for (const imagePath of generatedImages) {
-                const proxyUrl = await imageProxyService.getProxyUrl(imagePath);
-                newImageUrls[imagePath] = proxyUrl;
+                const { data: blob, error } = await imageProxyService.fetchImage(imagePath);
+                if (blob && !error) {
+                  const blobUrl = URL.createObjectURL(blob);
+                  newImageBlobUrls[imagePath] = blobUrl;
+                } else {
+                  console.error('获取图片失败:', imagePath, error);
+                }
               }
             }
           }
@@ -96,7 +101,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         if (Object.keys(newMessageImages).length > 0) {
           console.log('从任务结果中加载生成的图片:', newMessageImages);
           setMessageImages(newMessageImages);
-          setImageUrls(newImageUrls);
+          setImageBlobUrls(newImageBlobUrls);
         }
       }
     }
@@ -238,12 +243,17 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                 [messageId]: generatedImages
               }));
               
-              const newImageUrls: Record<string, string> = {};
+              const newImageBlobUrls: Record<string, string> = {};
               for (const imagePath of generatedImages) {
-                const proxyUrl = await imageProxyService.getProxyUrl(imagePath);
-                newImageUrls[imagePath] = proxyUrl;
+                const { data: blob, error } = await imageProxyService.fetchImage(imagePath);
+                if (blob && !error) {
+                  const blobUrl = URL.createObjectURL(blob);
+                  newImageBlobUrls[imagePath] = blobUrl;
+                } else {
+                  console.error('获取图片失败:', imagePath, error);
+                }
               }
-              setImageUrls(prev => ({ ...prev, ...newImageUrls }));
+              setImageBlobUrls(prev => ({ ...prev, ...newImageBlobUrls }));
             }
             
             if (messageId) {
@@ -485,9 +495,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                   <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
                     {messageImages[message.id].map((imagePath, index) => (
                       <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
-                        {imageUrls[imagePath] ? (
+                        {imageBlobUrls[imagePath] ? (
                           <img
-                            src={imageUrls[imagePath]}
+                            src={imageBlobUrls[imagePath]}
                             alt={`生成的图片 ${index + 1}`}
                             className="max-w-full h-auto max-h-64 object-contain"
                             loading="lazy"

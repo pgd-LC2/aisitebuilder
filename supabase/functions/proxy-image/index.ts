@@ -22,21 +22,10 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('缺少必要的环境变量设置');
     }
-    
-    // 从请求的 apikey 参数中获取 anon key(用于用户认证)
-    const url = new URL(req.url);
-    const anonKeyFromRequest = url.searchParams.get('apikey');
-    
-    if (!anonKeyFromRequest) {
-      return new Response(JSON.stringify({ error: '缺少 apikey 参数' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
 
+    const url = new URL(req.url);
     const path = url.searchParams.get('path');
     const fileId = url.searchParams.get('fileId');
-    const token = url.searchParams.get('token');
 
     if (!path && !fileId) {
       return new Response(JSON.stringify({ error: '缺少 path 或 fileId 参数' }), {
@@ -46,19 +35,22 @@ Deno.serve(async (req) => {
     }
 
     const authHeader = req.headers.get('Authorization');
-    const authToken = token || (authHeader ? authHeader.replace('Bearer ', '') : null);
     
-    if (!authToken) {
-      return new Response(JSON.stringify({ error: '未授权：缺少认证令牌' }), {
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: '未授权：缺少 Authorization 头' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const supabase = createClient(supabaseUrl, anonKeyFromRequest, {
+    // 从 Authorization header 中提取 JWT token
+    const token = authHeader.replace('Bearer ', '');
+    
+    // 使用 service role key 创建 Supabase 客户端，并手动验证用户 token
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
         headers: {
-          Authorization: `Bearer ${authToken}`
+          Authorization: authHeader
         }
       }
     });
