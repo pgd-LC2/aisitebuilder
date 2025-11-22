@@ -51,7 +51,12 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       console.log('添加消息到界面');
       return [...prev, message];
     });
-  }, []);
+    
+    // 添加消息后自动滚动到底部
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+  }, [scrollToBottom]);
 
   const loadMessages = useCallback(async () => {
     if (!projectId) return;
@@ -107,7 +112,12 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
     setLoading(false);
     lastFetchAtRef.current = Date.now();
-  }, [projectId]);
+    
+    // 加载消息后自动滚动到底部
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+  }, [projectId, scrollToBottom]);
 
   const startPollingForReply = useCallback(() => {
     if (pollTimerRef.current) {
