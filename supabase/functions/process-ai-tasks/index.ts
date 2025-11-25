@@ -127,6 +127,111 @@ const TOOLS = [
         required: ['prompt']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_files',
+      description: '列出项目目录下的文件和子目录。用于了解项目结构。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要读取的文件路径，相对于项目根目录'
+          }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_file',
+      description: '写入或创建文件。用于生成新代码或修改现有文件。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要写入的文件路径，相对于项目根目录'
+          },
+          content: {
+            type: 'string',
+            description: '要写入的文件内容'
+          }
+        },
+        required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_file',
+      description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要删除的文件路径，相对于项目根目录'
+          }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_files',
+      description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
+      parameters: {
+        type: 'object',
+        properties: {
+          keyword: {
+            type: 'string',
+            description: '要搜索的关键词'
+          },
+          file_extension: {
+            type: 'string',
+            description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
+          }
+        },
+        required: ['keyword']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_project_structure',
+      description: '获取完整的项目文件树结构。用于全局了解项目组成。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
   }
 ];
 
@@ -243,6 +348,294 @@ async function saveImageToStorage(supabase, projectId: string, versionId: string
   return path;
 }
 
+// --- AI Agent 工具处理函数 ---
+
+interface ToolContext {
+  supabase: ReturnType<typeof createClient>;
+  projectId: string;
+  versionId: string;
+  bucket: string;
+  basePath: string;
+}
+
+function getMimeType(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const mimeTypes: Record<string, string> = {
+    'html': 'text/html',
+    'css': 'text/css',
+    'js': 'application/javascript',
+    'ts': 'application/typescript',
+    'tsx': 'application/typescript',
+    'jsx': 'application/javascript',
+    'json': 'application/json',
+    'md': 'text/markdown',
+    'txt': 'text/plain',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'webp': 'image/webp'
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
+function getFileCategory(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const codeExtensions = ['html', 'css', 'js', 'ts', 'tsx', 'jsx', 'json'];
+  const assetExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
+  const documentExtensions = ['md', 'txt', 'pdf'];
+  
+  if (codeExtensions.includes(ext)) return 'code';
+  if (assetExtensions.includes(ext)) return 'asset';
+  if (documentExtensions.includes(ext)) return 'document';
+  return 'code';
+}
+
+async function handleListFiles(ctx: ToolContext, args: { path?: string }): Promise<{ success: boolean; files?: Array<{ name: string; type: string; size?: number }>; error?: string }> {
+  try {
+    const relativePath = args.path || '';
+    const fullPath = relativePath ? `${ctx.basePath}/${relativePath}`.replace(/\/+/g, '/') : ctx.basePath;
+    
+    const { data: fileList, error } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .list(fullPath, {
+        limit: 100,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+    
+    if (error) {
+      return { success: false, error: `列出文件失败: ${error.message}` };
+    }
+    
+    const files = (fileList || []).map(f => ({
+      name: f.name,
+      type: f.id ? 'file' : 'directory',
+      size: f.metadata?.size
+    }));
+    
+    return { success: true, files };
+  } catch (e) {
+    return { success: false, error: `列出文件异常: ${e.message}` };
+  }
+}
+
+async function handleReadFile(ctx: ToolContext, args: { path: string }): Promise<{ success: boolean; content?: string; error?: string }> {
+  try {
+    const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
+    
+    const { data, error } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .download(fullPath);
+    
+    if (error) {
+      return { success: false, error: `读取文件失败: ${error.message}` };
+    }
+    
+    const content = await data.text();
+    return { success: true, content };
+  } catch (e) {
+    return { success: false, error: `读取文件异常: ${e.message}` };
+  }
+}
+
+async function handleWriteFile(ctx: ToolContext, args: { path: string; content: string }): Promise<{ success: boolean; file_path?: string; error?: string }> {
+  try {
+    const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
+    const fileName = args.path.split('/').pop() || 'unnamed';
+    const mimeType = getMimeType(fileName);
+    const fileCategory = getFileCategory(fileName);
+    
+    const encoder = new TextEncoder();
+    const buffer = encoder.encode(args.content);
+    
+    const { error: uploadError } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .upload(fullPath, buffer, {
+        contentType: mimeType,
+        upsert: true
+      });
+    
+    if (uploadError) {
+      return { success: false, error: `写入文件失败: ${uploadError.message}` };
+    }
+    
+    const { data: existingFile } = await ctx.supabase
+      .from('project_files')
+      .select('id')
+      .eq('project_id', ctx.projectId)
+      .eq('file_path', fullPath)
+      .maybeSingle();
+    
+    if (existingFile) {
+      await ctx.supabase
+        .from('project_files')
+        .update({
+          file_size: buffer.length,
+          mime_type: mimeType,
+          source_type: 'ai_generated'
+        })
+        .eq('id', existingFile.id);
+    } else {
+      await ctx.supabase
+        .from('project_files')
+        .insert({
+          project_id: ctx.projectId,
+          version_id: ctx.versionId,
+          file_name: fileName,
+          file_path: fullPath,
+          file_size: buffer.length,
+          mime_type: mimeType,
+          file_category: fileCategory,
+          source_type: 'ai_generated',
+          is_public: false
+        });
+    }
+    
+    return { success: true, file_path: fullPath };
+  } catch (e) {
+    return { success: false, error: `写入文件异常: ${e.message}` };
+  }
+}
+
+async function handleDeleteFile(ctx: ToolContext, args: { path: string }): Promise<{ success: boolean; error?: string }> {
+  try {
+    const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
+    
+    const { error: deleteError } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .remove([fullPath]);
+    
+    if (deleteError) {
+      return { success: false, error: `删除文件失败: ${deleteError.message}` };
+    }
+    
+    await ctx.supabase
+      .from('project_files')
+      .delete()
+      .eq('project_id', ctx.projectId)
+      .eq('file_path', fullPath);
+    
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: `删除文件异常: ${e.message}` };
+  }
+}
+
+async function handleSearchFiles(ctx: ToolContext, args: { keyword: string; file_extension?: string }): Promise<{ success: boolean; results?: Array<{ file: string; matches: string[] }>; error?: string }> {
+  try {
+    const { data: fileList, error: listError } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .list(ctx.basePath, {
+        limit: 50,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+    
+    if (listError) {
+      return { success: false, error: `搜索文件失败: ${listError.message}` };
+    }
+    
+    const textExtensions = ['.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.txt'];
+    const filesToSearch = (fileList || []).filter(f => {
+      if (!f.id) return false;
+      const hasTextExt = textExtensions.some(ext => f.name.endsWith(ext));
+      if (args.file_extension) {
+        return f.name.endsWith(args.file_extension);
+      }
+      return hasTextExt;
+    });
+    
+    const results: Array<{ file: string; matches: string[] }> = [];
+    
+    for (const file of filesToSearch) {
+      const filePath = `${ctx.basePath}/${file.name}`.replace(/\/+/g, '/');
+      const { data, error } = await ctx.supabase.storage
+        .from(ctx.bucket)
+        .download(filePath);
+      
+      if (error) continue;
+      
+      const content = await data.text();
+      const lines = content.split('\n');
+      const matchingLines: string[] = [];
+      
+      lines.forEach((line, index) => {
+        if (line.toLowerCase().includes(args.keyword.toLowerCase())) {
+          matchingLines.push(`Line ${index + 1}: ${line.trim().substring(0, 100)}`);
+        }
+      });
+      
+      if (matchingLines.length > 0) {
+        results.push({
+          file: file.name,
+          matches: matchingLines.slice(0, 5)
+        });
+      }
+    }
+    
+    return { success: true, results };
+  } catch (e) {
+    return { success: false, error: `搜索文件异常: ${e.message}` };
+  }
+}
+
+interface FileTreeNode {
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+  children?: FileTreeNode[];
+}
+
+async function handleGetProjectStructure(ctx: ToolContext): Promise<{ success: boolean; structure?: FileTreeNode[]; error?: string }> {
+  try {
+    const { data: fileList, error } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .list(ctx.basePath, {
+        limit: 200,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+    
+    if (error) {
+      return { success: false, error: `获取项目结构失败: ${error.message}` };
+    }
+    
+    const structure: FileTreeNode[] = (fileList || []).map(f => ({
+      name: f.name,
+      type: f.id ? 'file' as const : 'directory' as const,
+      size: f.metadata?.size
+    }));
+    
+    return { success: true, structure };
+  } catch (e) {
+    return { success: false, error: `获取项目结构异常: ${e.message}` };
+  }
+}
+
+async function executeToolCall(
+  toolName: string,
+  args: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<{ success: boolean; result: unknown }> {
+  switch (toolName) {
+    case 'list_files':
+      return { success: true, result: await handleListFiles(ctx, args as { path?: string }) };
+    case 'read_file':
+      return { success: true, result: await handleReadFile(ctx, args as { path: string }) };
+    case 'write_file':
+      return { success: true, result: await handleWriteFile(ctx, args as { path: string; content: string }) };
+    case 'delete_file':
+      return { success: true, result: await handleDeleteFile(ctx, args as { path: string }) };
+    case 'search_files':
+      return { success: true, result: await handleSearchFiles(ctx, args as { keyword: string; file_extension?: string }) };
+    case 'get_project_structure':
+      return { success: true, result: await handleGetProjectStructure(ctx) };
+    case 'generate_image':
+      return { success: false, result: { error: 'generate_image handled separately' } };
+    default:
+      return { success: false, result: { error: `未知工具: ${toolName}` } };
+  }
+}
+
 async function writeBuildLog(supabase, projectId, logType, message, metadata = {}) {
   const { error } = await supabase.from('build_logs').insert({
     project_id: projectId,
@@ -288,16 +681,55 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
       fileContextStr = await getProjectFileContext(supabase, projectFilesContext.bucket, projectFilesContext.path);
     }
     
+    const versionId = projectFilesContext?.versionId || 'default';
+    const bucket = projectFilesContext?.bucket || 'project-files';
+    const basePath = projectFilesContext?.path || `${task.project_id}/${versionId}`;
+    
+    const toolContext: ToolContext = {
+      supabase,
+      projectId: task.project_id,
+      versionId,
+      bucket,
+      basePath
+    };
+    
     let messages = [];
-    const baseSystemPrompt = '你是一个专业的全栈开发 AI 助手。请用简体中文回复。你可以使用generate_image工具来生成图片。';
+    
+    const agentSystemPrompt = `你是一个专业的全栈开发 AI Agent。请用简体中文回复。
+
+你拥有以下工具能力，可以通过函数调用来使用它们：
+
+**文件操作工具：**
+- list_files: 列出项目目录下的文件和子目录，用于了解项目结构
+- read_file: 读取指定文件的内容，用于查看现有代码或配置
+- write_file: 写入或创建文件，用于生成新代码或修改现有文件
+- delete_file: 删除指定文件（谨慎使用，仅在用户明确要求时调用）
+- search_files: 在项目文件中搜索关键词，用于定位相关代码
+- get_project_structure: 获取完整的项目文件树结构
+
+**创意工具：**
+- generate_image: 根据描述生成图片
+
+**工作流程指南：**
+1. 当需要了解项目现状时，先使用 get_project_structure 或 list_files 查看项目结构
+2. 当需要修改代码时，先使用 read_file 读取现有文件内容，理解上下文
+3. 使用 write_file 创建或修改文件，将生成的代码保存到项目中
+4. 当需要查找特定功能或变量时，使用 search_files 搜索
+5. 完成所有必要的文件操作后，给出最终的总结回复
+
+**重要提示：**
+- 你可以多次调用工具来完成复杂任务
+- 每次工具调用后，根据结果决定下一步行动
+- 在完成所有步骤后再给出最终答案
+- 所有文件操作都限定在当前项目范围内`;
     
     if (task.type === 'chat_reply') {
       const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 10);
-      const contextPrompt = fileContextStr ? `\n参考现有代码: ${fileContextStr}` : '';
+      const contextPrompt = fileContextStr ? `\n\n当前项目文件参考:\n${fileContextStr}` : '';
       messages = [
         {
           role: 'system',
-          content: baseSystemPrompt + contextPrompt
+          content: agentSystemPrompt + contextPrompt
         },
         ...chatHistory.map((msg)=>({
             role: msg.role,
@@ -306,26 +738,52 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
       ];
     } else if (task.type === 'build_site') {
       const requirement = task.payload?.requirement || "创建基础着陆页";
+      const buildPrompt = `${agentSystemPrompt}
+
+**当前任务：构建网站**
+你的任务是根据用户需求生成网站代码。请按以下步骤执行：
+1. 首先使用 get_project_structure 了解现有项目结构
+2. 根据需求规划要创建或修改的文件
+3. 使用 write_file 工具创建必要的文件（如 index.html, styles.css, script.js 等）
+4. 如果需要图片，使用 generate_image 生成
+5. 完成后给出构建总结
+
+${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
+      
       messages = [
         {
           role: 'system',
-          content: `${baseSystemPrompt}\n你的任务是根据用户需求生成网站代码。${fileContextStr}\n请输出 JSON 格式的构建计划，或直接输出代码块。`
+          content: buildPrompt
         },
         {
           role: 'user',
-          content: `构建需求：${requirement}`
+          content: `请帮我构建网站，需求如下：${requirement}`
         }
       ];
     } else if (task.type === 'refactor_code') {
       const code = task.payload?.code || "";
+      const filePath = task.payload?.filePath || "";
+      const refactorPrompt = `${agentSystemPrompt}
+
+**当前任务：代码重构**
+你的任务是重构代码，关注性能、可读性和最佳实践。请按以下步骤执行：
+1. 如果提供了文件路径，使用 read_file 读取完整文件内容
+2. 分析代码结构和问题
+3. 使用 write_file 将重构后的代码写回文件
+4. 给出重构说明和改进点
+
+${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
+      
       messages = [
         {
           role: 'system',
-          content: `${baseSystemPrompt}\n你的任务是重构代码，关注性能、可读性和最佳实践。${fileContextStr}`
+          content: refactorPrompt
         },
         {
           role: 'user',
-          content: `请重构以下代码：\n${code}`
+          content: filePath 
+            ? `请重构文件 ${filePath} 中的代码` 
+            : `请重构以下代码：\n\`\`\`\n${code}\n\`\`\``
         }
       ];
     } else {
@@ -338,19 +796,26 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     let iteration = 0;
     let finalResponse = '';
     const generatedImages: string[] = [];
+    const modifiedFiles: string[] = [];
     
     while (iteration < maxIterations) {
       iteration++;
       console.log(`Agent 迭代 ${iteration}/${maxIterations}`);
+      await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration}/${maxIterations})...`);
       
       const assistantMessage = await callOpenRouter(messages, apiKey, model, TOOLS);
       messages.push(assistantMessage);
       
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
         for (const toolCall of assistantMessage.tool_calls) {
-          if (toolCall.function.name === 'generate_image') {
+          const toolName = toolCall.function.name;
+          const args = JSON.parse(toolCall.function.arguments || '{}');
+          
+          console.log(`执行工具: ${toolName}`, args);
+          await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
+          
+          if (toolName === 'generate_image') {
             try {
-              const args = JSON.parse(toolCall.function.arguments);
               const prompt = args.prompt;
               const aspectRatio = args.aspect_ratio || '1:1';
               
@@ -360,7 +825,6 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
               
               const timestamp = Date.now();
               const fileName = `generated_image_${timestamp}.png`;
-              const versionId = projectFilesContext?.versionId || 'default';
               
               const imagePath = await saveImageToStorage(
                 supabase,
@@ -397,6 +861,30 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
                 })
               });
             }
+          } else {
+            const { result } = await executeToolCall(toolName, args, toolContext);
+            
+            if (toolName === 'write_file' && (result as { success: boolean; file_path?: string }).success) {
+              const writeResult = result as { success: boolean; file_path?: string };
+              if (writeResult.file_path) {
+                modifiedFiles.push(writeResult.file_path);
+                await writeBuildLog(supabase, task.project_id, 'success', `文件已写入: ${writeResult.file_path}`);
+              }
+            } else if (toolName === 'delete_file' && (result as { success: boolean }).success) {
+              await writeBuildLog(supabase, task.project_id, 'info', `文件已删除: ${args.path}`);
+            } else if (toolName === 'read_file') {
+              await writeBuildLog(supabase, task.project_id, 'info', `已读取文件: ${args.path}`);
+            } else if (toolName === 'list_files' || toolName === 'get_project_structure') {
+              await writeBuildLog(supabase, task.project_id, 'info', `已获取项目结构`);
+            } else if (toolName === 'search_files') {
+              await writeBuildLog(supabase, task.project_id, 'info', `已搜索关键词: ${args.keyword}`);
+            }
+            
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(result)
+            });
           }
         }
       } else {
@@ -406,23 +894,25 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     }
     
     if (iteration >= maxIterations) {
-      finalResponse = '处理超时，已达到最大迭代次数';
+      finalResponse = '处理超时，已达到最大迭代次数。以下是已完成的操作：\n' + 
+        (modifiedFiles.length > 0 ? `修改的文件: ${modifiedFiles.join(', ')}` : '无文件修改') +
+        (generatedImages.length > 0 ? `\n生成的图片: ${generatedImages.join(', ')}` : '');
     }
     
-    const resultData = {
+    const resultData: Record<string, unknown> = {
       text: finalResponse,
       model: model,
       processed_files: !!fileContextStr,
       generated_images: generatedImages,
+      modified_files: modifiedFiles,
       iterations: iteration
     };
     
-    // 所有任务类型的 AI 回复都保存到 chat_messages 表
     const messageId = await writeAssistantMessage(supabase, task.project_id, finalResponse);
     if (!messageId) throw new Error('写入助手消息失败');
     resultData.messageId = messageId;
     
-    await writeBuildLog(supabase, task.project_id, 'success', 'AI 任务处理完成');
+    await writeBuildLog(supabase, task.project_id, 'success', `AI 任务处理完成 (${iteration} 次迭代, ${modifiedFiles.length} 个文件修改)`);
     await updateTaskStatus(supabase, task.id, 'completed', resultData);
     
   } catch (error) {
