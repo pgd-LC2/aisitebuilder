@@ -236,8 +236,27 @@ const TOOLS = [
 ];
 
 // --- API 调用与日志 ---
-async function callOpenRouter(messages, apiKey, model, tools = null) {
-  const requestBody: any = {
+interface CallOpenRouterOptions {
+  tools?: typeof TOOLS | null;
+  responseFormat?: {
+    type: 'json_schema';
+    json_schema: {
+      name: string;
+      strict: boolean;
+      schema: Record<string, unknown>;
+    };
+  } | null;
+}
+
+async function callOpenRouter(
+  messages: Array<{ role: string; content: string; tool_call_id?: string }>,
+  apiKey: string,
+  model: string,
+  options: CallOpenRouterOptions = {}
+) {
+  const { tools = null, responseFormat = null } = options;
+  
+  const requestBody: Record<string, unknown> = {
     model: model,
     messages: messages,
     temperature: 0.7,
@@ -246,6 +265,11 @@ async function callOpenRouter(messages, apiKey, model, tools = null) {
   
   if (tools) {
     requestBody.tools = tools;
+    requestBody.tool_choice = 'auto';
+  }
+  
+  if (responseFormat) {
+    requestBody.response_format = responseFormat;
   }
   
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -792,18 +816,17 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
     
     console.log(`调用 OpenRouter API, Model: ${model}, Msg Count: ${messages.length}`);
     
-    const maxIterations = 10;
     let iteration = 0;
     let finalResponse = '';
     const generatedImages: string[] = [];
     const modifiedFiles: string[] = [];
     
-    while (iteration < maxIterations) {
+    while (true) {
       iteration++;
-      console.log(`Agent 迭代 ${iteration}/${maxIterations}`);
-      await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration}/${maxIterations})...`);
+      console.log(`Agent 迭代 ${iteration}`);
+      await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      const assistantMessage = await callOpenRouter(messages, apiKey, model, TOOLS);
+      const assistantMessage = await callOpenRouter(messages, apiKey, model, { tools: TOOLS });
       messages.push(assistantMessage);
       
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
@@ -891,12 +914,6 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
         finalResponse = assistantMessage.content || '';
         break;
       }
-    }
-    
-    if (iteration >= maxIterations) {
-      finalResponse = '处理超时，已达到最大迭代次数。以下是已完成的操作：\n' + 
-        (modifiedFiles.length > 0 ? `修改的文件: ${modifiedFiles.join(', ')}` : '无文件修改') +
-        (generatedImages.length > 0 ? `\n生成的图片: ${generatedImages.join(', ')}` : '');
     }
     
     const resultData: Record<string, unknown> = {
