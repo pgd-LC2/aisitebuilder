@@ -246,6 +246,15 @@ interface CallOpenRouterOptions {
       schema: Record<string, unknown>;
     };
   } | null;
+  reasoning?: {
+    effort: 'minimal' | 'low' | 'medium' | 'high';
+  } | null;
+}
+
+interface ResponsesApiInput {
+  type: 'message';
+  role: 'user' | 'assistant';
+  content: Array<{ type: 'input_text' | 'output_text'; text: string }>;
 }
 
 async function callOpenRouter(
@@ -254,7 +263,73 @@ async function callOpenRouter(
   model: string,
   options: CallOpenRouterOptions = {}
 ) {
-  const { tools = null, responseFormat = null } = options;
+  const { tools = null, responseFormat = null, reasoning = null } = options;
+  
+  if (reasoning) {
+    const input: ResponsesApiInput[] = messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({
+        type: 'message' as const,
+        role: m.role as 'user' | 'assistant',
+        content: [{
+          type: m.role === 'user' ? 'input_text' as const : 'output_text' as const,
+          text: m.content
+        }]
+      }));
+    
+    const requestBody: Record<string, unknown> = {
+      model: model,
+      input: input,
+      reasoning: reasoning,
+      max_output_tokens: 9000
+    };
+    
+    if (tools) {
+      requestBody.tools = tools;
+    }
+    
+    const response = await fetch('https://openrouter.ai/api/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://aisitebuilder.app',
+        'X-Title': 'AI Site Builder'
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`OpenRouter Responses API 错误: ${response.status} - ${errorData}`);
+    }
+    
+    const data = await response.json();
+    
+    const messageOutput = data.output?.find((o: { type: string }) => o.type === 'message');
+    const reasoningOutput = data.output?.find((o: { type: string }) => o.type === 'reasoning');
+    
+    let content = '';
+    if (messageOutput?.content) {
+      const textContent = messageOutput.content.find((c: { type: string }) => c.type === 'output_text');
+      content = textContent?.text || '';
+    }
+    
+    const result: Record<string, unknown> = {
+      role: 'assistant',
+      content: content
+    };
+    
+    if (reasoningOutput?.summary) {
+      result.reasoning_summary = reasoningOutput.summary;
+    }
+    
+    if (messageOutput?.tool_calls) {
+      result.tool_calls = messageOutput.tool_calls;
+    }
+    
+    return result;
+  }
   
   const requestBody: Record<string, unknown> = {
     model: model,
@@ -826,7 +901,10 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
       console.log(`Agent 迭代 ${iteration}`);
       await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      const assistantMessage = await callOpenRouter(messages, apiKey, model, { tools: TOOLS });
+      const assistantMessage = await callOpenRouter(messages, apiKey, model, { 
+        tools: TOOLS,
+        reasoning: { effort: 'medium' }
+      });
       messages.push(assistantMessage);
       
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
