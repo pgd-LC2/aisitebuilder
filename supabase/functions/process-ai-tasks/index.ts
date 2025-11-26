@@ -1,13 +1,15 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { Client } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+
 // --- 配置与常量 ---
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey'
 };
+
 // 根据任务类型配置模型 - 统一使用 Google Gemini 3 Pro Preview
-const MODEL_CONFIG = {
+const MODEL_CONFIG: Record<string, string> = {
   chat_reply: 'google/gemini-3-pro-preview',
   build_site: 'google/gemini-3-pro-preview',
   refactor_code: 'google/gemini-3-pro-preview',
@@ -15,11 +17,11 @@ const MODEL_CONFIG = {
 };
 
 const IMAGE_MODEL = 'google/gemini-3-pro-image-preview';
+
 // --- 数据库操作函数 ---
-async function claimTask(pgClient, projectId) {
+async function claimTask(pgClient: Client, projectId?: string) {
   try {
     const projectFilterSQL = projectId ? 'AND project_id = $1' : '';
-    // 使用 SKIP LOCKED 确保并发安全，同时过滤掉重试次数过多的任务
     const query = `
       WITH next_task AS (
         SELECT id
@@ -41,9 +43,7 @@ async function claimTask(pgClient, projectId) {
     `;
     const result = await pgClient.queryObject({
       text: query,
-      args: projectId ? [
-        projectId
-      ] : []
+      args: projectId ? [projectId] : []
     });
     if (result.rows.length === 0) return null;
     return result.rows[0];
@@ -52,511 +52,235 @@ async function claimTask(pgClient, projectId) {
     throw error;
   }
 }
-async function fetchRecentChatMessages(supabase, projectId, limit = 10) {
-  const { data, error } = await supabase.from('chat_messages').select('*').eq('project_id', projectId).order('created_at', {
-    ascending: false
-  }) // 先取最新的
-  .limit(limit);
+
+async function fetchRecentChatMessages(supabase: ReturnType<typeof createClient>, projectId: string, limit = 10) {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  
   if (error) {
     console.error('获取聊天历史失败:', error);
     return [];
   }
-  return (data || []).reverse(); // 反转回时间正序
+  return (data || []).reverse();
 }
-// --- 文件上下文处理 (新功能) ---
-// 从 Storage 读取文件内容并拼接为 Context 字符串
-async function getProjectFileContext(supabase, bucket, path) {
+
+// --- 文件上下文处理 ---
+async function getProjectFileContext(supabase: ReturnType<typeof createClient>, bucket: string, path: string) {
   try {
-    // 1. 列出目录下的文件
     const { data: fileList, error: listError } = await supabase.storage.from(bucket).list(path, {
       limit: 20,
       offset: 0,
-      sortBy: {
-        column: 'name',
-        order: 'asc'
-      }
+      sortBy: { column: 'name', order: 'asc' }
     });
+    
     if (listError || !fileList || fileList.length === 0) return '';
+    
     let contextStr = "\n\n=== 当前项目文件上下文 ===\n";
-    // 2. 并行下载部分关键文件内容 (过滤掉图片等非文本文件)
-    const textExtensions = [
-      '.html',
-      '.css',
-      '.js',
-      '.ts',
-      '.jsx',
-      '.tsx',
-      '.json',
-      '.md'
-    ];
-    const filesToRead = fileList.filter((f)=>textExtensions.some((ext)=>f.name.endsWith(ext)) && f.metadata?.size < 20000 // 限制文件大小，防止Token溢出
+    const textExtensions = ['.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.json', '.md'];
+    
+    const filesToRead = fileList.filter(
+      (f) => textExtensions.some((ext) => f.name.endsWith(ext)) && f.metadata?.size < 20000
     );
-    const fileContents = await Promise.all(filesToRead.map(async (f)=>{
-      const filePath = `${path}/${f.name}`.replace(/^\/+/, '');
-      const { data, error } = await supabase.storage.from(bucket).download(filePath);
-      if (error) return null;
-      const text = await data.text();
-      return `\n--- File: ${f.name} ---\n${text}`;
-    }));
+    
+    const fileContents = await Promise.all(
+      filesToRead.map(async (f) => {
+        const filePath = `${path}/${f.name}`.replace(/^\/+/, '');
+        const { data, error } = await supabase.storage.from(bucket).download(filePath);
+        if (error) return null;
+        const text = await data.text();
+        return `\n--- File: ${f.name} ---\n${text}`;
+      })
+    );
+    
     contextStr += fileContents.filter(Boolean).join('\n');
     return contextStr;
   } catch (e) {
     console.error("读取文件上下文失败:", e);
-    return ""; // 失败不阻断流程，只是没上下文
+    return "";
   }
 }
-const TOOLS = [
+
+// --- Chat Completions API 工具定义 ---
+// 使用 Chat Completions API 格式，工具定义需要嵌套在 function 对象中
+const CHAT_COMPLETION_TOOLS = [
   {
     type: 'function' as const,
-    name: 'generate_image',
-    description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        prompt: {
-          type: 'string',
-          description: '图片生成的详细描述,用英文描述'
+    function: {
+      name: 'generate_image',
+      description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: '图片生成的详细描述,用英文描述' },
+          aspect_ratio: { type: 'string', description: '图片的宽高比', enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] }
         },
-        aspect_ratio: {
-          type: 'string',
-          description: '图片的宽高比',
-          enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
-        }
-      },
-      required: ['prompt']
+        required: ['prompt']
+      }
     }
   },
   {
     type: 'function' as const,
-    name: 'list_files',
-    description: '列出项目目录下的文件和子目录。用于了解项目结构。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
-        }
-      },
-      required: []
+    function: {
+      name: 'list_files',
+      description: '列出项目目录下的文件和子目录。用于了解项目结构。',
+      parameters: { type: 'object', properties: { path: { type: 'string', description: '要列出的目录路径，相对于项目根目录。留空表示根目录。' } }, required: [] }
     }
   },
   {
     type: 'function' as const,
-    name: 'read_file',
-    description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要读取的文件路径，相对于项目根目录'
-        }
-      },
-      required: ['path']
+    function: {
+      name: 'read_file',
+      description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
+      parameters: { type: 'object', properties: { path: { type: 'string', description: '要读取的文件路径，相对于项目根目录' } }, required: ['path'] }
     }
   },
   {
     type: 'function' as const,
-    name: 'write_file',
-    description: '写入或创建文件。用于生成新代码或修改现有文件。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要写入的文件路径，相对于项目根目录'
-        },
-        content: {
-          type: 'string',
-          description: '要写入的文件内容'
-        }
-      },
-      required: ['path', 'content']
+    function: {
+      name: 'write_file',
+      description: '写入或创建文件。用于生成新代码或修改现有文件。',
+      parameters: { type: 'object', properties: { path: { type: 'string', description: '要写入的文件路径，相对于项目根目录' }, content: { type: 'string', description: '要写入的文件内容' } }, required: ['path', 'content'] }
     }
   },
   {
     type: 'function' as const,
-    name: 'delete_file',
-    description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要删除的文件路径，相对于项目根目录'
-        }
-      },
-      required: ['path']
+    function: {
+      name: 'delete_file',
+      description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
+      parameters: { type: 'object', properties: { path: { type: 'string', description: '要删除的文件路径，相对于项目根目录' } }, required: ['path'] }
     }
   },
   {
     type: 'function' as const,
-    name: 'search_files',
-    description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        keyword: {
-          type: 'string',
-          description: '要搜索的关键词'
-        },
-        file_extension: {
-          type: 'string',
-          description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
-        }
-      },
-      required: ['keyword']
+    function: {
+      name: 'search_files',
+      description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
+      parameters: { type: 'object', properties: { keyword: { type: 'string', description: '要搜索的关键词' }, file_extension: { type: 'string', description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）' } }, required: ['keyword'] }
     }
   },
   {
     type: 'function' as const,
-    name: 'get_project_structure',
-    description: '获取完整的项目文件树结构。用于全局了解项目组成。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: []
+    function: {
+      name: 'get_project_structure',
+      description: '获取完整的项目文件树结构。用于全局了解项目组成。',
+      parameters: { type: 'object', properties: {}, required: [] }
     }
   }
 ];
 
-// --- API 调用与日志 ---
-
-// 使用宽松类型以保留 OpenRouter/Gemini 返回的所有字段（如 thought_signature）
-type RawOutputItem = Record<string, unknown>;
-
-interface CallOpenRouterOptions {
-  tools?: typeof TOOLS | null;
-  toolChoice?: 'auto' | 'none' | { type: 'function'; name: string };
-  reasoning?: {
-    effort: 'minimal' | 'low' | 'medium' | 'high';
-  } | null;
-  plugins?: Array<{ id: string; max_results?: number }> | null;
+// --- Chat Completions API 类型定义 ---
+interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+  index?: number;
 }
 
-// 将初始消息转换为 Responses API 输入格式（仅用于首次调用）
-function messagesToInitialInput(
-  messages: Array<{ role: string; content: string }>
-): RawOutputItem[] {
-  const input: RawOutputItem[] = [];
-  let messageIdCounter = 0;
-  
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      input.push({
-        type: 'message',
-        role: 'system',
-        content: [{ type: 'input_text', text: msg.content }]
-      });
-    } else if (msg.role === 'developer') {
-      input.push({
-        type: 'message',
-        role: 'developer',
-        content: [{ type: 'input_text', text: msg.content }]
-      });
-    } else if (msg.role === 'user') {
-      input.push({
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: msg.content }]
-      });
-    } else if (msg.role === 'assistant') {
-      input.push({
-        type: 'message',
-        role: 'assistant',
-        id: `msg_${++messageIdCounter}`,
-        status: 'completed',
-        content: [{ type: 'output_text', text: msg.content, annotations: [] }]
-      });
-    }
-  }
-  
-  return input;
+interface ChatCompletionMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  // reasoning_details 用于保留 Gemini 的推理信息，必须原样传回
+  reasoning_details?: unknown;
+  // reasoning 是 OpenRouter 返回的可读推理文本
+  reasoning?: string | null;
 }
 
-// 解析 Responses API 输出
-interface ParsedResponsesApiOutput {
-  role: 'assistant';
-  content: string;
-  function_calls?: Array<{
-    id: string;
-    call_id: string;
-    name: string;
-    arguments: string;
-  }>;
-  reasoning_summary?: string[];
+interface ChatCompletionResponse {
+  id: string;
+  model: string;
+  choices: Array<{ index: number; message: ChatCompletionMessage; finish_reason: string | null }>;
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
-function parseResponsesApiOutput(data: Record<string, unknown>): ParsedResponsesApiOutput {
-  const output = data.output as Array<{ type: string; [key: string]: unknown }> || [];
-  
-  const messageOutput = output.find(o => o.type === 'message') as {
-    type: string;
-    id?: string;
-    content?: Array<{ type: string; text?: string }>;
-  } | undefined;
-  
-  const reasoningOutput = output.find(o => o.type === 'reasoning') as {
-    type: string;
-    summary?: Array<{ type?: string; text?: string } | string>;
-  } | undefined;
-  
-  const functionCalls = output.filter(o => o.type === 'function_call') as Array<{
-    type: string;
-    id: string;
-    call_id: string;
-    name: string;
-    arguments: string;
-  }>;
-  
-  let content = '';
-  if (messageOutput?.content) {
-    const textContent = messageOutput.content.find(c => c.type === 'output_text');
-    content = textContent?.text || '';
-  }
-  
-  const result: ParsedResponsesApiOutput = {
-    role: 'assistant',
-    content: content
-  };
-  
-  if (functionCalls.length > 0) {
-    result.function_calls = functionCalls.map(fc => ({
-      id: fc.id,
-      call_id: fc.call_id,
-      name: fc.name,
-      arguments: fc.arguments
-    }));
-  }
-  
-  if (reasoningOutput?.summary && Array.isArray(reasoningOutput.summary)) {
-    const summaryTexts = reasoningOutput.summary
-      .map((item: { type?: string; text?: string } | string) => {
-        if (typeof item === 'string') {
-          return item;
-        }
-        if (item && typeof item === 'object' && typeof item.text === 'string') {
-          return item.text;
-        }
-        return '';
-      })
-      .filter((text: string) => text.length > 0);
-    
-    if (summaryTexts.length > 0) {
-      result.reasoning_summary = summaryTexts;
-    }
-  }
-  
-  return result;
+interface ChatCompletionOptions {
+  tools?: typeof CHAT_COMPLETION_TOOLS | null;
+  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
+  reasoning?: { effort: 'minimal' | 'low' | 'medium' | 'high' } | null;
 }
 
-// Responses API 返回结果（包含解析后的数据和原始输出）
-interface ResponsesApiResult {
-  parsed: ParsedResponsesApiOutput;
-  rawOutput: RawOutputItem[];  // 保留完整的 output 数组，包含 thought_signature 等字段
-}
-
-// 调用 OpenRouter Responses API
-async function callOpenRouterResponsesApi(
-  input: RawOutputItem[],
+// --- Chat Completions API 调用函数 ---
+async function callOpenRouterChatCompletions(
+  messages: ChatCompletionMessage[],
   apiKey: string,
   model: string,
-  options: CallOpenRouterOptions = {}
-): Promise<ResponsesApiResult> {
-  const { tools = null, toolChoice = 'auto', reasoning = null, plugins = null } = options;
+  options: ChatCompletionOptions = {}
+): Promise<{ message: ChatCompletionMessage; finishReason: string | null; raw: ChatCompletionResponse }> {
+  const { tools = null, toolChoice = 'auto', reasoning = null } = options;
   
-  const requestBody: Record<string, unknown> = {
-    model: model,
-    input: input,
-    max_output_tokens: 16000
-  };
+  const requestBody: Record<string, unknown> = { model, messages, max_tokens: 16000 };
+  if (tools) { requestBody.tools = tools; requestBody.tool_choice = toolChoice; }
+  if (reasoning) { requestBody.reasoning = reasoning; }
   
-  if (tools) {
-    requestBody.tools = tools;
-    requestBody.tool_choice = toolChoice;
-  }
+  console.log('Chat Completions API Request:', JSON.stringify({ model, messageCount: messages.length, hasTools: !!tools, toolChoice, reasoning }));
   
-  if (reasoning) {
-    requestBody.reasoning = reasoning;
-  }
-  
-  if (plugins) {
-    requestBody.plugins = plugins;
-  }
-  
-  console.log('Responses API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
-  
-  // 调试：打印 input 中的非 message items（reasoning, function_call, function_call_output）
-  const nonMessageItems = input.filter(i => i.type !== 'message');
-  console.log('DEBUG input non-message items count:', nonMessageItems.length);
-  console.log('DEBUG input non-message items:', JSON.stringify(
-    nonMessageItems.map(i => {
-      const anyI = i as Record<string, unknown>;
-      return {
-        type: i.type,
-        id: anyI.id,
-        call_id: anyI.call_id,
-        name: anyI.name,
-        keys: Object.keys(i),
-        // 对于 reasoning，打印 encrypted_content 长度
-        encryptedLen: typeof anyI.encrypted_content === 'string' ? (anyI.encrypted_content as string).length : null
-      };
-    }),
-    null, 2
-  ));
-  
-  // 单独打印 reasoning items
-  const reasoningItems = input.filter(i => i.type === 'reasoning');
-  console.log('DEBUG reasoning items in input:', JSON.stringify(
-    reasoningItems.map(r => {
-      const anyR = r as Record<string, unknown>;
-      return {
-        id: anyR.id,
-        encryptedLen: typeof anyR.encrypted_content === 'string' ? (anyR.encrypted_content as string).length : null,
-        keys: Object.keys(r)
-      };
-    }),
-    null, 2
-  ));
-  
-  const response = await fetch('https://openrouter.ai/api/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://aisitebuilder.app',
-      'X-Title': 'AI Site Builder'
-    },
-    body: JSON.stringify(requestBody)
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.text();
-    throw new Error(`OpenRouter Responses API 错误: ${response.status} - ${errorData}`);
-  }
-  
-  const data = await response.json();
-  console.log('Responses API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
-  
-  const parsed = parseResponsesApiOutput(data);
-  // 保留原始 output 数组，包含所有字段（如 thought_signature、reasoning 等）
-  const rawOutput = Array.isArray(data.output) ? data.output as RawOutputItem[] : [];
-  
-  // 调试：打印 function_call 项的完整结构，检查 thought_signature 位置
-  for (const item of rawOutput) {
-    if (item.type === 'function_call') {
-      console.log('Function call item keys:', Object.keys(item));
-      console.log('Function call item full:', JSON.stringify(item, null, 2));
-      // 检查是否有 thought_signature 或 thoughtSignature
-      const anyItem = item as Record<string, unknown>;
-      if (anyItem.thought_signature) {
-        console.log('Found thought_signature at top level');
-      }
-      if (anyItem.thoughtSignature) {
-        console.log('Found thoughtSignature at top level');
-      }
-      // 检查 provider 嵌套
-      if (anyItem.provider && typeof anyItem.provider === 'object') {
-        console.log('Provider field found:', JSON.stringify(anyItem.provider, null, 2));
-      }
-    }
-  }
-  
-  return { parsed, rawOutput };
-}
-async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
-  const requestBody: any = {
-    model: IMAGE_MODEL,
-    messages: [
-      {
-        role: 'user',
-        content: prompt
-      }
-    ],
-    modalities: ['image', 'text'],
-    image_config: {
-      aspect_ratio: aspectRatio
-    }
-  };
-
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://aisitebuilder.app',
-      'X-Title': 'AI Site Builder'
-    },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, 'HTTP-Referer': 'https://aisitebuilder.app', 'X-Title': 'AI Site Builder' },
     body: JSON.stringify(requestBody)
   });
-
+  
   if (!response.ok) {
     const errorData = await response.text();
-    throw new Error(`图片生成API错误: ${response.status} - ${errorData}`);
+    throw new Error(`OpenRouter Chat Completions API 错误: ${response.status} - ${errorData}`);
   }
+  
+  const data = await response.json() as ChatCompletionResponse;
+  console.log('Chat Completions API Response:', JSON.stringify({ id: data.id, model: data.model, finishReason: data.choices?.[0]?.finish_reason, hasToolCalls: !!data.choices?.[0]?.message?.tool_calls?.length, hasReasoningDetails: !!data.choices?.[0]?.message?.reasoning_details, contentLength: data.choices?.[0]?.message?.content?.length || 0 }));
+  
+  const choice = data.choices?.[0];
+  if (!choice?.message) throw new Error('Chat Completions API 响应中没有 message');
+  
+  return { message: choice.message, finishReason: choice.finish_reason, raw: data };
+}
 
+// --- 图片生成函数 ---
+async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
+  const requestBody = { model: IMAGE_MODEL, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'], image_config: { aspect_ratio: aspectRatio } };
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, 'HTTP-Referer': 'https://aisitebuilder.app', 'X-Title': 'AI Site Builder' },
+    body: JSON.stringify(requestBody)
+  });
+  if (!response.ok) { const errorData = await response.text(); throw new Error(`图片生成API错误: ${response.status} - ${errorData}`); }
   const data = await response.json();
   const message = data.choices[0].message;
-  
-  if (message.images && message.images.length > 0) {
-    const imageUrl = message.images[0].image_url.url;
-    return imageUrl;
-  }
-  
+  if (message.images && message.images.length > 0) return message.images[0].image_url.url;
   throw new Error('未能生成图片');
 }
 
-async function saveImageToStorage(supabase, projectId: string, versionId: string, imageDataUrl: string, fileName: string) {
+// --- 文件存储函数 ---
+async function saveImageToStorage(supabase: ReturnType<typeof createClient>, projectId: string, versionId: string, imageDataUrl: string, fileName: string) {
   const base64Data = imageDataUrl.split(',')[1];
-  const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-  
-  const bucket = 'project-files';
-  const path = `${projectId}/${versionId}/${fileName}`;
-  
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(path, buffer, {
-      contentType: 'image/png',
-      upsert: true
-    });
-  
-  if (error) {
-    throw new Error(`保存图片失败: ${error.message}`);
-  }
-  
-  const { error: dbError } = await supabase
-    .from('project_files')
-    .insert({
-      project_id: projectId,
-      version_id: versionId,
-      file_name: fileName,
-      file_path: path,
-      file_size: buffer.length,
-      mime_type: 'image/png',
-      file_category: 'asset',
-      source_type: 'ai_generated',
-      is_public: false
-    })
-    .select()
-    .maybeSingle();
-  
-  if (dbError) {
-    console.error('保存文件记录失败:', dbError);
-  }
-  
-  return path;
+  const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+  const filePath = `${projectId}/${versionId}/${fileName}`;
+  const { error } = await supabase.storage.from('project-files').upload(filePath, binaryData, { contentType: 'image/png', upsert: true });
+  if (error) throw new Error(`保存图片失败: ${error.message}`);
+  const { error: dbError } = await supabase.from('project_files').upsert({ project_id: projectId, version_id: versionId, file_path: fileName, file_category: 'asset', source_type: 'ai_generated', is_public: false }, { onConflict: 'project_id,version_id,file_path' });
+  if (dbError) console.error('记录文件元数据失败:', dbError);
+  return fileName;
 }
 
-// --- AI Agent 工具处理函数 ---
+// --- 文件操作辅助函数 ---
+function getMimeType(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const mimeTypes: Record<string, string> = { 'html': 'text/html', 'css': 'text/css', 'js': 'application/javascript', 'ts': 'application/typescript', 'jsx': 'text/jsx', 'tsx': 'text/tsx', 'json': 'application/json', 'md': 'text/markdown', 'txt': 'text/plain', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp' };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
 
+function getFileCategory(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  if (['html', 'css', 'js', 'ts', 'jsx', 'tsx', 'json'].includes(ext)) return 'code';
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'].includes(ext)) return 'asset';
+  return 'document';
+}
+
+// --- 工具上下文类型 ---
 interface ToolContext {
   supabase: ReturnType<typeof createClient>;
   projectId: string;
@@ -565,317 +289,104 @@ interface ToolContext {
   basePath: string;
 }
 
-function getMimeType(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  const mimeTypes: Record<string, string> = {
-    'html': 'text/html',
-    'css': 'text/css',
-    'js': 'application/javascript',
-    'ts': 'application/typescript',
-    'tsx': 'application/typescript',
-    'jsx': 'application/javascript',
-    'json': 'application/json',
-    'md': 'text/markdown',
-    'txt': 'text/plain',
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'gif': 'image/gif',
-    'svg': 'image/svg+xml',
-    'webp': 'image/webp'
-  };
-  return mimeTypes[ext] || 'application/octet-stream';
+// --- 工具处理函数 ---
+async function handleListFiles(ctx: ToolContext, path: string = '') {
+  const fullPath = path ? `${ctx.basePath}/${path}`.replace(/\/+/g, '/') : ctx.basePath;
+  const { data: fileList, error } = await ctx.supabase.storage.from(ctx.bucket).list(fullPath, { limit: 100, sortBy: { column: 'name', order: 'asc' } });
+  if (error) return { success: false, error: error.message };
+  const files = (fileList || []).map((f) => ({ name: f.name, type: f.metadata ? 'file' : 'directory', size: f.metadata?.size || 0 }));
+  return { success: true, path: path || '/', files };
 }
 
-function getFileCategory(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  const codeExtensions = ['html', 'css', 'js', 'ts', 'tsx', 'jsx', 'json'];
-  const assetExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
-  const documentExtensions = ['md', 'txt', 'pdf'];
-  
-  if (codeExtensions.includes(ext)) return 'code';
-  if (assetExtensions.includes(ext)) return 'asset';
-  if (documentExtensions.includes(ext)) return 'document';
-  return 'code';
+async function handleReadFile(ctx: ToolContext, path: string) {
+  const fullPath = `${ctx.basePath}/${path}`.replace(/\/+/g, '/');
+  const { data, error } = await ctx.supabase.storage.from(ctx.bucket).download(fullPath);
+  if (error) return { success: false, error: error.message };
+  const content = await data.text();
+  return { success: true, path, content };
 }
 
-async function handleListFiles(ctx: ToolContext, args: { path?: string }): Promise<{ success: boolean; files?: Array<{ name: string; type: string; size?: number }>; error?: string }> {
-  try {
-    const relativePath = args.path || '';
-    const fullPath = relativePath ? `${ctx.basePath}/${relativePath}`.replace(/\/+/g, '/') : ctx.basePath;
-    
-    const { data: fileList, error } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .list(fullPath, {
-        limit: 100,
-        sortBy: { column: 'name', order: 'asc' }
-      });
-    
-    if (error) {
-      return { success: false, error: `列出文件失败: ${error.message}` };
-    }
-    
-    const files = (fileList || []).map(f => ({
-      name: f.name,
-      type: f.id ? 'file' : 'directory',
-      size: f.metadata?.size
-    }));
-    
-    return { success: true, files };
-  } catch (e) {
-    return { success: false, error: `列出文件异常: ${e.message}` };
-  }
+async function handleWriteFile(ctx: ToolContext, path: string, content: string) {
+  const fullPath = `${ctx.basePath}/${path}`.replace(/\/+/g, '/');
+  const mimeType = getMimeType(path);
+  const { error: uploadError } = await ctx.supabase.storage.from(ctx.bucket).upload(fullPath, new TextEncoder().encode(content), { contentType: mimeType, upsert: true });
+  if (uploadError) return { success: false, error: uploadError.message };
+  const { data: existingFile } = await ctx.supabase.from('project_files').select('id').eq('project_id', ctx.projectId).eq('version_id', ctx.versionId).eq('file_path', path).single();
+  if (!existingFile) await ctx.supabase.from('project_files').insert({ project_id: ctx.projectId, version_id: ctx.versionId, file_path: path, file_category: getFileCategory(path), source_type: 'ai_generated', is_public: false });
+  return { success: true, file_path: path, message: `文件 ${path} 已成功写入` };
 }
 
-async function handleReadFile(ctx: ToolContext, args: { path: string }): Promise<{ success: boolean; content?: string; error?: string }> {
-  try {
-    const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
-    
-    const { data, error } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .download(fullPath);
-    
-    if (error) {
-      return { success: false, error: `读取文件失败: ${error.message}` };
-    }
-    
+async function handleDeleteFile(ctx: ToolContext, path: string) {
+  const fullPath = `${ctx.basePath}/${path}`.replace(/\/+/g, '/');
+  const { error: deleteError } = await ctx.supabase.storage.from(ctx.bucket).remove([fullPath]);
+  if (deleteError) return { success: false, error: deleteError.message };
+  await ctx.supabase.from('project_files').delete().eq('project_id', ctx.projectId).eq('version_id', ctx.versionId).eq('file_path', path);
+  return { success: true, message: `文件 ${path} 已删除` };
+}
+
+async function handleSearchFiles(ctx: ToolContext, keyword: string, fileExtension?: string) {
+  const { data: fileList, error: listError } = await ctx.supabase.storage.from(ctx.bucket).list(ctx.basePath, { limit: 100 });
+  if (listError) return { success: false, error: listError.message };
+  const textExtensions = ['.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.txt'];
+  const filesToSearch = (fileList || []).filter((f) => { if (!f.metadata) return false; const ext = '.' + (f.name.split('.').pop() || ''); if (fileExtension && ext !== fileExtension) return false; return textExtensions.includes(ext); });
+  const results: Array<{ file: string; matches: string[] }> = [];
+  for (const file of filesToSearch) {
+    const fullPath = `${ctx.basePath}/${file.name}`.replace(/\/+/g, '/');
+    const { data, error } = await ctx.supabase.storage.from(ctx.bucket).download(fullPath);
+    if (error) continue;
     const content = await data.text();
-    return { success: true, content };
-  } catch (e) {
-    return { success: false, error: `读取文件异常: ${e.message}` };
+    const lines = content.split('\n');
+    const matches: string[] = [];
+    lines.forEach((line, index) => { if (line.toLowerCase().includes(keyword.toLowerCase())) matches.push(`Line ${index + 1}: ${line.trim().substring(0, 100)}`); });
+    if (matches.length > 0) results.push({ file: file.name, matches: matches.slice(0, 5) });
   }
+  return { success: true, keyword, results };
 }
 
-async function handleWriteFile(ctx: ToolContext, args: { path: string; content: string }): Promise<{ success: boolean; file_path?: string; error?: string }> {
-  try {
-    const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
-    const fileName = args.path.split('/').pop() || 'unnamed';
-    const mimeType = getMimeType(fileName);
-    const fileCategory = getFileCategory(fileName);
-    
-    const encoder = new TextEncoder();
-    const buffer = encoder.encode(args.content);
-    
-    const { error: uploadError } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .upload(fullPath, buffer, {
-        contentType: mimeType,
-        upsert: true
-      });
-    
-    if (uploadError) {
-      return { success: false, error: `写入文件失败: ${uploadError.message}` };
-    }
-    
-    const { data: existingFile } = await ctx.supabase
-      .from('project_files')
-      .select('id')
-      .eq('project_id', ctx.projectId)
-      .eq('file_path', fullPath)
-      .maybeSingle();
-    
-    if (existingFile) {
-      await ctx.supabase
-        .from('project_files')
-        .update({
-          file_size: buffer.length,
-          mime_type: mimeType,
-          source_type: 'ai_generated'
-        })
-        .eq('id', existingFile.id);
-    } else {
-      await ctx.supabase
-        .from('project_files')
-        .insert({
-          project_id: ctx.projectId,
-          version_id: ctx.versionId,
-          file_name: fileName,
-          file_path: fullPath,
-          file_size: buffer.length,
-          mime_type: mimeType,
-          file_category: fileCategory,
-          source_type: 'ai_generated',
-          is_public: false
-        });
-    }
-    
-    return { success: true, file_path: fullPath };
-  } catch (e) {
-    return { success: false, error: `写入文件异常: ${e.message}` };
-  }
+async function handleGetProjectStructure(ctx: ToolContext) {
+  const { data: fileList, error } = await ctx.supabase.storage.from(ctx.bucket).list(ctx.basePath, { limit: 200 });
+  if (error) return { success: false, error: error.message };
+  const structure = (fileList || []).map((f) => ({ name: f.name, type: f.metadata ? 'file' : 'directory', size: f.metadata?.size || 0 }));
+  return { success: true, structure };
 }
 
-async function handleDeleteFile(ctx: ToolContext, args: { path: string }): Promise<{ success: boolean; error?: string }> {
-  try {
-    const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
-    
-    const { error: deleteError } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .remove([fullPath]);
-    
-    if (deleteError) {
-      return { success: false, error: `删除文件失败: ${deleteError.message}` };
-    }
-    
-    await ctx.supabase
-      .from('project_files')
-      .delete()
-      .eq('project_id', ctx.projectId)
-      .eq('file_path', fullPath);
-    
-    return { success: true };
-  } catch (e) {
-    return { success: false, error: `删除文件异常: ${e.message}` };
-  }
-}
-
-async function handleSearchFiles(ctx: ToolContext, args: { keyword: string; file_extension?: string }): Promise<{ success: boolean; results?: Array<{ file: string; matches: string[] }>; error?: string }> {
-  try {
-    const { data: fileList, error: listError } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .list(ctx.basePath, {
-        limit: 50,
-        sortBy: { column: 'name', order: 'asc' }
-      });
-    
-    if (listError) {
-      return { success: false, error: `搜索文件失败: ${listError.message}` };
-    }
-    
-    const textExtensions = ['.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.txt'];
-    const filesToSearch = (fileList || []).filter(f => {
-      if (!f.id) return false;
-      const hasTextExt = textExtensions.some(ext => f.name.endsWith(ext));
-      if (args.file_extension) {
-        return f.name.endsWith(args.file_extension);
-      }
-      return hasTextExt;
-    });
-    
-    const results: Array<{ file: string; matches: string[] }> = [];
-    
-    for (const file of filesToSearch) {
-      const filePath = `${ctx.basePath}/${file.name}`.replace(/\/+/g, '/');
-      const { data, error } = await ctx.supabase.storage
-        .from(ctx.bucket)
-        .download(filePath);
-      
-      if (error) continue;
-      
-      const content = await data.text();
-      const lines = content.split('\n');
-      const matchingLines: string[] = [];
-      
-      lines.forEach((line, index) => {
-        if (line.toLowerCase().includes(args.keyword.toLowerCase())) {
-          matchingLines.push(`Line ${index + 1}: ${line.trim().substring(0, 100)}`);
-        }
-      });
-      
-      if (matchingLines.length > 0) {
-        results.push({
-          file: file.name,
-          matches: matchingLines.slice(0, 5)
-        });
-      }
-    }
-    
-    return { success: true, results };
-  } catch (e) {
-    return { success: false, error: `搜索文件异常: ${e.message}` };
-  }
-}
-
-interface FileTreeNode {
-  name: string;
-  type: 'file' | 'directory';
-  size?: number;
-  children?: FileTreeNode[];
-}
-
-async function handleGetProjectStructure(ctx: ToolContext): Promise<{ success: boolean; structure?: FileTreeNode[]; error?: string }> {
-  try {
-    const { data: fileList, error } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .list(ctx.basePath, {
-        limit: 200,
-        sortBy: { column: 'name', order: 'asc' }
-      });
-    
-    if (error) {
-      return { success: false, error: `获取项目结构失败: ${error.message}` };
-    }
-    
-    const structure: FileTreeNode[] = (fileList || []).map(f => ({
-      name: f.name,
-      type: f.id ? 'file' as const : 'directory' as const,
-      size: f.metadata?.size
-    }));
-    
-    return { success: true, structure };
-  } catch (e) {
-    return { success: false, error: `获取项目结构异常: ${e.message}` };
-  }
-}
-
-async function executeToolCall(
-  toolName: string,
-  args: Record<string, unknown>,
-  ctx: ToolContext
-): Promise<{ success: boolean; result: unknown }> {
+// --- 工具执行函数 ---
+async function executeToolCall(toolName: string, args: Record<string, unknown>, ctx: ToolContext): Promise<{ result: unknown }> {
   switch (toolName) {
-    case 'list_files':
-      return { success: true, result: await handleListFiles(ctx, args as { path?: string }) };
-    case 'read_file':
-      return { success: true, result: await handleReadFile(ctx, args as { path: string }) };
-    case 'write_file':
-      return { success: true, result: await handleWriteFile(ctx, args as { path: string; content: string }) };
-    case 'delete_file':
-      return { success: true, result: await handleDeleteFile(ctx, args as { path: string }) };
-    case 'search_files':
-      return { success: true, result: await handleSearchFiles(ctx, args as { keyword: string; file_extension?: string }) };
-    case 'get_project_structure':
-      return { success: true, result: await handleGetProjectStructure(ctx) };
-    case 'generate_image':
-      return { success: false, result: { error: 'generate_image handled separately' } };
-    default:
-      return { success: false, result: { error: `未知工具: ${toolName}` } };
+    case 'list_files': return { result: await handleListFiles(ctx, args.path as string | undefined) };
+    case 'read_file': return { result: await handleReadFile(ctx, args.path as string) };
+    case 'write_file': return { result: await handleWriteFile(ctx, args.path as string, args.content as string) };
+    case 'delete_file': return { result: await handleDeleteFile(ctx, args.path as string) };
+    case 'search_files': return { result: await handleSearchFiles(ctx, args.keyword as string, args.file_extension as string | undefined) };
+    case 'get_project_structure': return { result: await handleGetProjectStructure(ctx) };
+    default: return { result: { success: false, error: `未知工具: ${toolName}` } };
   }
 }
 
-async function writeBuildLog(supabase, projectId, logType, message, metadata = {}) {
-  const { error } = await supabase.from('build_logs').insert({
-    project_id: projectId,
-    log_type: logType,
-    message: message,
-    metadata
-  });
+// --- 日志和消息函数 ---
+async function writeBuildLog(supabase: ReturnType<typeof createClient>, projectId: string, logType: string, message: string) {
+  const { error } = await supabase.from('build_logs').insert({ project_id: projectId, log_type: logType, message: message });
   if (error) console.error('写入构建日志失败:', error);
 }
-async function writeAssistantMessage(supabase, projectId, content) {
-  const { data, error } = await supabase.from('chat_messages').insert({
-    project_id: projectId,
-    role: 'assistant',
-    content: content,
-    metadata: {}
-  }).select().maybeSingle();
-  if (error) {
-    console.error('写入助手消息失败:', error);
-    return null;
-  }
-  return data?.id || null;
+
+async function writeAssistantMessage(supabase: ReturnType<typeof createClient>, projectId: string, content: string) {
+  const { data, error } = await supabase.from('chat_messages').insert({ project_id: projectId, role: 'assistant', content: content }).select('id').single();
+  if (error) { console.error('写入助手消息失败:', error); return null; }
+  return data?.id;
 }
-async function updateTaskStatus(supabase, taskId, status, result, errorMsg) {
-  const updateData = {
-    status: status,
-    finished_at: new Date().toISOString()
-  };
+
+async function updateTaskStatus(supabase: ReturnType<typeof createClient>, taskId: string, status: string, result?: Record<string, unknown>, errorMsg?: string) {
+  const updateData: Record<string, unknown> = { status, completed_at: new Date().toISOString() };
   if (result) updateData.result = result;
   if (errorMsg) updateData.error = errorMsg;
-  const { error } = await supabase.from('ai_tasks').update(updateData).eq('id', taskId);
-  if (error) console.error('更新任务状态失败:', error);
+  await supabase.from('ai_tasks').update(updateData).eq('id', taskId);
 }
-async function processTask(task, supabase, apiKey, projectFilesContext) {
+
+// --- 任务处理主函数 ---
+interface Task { id: string; project_id: string; type: string; payload?: Record<string, unknown>; attempts: number; max_attempts: number; }
+interface ProjectFilesContext { bucket?: string; path?: string; versionId?: string; }
+
+async function processTask(task: Task, supabase: ReturnType<typeof createClient>, apiKey: string, projectFilesContext?: ProjectFilesContext) {
   console.log(`开始处理任务: ${task.id}, 类型: ${task.type}`);
   const model = MODEL_CONFIG[task.type] || MODEL_CONFIG.default;
   
@@ -892,15 +403,8 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     const bucket = projectFilesContext?.bucket || 'project-files';
     const basePath = projectFilesContext?.path || `${task.project_id}/${versionId}`;
     
-    const toolContext: ToolContext = {
-      supabase,
-      projectId: task.project_id,
-      versionId,
-      bucket,
-      basePath
-    };
-    
-    let messages = [];
+    const toolContext: ToolContext = { supabase, projectId: task.project_id, versionId, bucket, basePath };
+    const messages: ChatCompletionMessage[] = [];
     
     const agentSystemPrompt = `你是一个专业的全栈开发 AI Agent。请用简体中文回复。
 
@@ -933,258 +437,109 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     if (task.type === 'chat_reply') {
       const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 10);
       const contextPrompt = fileContextStr ? `\n\n当前项目文件参考:\n${fileContextStr}` : '';
-      messages = [
-        {
-          role: 'system',
-          content: agentSystemPrompt + contextPrompt
-        },
-        ...chatHistory.map((msg)=>({
-            role: msg.role,
-            content: msg.content
-          }))
-      ];
+      messages.push({ role: 'system', content: agentSystemPrompt + contextPrompt });
+      for (const msg of chatHistory) messages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
     } else if (task.type === 'build_site') {
-      const requirement = task.payload?.requirement || "创建基础着陆页";
-      const buildPrompt = `${agentSystemPrompt}
-
-**当前任务：构建网站**
-你的任务是根据用户需求生成网站代码。请按以下步骤执行：
-1. 首先使用 get_project_structure 了解现有项目结构
-2. 根据需求规划要创建或修改的文件
-3. 使用 write_file 工具创建必要的文件（如 index.html, styles.css, script.js 等）
-4. 如果需要图片，使用 generate_image 生成
-5. 完成后给出构建总结
-
-${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
-      
-      messages = [
-        {
-          role: 'system',
-          content: buildPrompt
-        },
-        {
-          role: 'user',
-          content: `请帮我构建网站，需求如下：${requirement}`
-        }
-      ];
+      const requirement = (task.payload?.requirement as string) || "创建基础着陆页";
+      const buildPrompt = `${agentSystemPrompt}\n\n**当前任务：构建网站**\n你的任务是根据用户需求生成网站代码。请按以下步骤执行：\n1. 首先使用 get_project_structure 了解现有项目结构\n2. 根据需求规划要创建或修改的文件\n3. 使用 write_file 工具创建必要的文件（如 index.html, styles.css, script.js 等）\n4. 如果需要图片，使用 generate_image 生成\n5. 完成后给出构建总结\n${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
+      messages.push({ role: 'system', content: buildPrompt });
+      messages.push({ role: 'user', content: `请帮我构建网站，需求如下：${requirement}` });
     } else if (task.type === 'refactor_code') {
-      const code = task.payload?.code || "";
-      const filePath = task.payload?.filePath || "";
-      const refactorPrompt = `${agentSystemPrompt}
-
-**当前任务：代码重构**
-你的任务是重构代码，关注性能、可读性和最佳实践。请按以下步骤执行：
-1. 如果提供了文件路径，使用 read_file 读取完整文件内容
-2. 分析代码结构和问题
-3. 使用 write_file 将重构后的代码写回文件
-4. 给出重构说明和改进点
-
-${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
-      
-      messages = [
-        {
-          role: 'system',
-          content: refactorPrompt
-        },
-        {
-          role: 'user',
-          content: filePath 
-            ? `请重构文件 ${filePath} 中的代码` 
-            : `请重构以下代码：\n\`\`\`\n${code}\n\`\`\``
-        }
-      ];
+      const code = (task.payload?.code as string) || "";
+      const filePath = (task.payload?.filePath as string) || "";
+      const refactorPrompt = `${agentSystemPrompt}\n\n**当前任务：代码重构**\n你的任务是重构代码，关注性能、可读性和最佳实践。请按以下步骤执行：\n1. 如果提供了文件路径，使用 read_file 读取完整文件内容\n2. 分析代码结构和问题\n3. 使用 write_file 将重构后的代码写回文件\n4. 给出重构说明和改进点\n${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
+      messages.push({ role: 'system', content: refactorPrompt });
+      messages.push({ role: 'user', content: filePath ? `请重构文件 ${filePath} 中的代码` : `请重构以下代码：\n\`\`\`\n${code}\n\`\`\`` });
     } else {
       throw new Error(`不支持的任务类型: ${task.type}`);
     }
     
-    console.log(`调用 OpenRouter Responses API, Model: ${model}, Msg Count: ${messages.length}`);
+    console.log(`调用 OpenRouter Chat Completions API, Model: ${model}, Msg Count: ${messages.length}`);
     
     let iteration = 0;
     let finalResponse = '';
     const generatedImages: string[] = [];
     const modifiedFiles: string[] = [];
     
-    // 使用原始历史记录方式，保留所有字段（包括 thought_signature、reasoning 等）
-    // 首次调用时，将 messages 转换为初始输入格式
-    const historyItems: RawOutputItem[] = messagesToInitialInput(messages);
-    // 上一轮的工具调用输出，将在下一次请求时追加
-    let lastToolOutputs: RawOutputItem[] = [];
-    
+    // Agent 循环：持续调用 API 直到没有工具调用
     while (true) {
       iteration++;
       console.log(`Agent 迭代 ${iteration}`);
       await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      // 构建输入：历史记录 + 上一轮的工具输出
-      const input = [...historyItems, ...lastToolOutputs];
+      const { message: assistantMessage } = await callOpenRouterChatCompletions(messages, apiKey, model, { tools: CHAT_COMPLETION_TOOLS, toolChoice: 'auto', reasoning: { effort: 'medium' } });
       
-      // 调用 Responses API，获取解析结果和原始输出
-      const { parsed: assistantResponse, rawOutput } = await callOpenRouterResponsesApi(input, apiKey, model, { 
-        tools: TOOLS,
-        toolChoice: 'auto',
-        reasoning: { effort: 'medium' }
-      });
-      
-      // 记录推理摘要（如果有）
-      if (assistantResponse.reasoning_summary && assistantResponse.reasoning_summary.length > 0) {
-        console.log('推理摘要:', assistantResponse.reasoning_summary.join(' -> '));
-        await writeBuildLog(supabase, task.project_id, 'info', `AI 推理: ${assistantResponse.reasoning_summary.slice(0, 3).join(' -> ')}`);
+      // 记录推理信息（如果有）
+      if (assistantMessage.reasoning) {
+        console.log('推理:', assistantMessage.reasoning.substring(0, 200));
+        await writeBuildLog(supabase, task.project_id, 'info', `AI 推理: ${assistantMessage.reasoning.substring(0, 100)}...`);
       }
       
-      // 对 function_call 项进行签名归一化处理，确保 thought_signature 被正确保留
-      // Gemini 可能返回 thought_signature 或 thoughtSignature（驼峰），需要同时兼容
-      for (const item of rawOutput) {
-        if (item.type === 'function_call') {
-          const anyItem = item as Record<string, unknown>;
-          
-          // 从可能的位置提取签名
-          const sig = 
-            (anyItem.thought_signature as string | undefined) ??
-            (anyItem.thoughtSignature as string | undefined) ??
-            // 检查 provider 嵌套结构
-            (anyItem.provider && typeof anyItem.provider === 'object' && 
-              ((anyItem.provider as Record<string, unknown>).thought_signature as string | undefined)) ??
-            (anyItem.provider && typeof anyItem.provider === 'object' && 
-              ((anyItem.provider as Record<string, unknown>).thoughtSignature as string | undefined)) ??
-            null;
-          
-          if (sig) {
-            // 同时写入两种命名格式，确保兼容性
-            anyItem.thought_signature = sig;
-            anyItem.thoughtSignature = sig;
-            console.log(`签名归一化完成: ${anyItem.name}, 签名长度: ${sig.length}`);
-          } else {
-            console.warn(`警告: function_call ${anyItem.name} 没有找到 thought_signature`);
-          }
-        }
-      }
+      // 将完整的 assistant message 添加到历史记录中
+      // 重要：必须保留 tool_calls 和 reasoning_details，这是 Gemini 要求的
+      messages.push(assistantMessage);
       
-      // 将原始输出追加到历史记录中（保留所有字段，包括 thought_signature）
-      historyItems.push(...rawOutput);
+      const toolCalls = assistantMessage.tool_calls || [];
       
-      // 调试：打印第二次及以后迭代的 input 中的 function_call 项
-      if (iteration > 1) {
-        const inputFunctionCalls = historyItems.filter(item => item.type === 'function_call');
-        for (const fc of inputFunctionCalls) {
-          const anyFc = fc as Record<string, unknown>;
-          console.log(`Input function_call: ${anyFc.name}, has thought_signature: ${!!anyFc.thought_signature}, has thoughtSignature: ${!!anyFc.thoughtSignature}`);
-        }
-      }
-      
-      // 从原始输出中提取 function_call 项（保留完整对象，包含 thought_signature）
-      const functionCalls = rawOutput.filter(
-        (item) => item.type === 'function_call'
-      ) as Array<{
-        type: 'function_call';
-        id: string;
-        call_id: string;
-        name: string;
-        arguments: string;
-        status?: string;
-        // thought_signature 和其他字段会被保留
-        [key: string]: unknown;
-      }>;
-      
-      // 如果有函数调用
-      if (functionCalls.length > 0) {
-        // 清空上一轮的工具输出
-        lastToolOutputs = [];
-        
-        for (const funcCall of functionCalls) {
-          const toolName = funcCall.name;
-          const args = JSON.parse(funcCall.arguments || '{}');
-          
-          console.log(`执行工具: ${toolName}`, args);
-          await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
-          
-          let toolOutput: string;
-          
-          if (toolName === 'generate_image') {
-            try {
-              const prompt = args.prompt;
-              const aspectRatio = args.aspect_ratio || '1:1';
-              
-              await writeBuildLog(supabase, task.project_id, 'info', `正在生成图片: ${prompt}`);
-              
-              const imageDataUrl = await generateImage(prompt, apiKey, aspectRatio);
-              
-              const timestamp = Date.now();
-              const fileName = `generated_image_${timestamp}.png`;
-              
-              const imagePath = await saveImageToStorage(
-                supabase,
-                task.project_id,
-                versionId,
-                imageDataUrl,
-                fileName
-              );
-              
-              generatedImages.push(imagePath);
-              
-              await writeBuildLog(supabase, task.project_id, 'success', `图片已生成并保存: ${imagePath}`);
-              
-              toolOutput = JSON.stringify({
-                success: true,
-                image_path: imagePath,
-                file_name: fileName,
-                message: '图片已成功生成并保存到项目文件夹'
-              });
-            } catch (error) {
-              console.error('图片生成失败:', error);
-              await writeBuildLog(supabase, task.project_id, 'error', `图片生成失败: ${error.message}`);
-              
-              toolOutput = JSON.stringify({
-                success: false,
-                error: error.message
-              });
-            }
-          } else {
-            const { result } = await executeToolCall(toolName, args, toolContext);
-            
-            if (toolName === 'write_file' && (result as { success: boolean; file_path?: string }).success) {
-              const writeResult = result as { success: boolean; file_path?: string };
-              if (writeResult.file_path) {
-                modifiedFiles.push(writeResult.file_path);
-                await writeBuildLog(supabase, task.project_id, 'success', `文件已写入: ${writeResult.file_path}`);
-              }
-            } else if (toolName === 'delete_file' && (result as { success: boolean }).success) {
-              await writeBuildLog(supabase, task.project_id, 'info', `文件已删除: ${args.path}`);
-            } else if (toolName === 'read_file') {
-              await writeBuildLog(supabase, task.project_id, 'info', `已读取文件: ${args.path}`);
-            } else if (toolName === 'list_files' || toolName === 'get_project_structure') {
-              await writeBuildLog(supabase, task.project_id, 'info', `已获取项目结构`);
-            } else if (toolName === 'search_files') {
-              await writeBuildLog(supabase, task.project_id, 'info', `已搜索关键词: ${args.keyword}`);
-            }
-            
-            toolOutput = JSON.stringify(result);
-          }
-          
-          // 创建 function_call_output 项，引用原始的 call_id
-          const functionCallOutputItem: RawOutputItem = {
-            type: 'function_call_output',
-            call_id: funcCall.call_id,
-            output: toolOutput
-          };
-          
-          lastToolOutputs.push(functionCallOutputItem);
-        }
-      } else {
-        // 没有函数调用，这是最终响应
-        finalResponse = assistantResponse.content || '';
+      if (toolCalls.length === 0) {
+        // 没有工具调用，这是最终响应
+        finalResponse = assistantMessage.content || '';
+        console.log(`Agent 完成，最终响应长度: ${finalResponse.length}`);
         break;
+      }
+      
+      // 执行所有工具调用
+      for (const toolCall of toolCalls) {
+        const toolName = toolCall.function?.name || '';
+        const argsStr = toolCall.function?.arguments || '{}';
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(argsStr); } catch (e) { console.error(`解析工具参数失败: ${argsStr}`, e); args = {}; }
+        
+        console.log(`执行工具: ${toolName}`, args);
+        await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
+        
+        let toolOutput: string;
+        
+        if (toolName === 'generate_image') {
+          try {
+            const prompt = args.prompt as string;
+            const aspectRatio = (args.aspect_ratio as string) || '1:1';
+            await writeBuildLog(supabase, task.project_id, 'info', `正在生成图片: ${prompt}`);
+            const imageDataUrl = await generateImage(prompt, apiKey, aspectRatio);
+            const timestamp = Date.now();
+            const fileName = `generated_image_${timestamp}.png`;
+            const imagePath = await saveImageToStorage(supabase, task.project_id, versionId, imageDataUrl, fileName);
+            generatedImages.push(imagePath);
+            await writeBuildLog(supabase, task.project_id, 'success', `图片已生成并保存: ${imagePath}`);
+            toolOutput = JSON.stringify({ success: true, image_path: imagePath, file_name: fileName, message: '图片已成功生成并保存到项目文件夹' });
+          } catch (error) {
+            console.error('图片生成失败:', error);
+            await writeBuildLog(supabase, task.project_id, 'error', `图片生成失败: ${(error as Error).message}`);
+            toolOutput = JSON.stringify({ success: false, error: (error as Error).message });
+          }
+        } else {
+          const { result } = await executeToolCall(toolName, args, toolContext);
+          if (toolName === 'write_file' && (result as { success: boolean; file_path?: string }).success) {
+            const writeResult = result as { success: boolean; file_path?: string };
+            if (writeResult.file_path) { modifiedFiles.push(writeResult.file_path); await writeBuildLog(supabase, task.project_id, 'success', `文件已写入: ${writeResult.file_path}`); }
+          } else if (toolName === 'delete_file' && (result as { success: boolean }).success) {
+            await writeBuildLog(supabase, task.project_id, 'info', `文件已删除: ${args.path}`);
+          } else if (toolName === 'read_file') {
+            await writeBuildLog(supabase, task.project_id, 'info', `已读取文件: ${args.path}`);
+          } else if (toolName === 'list_files' || toolName === 'get_project_structure') {
+            await writeBuildLog(supabase, task.project_id, 'info', `已获取项目结构`);
+          } else if (toolName === 'search_files') {
+            await writeBuildLog(supabase, task.project_id, 'info', `已搜索关键词: ${args.keyword}`);
+          }
+          toolOutput = JSON.stringify(result);
+        }
+        
+        // 将工具结果添加到消息历史中
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolOutput });
       }
     }
     
-    const resultData: Record<string, unknown> = {
-      text: finalResponse,
-      model: model,
-      processed_files: !!fileContextStr,
-      generated_images: generatedImages,
-      modified_files: modifiedFiles,
-      iterations: iteration
-    };
-    
+    const resultData: Record<string, unknown> = { text: finalResponse, model, processed_files: !!fileContextStr, generated_images: generatedImages, modified_files: modifiedFiles, iterations: iteration };
     const messageId = await writeAssistantMessage(supabase, task.project_id, finalResponse);
     if (!messageId) throw new Error('写入助手消息失败');
     resultData.messageId = messageId;
@@ -1194,93 +549,49 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
     
   } catch (error) {
     console.error(`处理任务 ${task.id} 失败:`, error);
-    await writeBuildLog(supabase, task.project_id, 'error', `AI 任务处理失败: ${error.message}`);
-    
+    await writeBuildLog(supabase, task.project_id, 'error', `AI 任务处理失败: ${(error as Error).message}`);
     if (task.attempts >= task.max_attempts) {
-      await updateTaskStatus(supabase, task.id, 'failed', undefined, error.message);
+      await updateTaskStatus(supabase, task.id, 'failed', undefined, (error as Error).message);
     } else {
-      await supabase.from('ai_tasks').update({
-        status: 'queued',
-        error: `Attempt ${task.attempts} failed: ${error.message}`
-      }).eq('id', task.id);
+      await supabase.from('ai_tasks').update({ status: 'queued', error: `Attempt ${task.attempts} failed: ${(error as Error).message}` }).eq('id', task.id);
     }
     throw error;
   }
 }
+
 // --- 主服务入口 ---
-Deno.serve(async (req)=>{
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders
-    });
-  }
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 200, headers: corsHeaders });
+  
   try {
-    // 初始化环境
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const openrouterApiKey = Deno.env.get('OPENROUTER_KEY');
     const databaseUrl = Deno.env.get('SUPABASE_DB_URL');
-    if (!openrouterApiKey || !supabaseUrl || !supabaseServiceKey || !databaseUrl) {
-      throw new Error('缺少必要的环境变量设置 (URL/KEY)');
-    }
+    
+    if (!openrouterApiKey || !supabaseUrl || !supabaseServiceKey || !databaseUrl) throw new Error('缺少必要的环境变量设置 (URL/KEY)');
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    let body: { projectId?: string; projectFilesContext?: ProjectFilesContext } = {};
+    try { body = await req.json(); } catch { /* empty body allowed */ }
+    
+    const projectId = body.projectId;
+    const projectFilesContext = body.projectFilesContext;
+    
     const pgClient = new Client(databaseUrl);
     await pgClient.connect();
+    
     try {
-      const body = await req.json().catch(()=>null);
-      // 允许通过 Body 传参，也允许 Webhook 触发时不带参数（自动扫描所有项目）
-      // 但为了安全和隔离，当前逻辑主要针对特定 Project 处理
-      const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : undefined;
-      // 解析上下文参数
-      const rawCtx = body?.projectFilesContext;
-      const projectFilesContext = rawCtx ? {
-        bucket: rawCtx.bucket,
-        path: rawCtx.path,
-        versionId: rawCtx.versionId
-      } : undefined;
-      // 1. 抢占任务
       const task = await claimTask(pgClient, projectId);
-      if (!task) {
-        return new Response(JSON.stringify({
-          message: '没有待处理的任务'
-        }), {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
-      console.log(`成功抢占任务: ${task.id}`);
-      // 2. 处理任务
-      await processTask(task, supabase, openrouterApiKey, projectFilesContext);
-      return new Response(JSON.stringify({
-        success: true,
-        taskId: task.id,
-        message: '任务处理完成'
-      }), {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      });
-    } finally{
+      if (!task) return new Response(JSON.stringify({ success: true, message: '没有待处理的任务' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      await processTask(task as Task, supabase, openrouterApiKey, projectFilesContext);
+      return new Response(JSON.stringify({ success: true, taskId: (task as Task).id }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    } finally {
       await pgClient.end();
     }
   } catch (error) {
     console.error('处理请求失败:', error);
-    return new Response(JSON.stringify({
-      error: '服务器错误',
-      details: error.message
-    }), {
-      status: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
+    return new Response(JSON.stringify({ success: false, error: (error as Error).message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
