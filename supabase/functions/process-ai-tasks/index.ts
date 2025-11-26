@@ -394,6 +394,39 @@ async function callOpenRouterResponsesApi(
   
   console.log('Responses API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
   
+  // 调试：打印 input 中的非 message items（reasoning, function_call, function_call_output）
+  const nonMessageItems = input.filter(i => i.type !== 'message');
+  console.log('DEBUG input non-message items count:', nonMessageItems.length);
+  console.log('DEBUG input non-message items:', JSON.stringify(
+    nonMessageItems.map(i => {
+      const anyI = i as Record<string, unknown>;
+      return {
+        type: i.type,
+        id: anyI.id,
+        call_id: anyI.call_id,
+        name: anyI.name,
+        keys: Object.keys(i),
+        // 对于 reasoning，打印 encrypted_content 长度
+        encryptedLen: typeof anyI.encrypted_content === 'string' ? (anyI.encrypted_content as string).length : null
+      };
+    }),
+    null, 2
+  ));
+  
+  // 单独打印 reasoning items
+  const reasoningItems = input.filter(i => i.type === 'reasoning');
+  console.log('DEBUG reasoning items in input:', JSON.stringify(
+    reasoningItems.map(r => {
+      const anyR = r as Record<string, unknown>;
+      return {
+        id: anyR.id,
+        encryptedLen: typeof anyR.encrypted_content === 'string' ? (anyR.encrypted_content as string).length : null,
+        keys: Object.keys(r)
+      };
+    }),
+    null, 2
+  ));
+  
   const response = await fetch('https://openrouter.ai/api/v1/responses', {
     method: 'POST',
     headers: {
