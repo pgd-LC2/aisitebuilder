@@ -417,6 +417,26 @@ async function callOpenRouterResponsesApi(
   // 保留原始 output 数组，包含所有字段（如 thought_signature、reasoning 等）
   const rawOutput = Array.isArray(data.output) ? data.output as RawOutputItem[] : [];
   
+  // 调试：打印 function_call 项的完整结构，检查 thought_signature 位置
+  for (const item of rawOutput) {
+    if (item.type === 'function_call') {
+      console.log('Function call item keys:', Object.keys(item));
+      console.log('Function call item full:', JSON.stringify(item, null, 2));
+      // 检查是否有 thought_signature 或 thoughtSignature
+      const anyItem = item as Record<string, unknown>;
+      if (anyItem.thought_signature) {
+        console.log('Found thought_signature at top level');
+      }
+      if (anyItem.thoughtSignature) {
+        console.log('Found thoughtSignature at top level');
+      }
+      // 检查 provider 嵌套
+      if (anyItem.provider && typeof anyItem.provider === 'object') {
+        console.log('Provider field found:', JSON.stringify(anyItem.provider, null, 2));
+      }
+    }
+  }
+  
   return { parsed, rawOutput };
 }
 async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
@@ -978,8 +998,45 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
         await writeBuildLog(supabase, task.project_id, 'info', `AI 推理: ${assistantResponse.reasoning_summary.slice(0, 3).join(' -> ')}`);
       }
       
+      // 对 function_call 项进行签名归一化处理，确保 thought_signature 被正确保留
+      // Gemini 可能返回 thought_signature 或 thoughtSignature（驼峰），需要同时兼容
+      for (const item of rawOutput) {
+        if (item.type === 'function_call') {
+          const anyItem = item as Record<string, unknown>;
+          
+          // 从可能的位置提取签名
+          const sig = 
+            (anyItem.thought_signature as string | undefined) ??
+            (anyItem.thoughtSignature as string | undefined) ??
+            // 检查 provider 嵌套结构
+            (anyItem.provider && typeof anyItem.provider === 'object' && 
+              ((anyItem.provider as Record<string, unknown>).thought_signature as string | undefined)) ??
+            (anyItem.provider && typeof anyItem.provider === 'object' && 
+              ((anyItem.provider as Record<string, unknown>).thoughtSignature as string | undefined)) ??
+            null;
+          
+          if (sig) {
+            // 同时写入两种命名格式，确保兼容性
+            anyItem.thought_signature = sig;
+            anyItem.thoughtSignature = sig;
+            console.log(`签名归一化完成: ${anyItem.name}, 签名长度: ${sig.length}`);
+          } else {
+            console.warn(`警告: function_call ${anyItem.name} 没有找到 thought_signature`);
+          }
+        }
+      }
+      
       // 将原始输出追加到历史记录中（保留所有字段，包括 thought_signature）
       historyItems.push(...rawOutput);
+      
+      // 调试：打印第二次及以后迭代的 input 中的 function_call 项
+      if (iteration > 1) {
+        const inputFunctionCalls = historyItems.filter(item => item.type === 'function_call');
+        for (const fc of inputFunctionCalls) {
+          const anyFc = fc as Record<string, unknown>;
+          console.log(`Input function_call: ${anyFc.name}, has thought_signature: ${!!anyFc.thought_signature}, has thoughtSignature: ${!!anyFc.thoughtSignature}`);
+        }
+      }
       
       // 从原始输出中提取 function_call 项（保留完整对象，包含 thought_signature）
       const functionCalls = rawOutput.filter(
