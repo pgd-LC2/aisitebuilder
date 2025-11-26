@@ -233,9 +233,9 @@ const TOOLS = [
 // Responses API 输入类型定义
 interface ResponsesApiMessageInput {
   type: 'message';
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system' | 'developer';
   id?: string;
-  status?: 'completed' | 'in_progress';
+  status?: 'completed' | 'in_progress' | 'incomplete';
   content: Array<{ type: 'input_text' | 'output_text'; text: string; annotations?: Array<unknown> }>;
 }
 
@@ -278,8 +278,14 @@ function convertToResponsesApiInput(
     if (msg.role === 'system') {
       input.push({
         type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: `[System Instructions]\n${msg.content}` }]
+        role: 'system',
+        content: [{ type: 'input_text', text: msg.content }]
+      });
+    } else if (msg.role === 'developer') {
+      input.push({
+        type: 'message',
+        role: 'developer',
+        content: [{ type: 'input_text', text: msg.content }]
       });
     } else if (msg.role === 'user') {
       input.push({
@@ -344,7 +350,7 @@ function parseResponsesApiOutput(data: Record<string, unknown>): ParsedResponses
   
   const reasoningOutput = output.find(o => o.type === 'reasoning') as {
     type: string;
-    summary?: string[];
+    summary?: Array<{ type?: string; text?: string } | string>;
   } | undefined;
   
   const functionCalls = output.filter(o => o.type === 'function_call') as Array<{
@@ -375,8 +381,22 @@ function parseResponsesApiOutput(data: Record<string, unknown>): ParsedResponses
     }));
   }
   
-  if (reasoningOutput?.summary) {
-    result.reasoning_summary = reasoningOutput.summary;
+  if (reasoningOutput?.summary && Array.isArray(reasoningOutput.summary)) {
+    const summaryTexts = reasoningOutput.summary
+      .map((item: { type?: string; text?: string } | string) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        if (item && typeof item === 'object' && typeof item.text === 'string') {
+          return item.text;
+        }
+        return '';
+      })
+      .filter((text: string) => text.length > 0);
+    
+    if (summaryTexts.length > 0) {
+      result.reasoning_summary = summaryTexts;
+    }
   }
   
   return result;
