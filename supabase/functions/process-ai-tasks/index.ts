@@ -107,247 +107,312 @@ async function getProjectFileContext(supabase, bucket, path) {
 }
 const TOOLS = [
   {
-    type: 'function',
-    function: {
-      name: 'generate_image',
-      description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
-      parameters: {
-        type: 'object',
-        properties: {
-          prompt: {
-            type: 'string',
-            description: '图片生成的详细描述,用英文描述'
-          },
-          aspect_ratio: {
-            type: 'string',
-            description: '图片的宽高比',
-            enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
-          }
+    type: 'function' as const,
+    name: 'generate_image',
+    description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: '图片生成的详细描述,用英文描述'
         },
-        required: ['prompt']
-      }
+        aspect_ratio: {
+          type: 'string',
+          description: '图片的宽高比',
+          enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+        }
+      },
+      required: ['prompt']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'list_files',
-      description: '列出项目目录下的文件和子目录。用于了解项目结构。',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
-          }
-        },
-        required: []
-      }
+    type: 'function' as const,
+    name: 'list_files',
+    description: '列出项目目录下的文件和子目录。用于了解项目结构。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
+        }
+      },
+      required: []
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'read_file',
-      description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: '要读取的文件路径，相对于项目根目录'
-          }
-        },
-        required: ['path']
-      }
+    type: 'function' as const,
+    name: 'read_file',
+    description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: '要读取的文件路径，相对于项目根目录'
+        }
+      },
+      required: ['path']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'write_file',
-      description: '写入或创建文件。用于生成新代码或修改现有文件。',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: '要写入的文件路径，相对于项目根目录'
-          },
-          content: {
-            type: 'string',
-            description: '要写入的文件内容'
-          }
+    type: 'function' as const,
+    name: 'write_file',
+    description: '写入或创建文件。用于生成新代码或修改现有文件。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: '要写入的文件路径，相对于项目根目录'
         },
-        required: ['path', 'content']
-      }
+        content: {
+          type: 'string',
+          description: '要写入的文件内容'
+        }
+      },
+      required: ['path', 'content']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'delete_file',
-      description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: '要删除的文件路径，相对于项目根目录'
-          }
-        },
-        required: ['path']
-      }
+    type: 'function' as const,
+    name: 'delete_file',
+    description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: '要删除的文件路径，相对于项目根目录'
+        }
+      },
+      required: ['path']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'search_files',
-      description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
-      parameters: {
-        type: 'object',
-        properties: {
-          keyword: {
-            type: 'string',
-            description: '要搜索的关键词'
-          },
-          file_extension: {
-            type: 'string',
-            description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
-          }
+    type: 'function' as const,
+    name: 'search_files',
+    description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {
+        keyword: {
+          type: 'string',
+          description: '要搜索的关键词'
         },
-        required: ['keyword']
-      }
+        file_extension: {
+          type: 'string',
+          description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
+        }
+      },
+      required: ['keyword']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'get_project_structure',
-      description: '获取完整的项目文件树结构。用于全局了解项目组成。',
-      parameters: {
-        type: 'object',
-        properties: {},
-        required: []
-      }
+    type: 'function' as const,
+    name: 'get_project_structure',
+    description: '获取完整的项目文件树结构。用于全局了解项目组成。',
+    strict: null,
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: []
     }
   }
 ];
 
 // --- API 调用与日志 ---
+
+// Responses API 输入类型定义
+interface ResponsesApiMessageInput {
+  type: 'message';
+  role: 'user' | 'assistant';
+  id?: string;
+  status?: 'completed' | 'in_progress';
+  content: Array<{ type: 'input_text' | 'output_text'; text: string; annotations?: Array<unknown> }>;
+}
+
+interface ResponsesApiFunctionCall {
+  type: 'function_call';
+  id: string;
+  call_id: string;
+  name: string;
+  arguments: string;
+}
+
+interface ResponsesApiFunctionCallOutput {
+  type: 'function_call_output';
+  id: string;
+  call_id: string;
+  output: string;
+}
+
+type ResponsesApiInputItem = ResponsesApiMessageInput | ResponsesApiFunctionCall | ResponsesApiFunctionCallOutput;
+
 interface CallOpenRouterOptions {
   tools?: typeof TOOLS | null;
-  responseFormat?: {
-    type: 'json_schema';
-    json_schema: {
-      name: string;
-      strict: boolean;
-      schema: Record<string, unknown>;
-    };
-  } | null;
+  toolChoice?: 'auto' | 'none' | { type: 'function'; name: string };
   reasoning?: {
     effort: 'minimal' | 'low' | 'medium' | 'high';
   } | null;
+  plugins?: Array<{ id: string; max_results?: number }> | null;
 }
 
-interface ResponsesApiInput {
-  type: 'message';
-  role: 'user' | 'assistant';
-  content: Array<{ type: 'input_text' | 'output_text'; text: string }>;
+// 将内部消息格式转换为 Responses API 输入格式
+function convertToResponsesApiInput(
+  messages: Array<{ role: string; content: string; tool_call_id?: string; name?: string }>,
+  pendingToolCalls: Array<{ id: string; call_id: string; name: string; arguments: string }> = [],
+  toolResults: Array<{ call_id: string; output: string }> = []
+): ResponsesApiInputItem[] {
+  const input: ResponsesApiInputItem[] = [];
+  let messageIdCounter = 0;
+  
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      input.push({
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: `[System Instructions]\n${msg.content}` }]
+      });
+    } else if (msg.role === 'user') {
+      input.push({
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: msg.content }]
+      });
+    } else if (msg.role === 'assistant') {
+      input.push({
+        type: 'message',
+        role: 'assistant',
+        id: `msg_${++messageIdCounter}`,
+        status: 'completed',
+        content: [{ type: 'output_text', text: msg.content, annotations: [] }]
+      });
+    }
+  }
+  
+  for (const tc of pendingToolCalls) {
+    input.push({
+      type: 'function_call',
+      id: tc.id,
+      call_id: tc.call_id,
+      name: tc.name,
+      arguments: tc.arguments
+    });
+  }
+  
+  for (const tr of toolResults) {
+    input.push({
+      type: 'function_call_output',
+      id: `fc_output_${tr.call_id}`,
+      call_id: tr.call_id,
+      output: tr.output
+    });
+  }
+  
+  return input;
 }
 
-async function callOpenRouter(
-  messages: Array<{ role: string; content: string; tool_call_id?: string }>,
+// 解析 Responses API 输出
+interface ParsedResponsesApiOutput {
+  role: 'assistant';
+  content: string;
+  function_calls?: Array<{
+    id: string;
+    call_id: string;
+    name: string;
+    arguments: string;
+  }>;
+  reasoning_summary?: string[];
+}
+
+function parseResponsesApiOutput(data: Record<string, unknown>): ParsedResponsesApiOutput {
+  const output = data.output as Array<{ type: string; [key: string]: unknown }> || [];
+  
+  const messageOutput = output.find(o => o.type === 'message') as {
+    type: string;
+    id?: string;
+    content?: Array<{ type: string; text?: string }>;
+  } | undefined;
+  
+  const reasoningOutput = output.find(o => o.type === 'reasoning') as {
+    type: string;
+    summary?: string[];
+  } | undefined;
+  
+  const functionCalls = output.filter(o => o.type === 'function_call') as Array<{
+    type: string;
+    id: string;
+    call_id: string;
+    name: string;
+    arguments: string;
+  }>;
+  
+  let content = '';
+  if (messageOutput?.content) {
+    const textContent = messageOutput.content.find(c => c.type === 'output_text');
+    content = textContent?.text || '';
+  }
+  
+  const result: ParsedResponsesApiOutput = {
+    role: 'assistant',
+    content: content
+  };
+  
+  if (functionCalls.length > 0) {
+    result.function_calls = functionCalls.map(fc => ({
+      id: fc.id,
+      call_id: fc.call_id,
+      name: fc.name,
+      arguments: fc.arguments
+    }));
+  }
+  
+  if (reasoningOutput?.summary) {
+    result.reasoning_summary = reasoningOutput.summary;
+  }
+  
+  return result;
+}
+
+// 调用 OpenRouter Responses API
+async function callOpenRouterResponsesApi(
+  input: ResponsesApiInputItem[],
   apiKey: string,
   model: string,
   options: CallOpenRouterOptions = {}
-) {
-  const { tools = null, responseFormat = null, reasoning = null } = options;
-  
-  if (reasoning) {
-    const input: ResponsesApiInput[] = messages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({
-        type: 'message' as const,
-        role: m.role as 'user' | 'assistant',
-        content: [{
-          type: m.role === 'user' ? 'input_text' as const : 'output_text' as const,
-          text: m.content
-        }]
-      }));
-    
-    const requestBody: Record<string, unknown> = {
-      model: model,
-      input: input,
-      reasoning: reasoning,
-      max_output_tokens: 9000
-    };
-    
-    if (tools) {
-      requestBody.tools = tools;
-    }
-    
-    const response = await fetch('https://openrouter.ai/api/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://aisitebuilder.app',
-        'X-Title': 'AI Site Builder'
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`OpenRouter Responses API 错误: ${response.status} - ${errorData}`);
-    }
-    
-    const data = await response.json();
-    
-    const messageOutput = data.output?.find((o: { type: string }) => o.type === 'message');
-    const reasoningOutput = data.output?.find((o: { type: string }) => o.type === 'reasoning');
-    
-    let content = '';
-    if (messageOutput?.content) {
-      const textContent = messageOutput.content.find((c: { type: string }) => c.type === 'output_text');
-      content = textContent?.text || '';
-    }
-    
-    const result: Record<string, unknown> = {
-      role: 'assistant',
-      content: content
-    };
-    
-    if (reasoningOutput?.summary) {
-      result.reasoning_summary = reasoningOutput.summary;
-    }
-    
-    if (messageOutput?.tool_calls) {
-      result.tool_calls = messageOutput.tool_calls;
-    }
-    
-    return result;
-  }
+): Promise<ParsedResponsesApiOutput> {
+  const { tools = null, toolChoice = 'auto', reasoning = null, plugins = null } = options;
   
   const requestBody: Record<string, unknown> = {
     model: model,
-    messages: messages,
-    temperature: 0.7,
-    max_tokens: 4000
+    input: input,
+    max_output_tokens: 16000
   };
   
   if (tools) {
     requestBody.tools = tools;
-    requestBody.tool_choice = 'auto';
+    requestBody.tool_choice = toolChoice;
   }
   
-  if (responseFormat) {
-    requestBody.response_format = responseFormat;
+  if (reasoning) {
+    requestBody.reasoning = reasoning;
   }
   
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  if (plugins) {
+    requestBody.plugins = plugins;
+  }
+  
+  console.log('Responses API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
+  
+  const response = await fetch('https://openrouter.ai/api/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -357,12 +422,16 @@ async function callOpenRouter(
     },
     body: JSON.stringify(requestBody)
   });
+  
   if (!response.ok) {
     const errorData = await response.text();
-    throw new Error(`OpenRouter API 错误: ${response.status} - ${errorData}`);
+    throw new Error(`OpenRouter Responses API 错误: ${response.status} - ${errorData}`);
   }
+  
   const data = await response.json();
-  return data.choices[0].message;
+  console.log('Responses API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
+  
+  return parseResponsesApiOutput(data);
 }
 async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
   const requestBody: any = {
@@ -889,31 +958,60 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
       throw new Error(`不支持的任务类型: ${task.type}`);
     }
     
-    console.log(`调用 OpenRouter API, Model: ${model}, Msg Count: ${messages.length}`);
+    console.log(`调用 OpenRouter Responses API, Model: ${model}, Msg Count: ${messages.length}`);
     
     let iteration = 0;
     let finalResponse = '';
     const generatedImages: string[] = [];
     const modifiedFiles: string[] = [];
     
+    // 用于跟踪待处理的工具调用和结果
+    let pendingToolCalls: Array<{ id: string; call_id: string; name: string; arguments: string }> = [];
+    let toolResults: Array<{ call_id: string; output: string }> = [];
+    
     while (true) {
       iteration++;
       console.log(`Agent 迭代 ${iteration}`);
       await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      const assistantMessage = await callOpenRouter(messages, apiKey, model, { 
+      // 转换消息为 Responses API 格式
+      const input = convertToResponsesApiInput(messages, pendingToolCalls, toolResults);
+      
+      // 调用 Responses API
+      const assistantResponse = await callOpenRouterResponsesApi(input, apiKey, model, { 
         tools: TOOLS,
+        toolChoice: 'auto',
         reasoning: { effort: 'medium' }
       });
-      messages.push(assistantMessage);
       
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        for (const toolCall of assistantMessage.tool_calls) {
-          const toolName = toolCall.function.name;
-          const args = JSON.parse(toolCall.function.arguments || '{}');
+      // 记录推理摘要（如果有）
+      if (assistantResponse.reasoning_summary && assistantResponse.reasoning_summary.length > 0) {
+        console.log('推理摘要:', assistantResponse.reasoning_summary.join(' -> '));
+        await writeBuildLog(supabase, task.project_id, 'info', `AI 推理: ${assistantResponse.reasoning_summary.slice(0, 3).join(' -> ')}`);
+      }
+      
+      // 清空上一轮的工具调用和结果
+      pendingToolCalls = [];
+      toolResults = [];
+      
+      // 如果有函数调用
+      if (assistantResponse.function_calls && assistantResponse.function_calls.length > 0) {
+        // 将助手的回复添加到消息历史（如果有内容）
+        if (assistantResponse.content) {
+          messages.push({
+            role: 'assistant',
+            content: assistantResponse.content
+          });
+        }
+        
+        for (const funcCall of assistantResponse.function_calls) {
+          const toolName = funcCall.name;
+          const args = JSON.parse(funcCall.arguments || '{}');
           
           console.log(`执行工具: ${toolName}`, args);
           await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
+          
+          let toolOutput: string;
           
           if (toolName === 'generate_image') {
             try {
@@ -939,27 +1037,19 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
               
               await writeBuildLog(supabase, task.project_id, 'success', `图片已生成并保存: ${imagePath}`);
               
-              messages.push({
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: JSON.stringify({
-                  success: true,
-                  image_path: imagePath,
-                  file_name: fileName,
-                  message: '图片已成功生成并保存到项目文件夹'
-                })
+              toolOutput = JSON.stringify({
+                success: true,
+                image_path: imagePath,
+                file_name: fileName,
+                message: '图片已成功生成并保存到项目文件夹'
               });
             } catch (error) {
               console.error('图片生成失败:', error);
               await writeBuildLog(supabase, task.project_id, 'error', `图片生成失败: ${error.message}`);
               
-              messages.push({
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: JSON.stringify({
-                  success: false,
-                  error: error.message
-                })
+              toolOutput = JSON.stringify({
+                success: false,
+                error: error.message
               });
             }
           } else {
@@ -981,15 +1071,25 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
               await writeBuildLog(supabase, task.project_id, 'info', `已搜索关键词: ${args.keyword}`);
             }
             
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(result)
-            });
+            toolOutput = JSON.stringify(result);
           }
+          
+          // 记录工具调用和结果，用于下一次 API 调用
+          pendingToolCalls.push({
+            id: funcCall.id,
+            call_id: funcCall.call_id,
+            name: funcCall.name,
+            arguments: funcCall.arguments
+          });
+          
+          toolResults.push({
+            call_id: funcCall.call_id,
+            output: toolOutput
+          });
         }
       } else {
-        finalResponse = assistantMessage.content || '';
+        // 没有函数调用，这是最终响应
+        finalResponse = assistantResponse.content || '';
         break;
       }
     }
