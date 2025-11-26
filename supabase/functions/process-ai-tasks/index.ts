@@ -230,31 +230,8 @@ const TOOLS = [
 
 // --- API 调用与日志 ---
 
-// Responses API 输入类型定义
-interface ResponsesApiMessageInput {
-  type: 'message';
-  role: 'user' | 'assistant' | 'system' | 'developer';
-  id?: string;
-  status?: 'completed' | 'in_progress' | 'incomplete';
-  content: Array<{ type: 'input_text' | 'output_text'; text: string; annotations?: Array<unknown> }>;
-}
-
-interface ResponsesApiFunctionCall {
-  type: 'function_call';
-  id: string;
-  call_id: string;
-  name: string;
-  arguments: string;
-}
-
-interface ResponsesApiFunctionCallOutput {
-  type: 'function_call_output';
-  id: string;
-  call_id: string;
-  output: string;
-}
-
-type ResponsesApiInputItem = ResponsesApiMessageInput | ResponsesApiFunctionCall | ResponsesApiFunctionCallOutput;
+// 使用宽松类型以保留 OpenRouter/Gemini 返回的所有字段（如 thought_signature）
+type RawOutputItem = Record<string, unknown>;
 
 interface CallOpenRouterOptions {
   tools?: typeof TOOLS | null;
@@ -265,13 +242,11 @@ interface CallOpenRouterOptions {
   plugins?: Array<{ id: string; max_results?: number }> | null;
 }
 
-// 将内部消息格式转换为 Responses API 输入格式
-function convertToResponsesApiInput(
-  messages: Array<{ role: string; content: string; tool_call_id?: string; name?: string }>,
-  pendingToolCalls: Array<{ id: string; call_id: string; name: string; arguments: string }> = [],
-  toolResults: Array<{ call_id: string; output: string }> = []
-): ResponsesApiInputItem[] {
-  const input: ResponsesApiInputItem[] = [];
+// 将初始消息转换为 Responses API 输入格式（仅用于首次调用）
+function messagesToInitialInput(
+  messages: Array<{ role: string; content: string }>
+): RawOutputItem[] {
+  const input: RawOutputItem[] = [];
   let messageIdCounter = 0;
   
   for (const msg of messages) {
@@ -302,25 +277,6 @@ function convertToResponsesApiInput(
         content: [{ type: 'output_text', text: msg.content, annotations: [] }]
       });
     }
-  }
-  
-  for (const tc of pendingToolCalls) {
-    input.push({
-      type: 'function_call',
-      id: tc.id,
-      call_id: tc.call_id,
-      name: tc.name,
-      arguments: tc.arguments
-    });
-  }
-  
-  for (const tr of toolResults) {
-    input.push({
-      type: 'function_call_output',
-      id: `fc_output_${tr.call_id}`,
-      call_id: tr.call_id,
-      output: tr.output
-    });
   }
   
   return input;
@@ -402,13 +358,19 @@ function parseResponsesApiOutput(data: Record<string, unknown>): ParsedResponses
   return result;
 }
 
+// Responses API 返回结果（包含解析后的数据和原始输出）
+interface ResponsesApiResult {
+  parsed: ParsedResponsesApiOutput;
+  rawOutput: RawOutputItem[];  // 保留完整的 output 数组，包含 thought_signature 等字段
+}
+
 // 调用 OpenRouter Responses API
 async function callOpenRouterResponsesApi(
-  input: ResponsesApiInputItem[],
+  input: RawOutputItem[],
   apiKey: string,
   model: string,
   options: CallOpenRouterOptions = {}
-): Promise<ParsedResponsesApiOutput> {
+): Promise<ResponsesApiResult> {
   const { tools = null, toolChoice = 'auto', reasoning = null, plugins = null } = options;
   
   const requestBody: Record<string, unknown> = {
@@ -451,7 +413,11 @@ async function callOpenRouterResponsesApi(
   const data = await response.json();
   console.log('Responses API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
   
-  return parseResponsesApiOutput(data);
+  const parsed = parseResponsesApiOutput(data);
+  // 保留原始 output 数组，包含所有字段（如 thought_signature、reasoning 等）
+  const rawOutput = Array.isArray(data.output) ? data.output as RawOutputItem[] : [];
+  
+  return { parsed, rawOutput };
 }
 async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
   const requestBody: any = {
@@ -985,20 +951,22 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
     const generatedImages: string[] = [];
     const modifiedFiles: string[] = [];
     
-    // 用于跟踪待处理的工具调用和结果
-    let pendingToolCalls: Array<{ id: string; call_id: string; name: string; arguments: string }> = [];
-    let toolResults: Array<{ call_id: string; output: string }> = [];
+    // 使用原始历史记录方式，保留所有字段（包括 thought_signature、reasoning 等）
+    // 首次调用时，将 messages 转换为初始输入格式
+    const historyItems: RawOutputItem[] = messagesToInitialInput(messages);
+    // 上一轮的工具调用输出，将在下一次请求时追加
+    let lastToolOutputs: RawOutputItem[] = [];
     
     while (true) {
       iteration++;
       console.log(`Agent 迭代 ${iteration}`);
       await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      // 转换消息为 Responses API 格式
-      const input = convertToResponsesApiInput(messages, pendingToolCalls, toolResults);
+      // 构建输入：历史记录 + 上一轮的工具输出
+      const input = [...historyItems, ...lastToolOutputs];
       
-      // 调用 Responses API
-      const assistantResponse = await callOpenRouterResponsesApi(input, apiKey, model, { 
+      // 调用 Responses API，获取解析结果和原始输出
+      const { parsed: assistantResponse, rawOutput } = await callOpenRouterResponsesApi(input, apiKey, model, { 
         tools: TOOLS,
         toolChoice: 'auto',
         reasoning: { effort: 'medium' }
@@ -1010,21 +978,29 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
         await writeBuildLog(supabase, task.project_id, 'info', `AI 推理: ${assistantResponse.reasoning_summary.slice(0, 3).join(' -> ')}`);
       }
       
-      // 清空上一轮的工具调用和结果
-      pendingToolCalls = [];
-      toolResults = [];
+      // 将原始输出追加到历史记录中（保留所有字段，包括 thought_signature）
+      historyItems.push(...rawOutput);
+      
+      // 从原始输出中提取 function_call 项（保留完整对象，包含 thought_signature）
+      const functionCalls = rawOutput.filter(
+        (item) => item.type === 'function_call'
+      ) as Array<{
+        type: 'function_call';
+        id: string;
+        call_id: string;
+        name: string;
+        arguments: string;
+        status?: string;
+        // thought_signature 和其他字段会被保留
+        [key: string]: unknown;
+      }>;
       
       // 如果有函数调用
-      if (assistantResponse.function_calls && assistantResponse.function_calls.length > 0) {
-        // 将助手的回复添加到消息历史（如果有内容）
-        if (assistantResponse.content) {
-          messages.push({
-            role: 'assistant',
-            content: assistantResponse.content
-          });
-        }
+      if (functionCalls.length > 0) {
+        // 清空上一轮的工具输出
+        lastToolOutputs = [];
         
-        for (const funcCall of assistantResponse.function_calls) {
+        for (const funcCall of functionCalls) {
           const toolName = funcCall.name;
           const args = JSON.parse(funcCall.arguments || '{}');
           
@@ -1094,18 +1070,14 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
             toolOutput = JSON.stringify(result);
           }
           
-          // 记录工具调用和结果，用于下一次 API 调用
-          pendingToolCalls.push({
-            id: funcCall.id,
-            call_id: funcCall.call_id,
-            name: funcCall.name,
-            arguments: funcCall.arguments
-          });
-          
-          toolResults.push({
+          // 创建 function_call_output 项，引用原始的 call_id
+          const functionCallOutputItem: RawOutputItem = {
+            type: 'function_call_output',
             call_id: funcCall.call_id,
             output: toolOutput
-          });
+          };
+          
+          lastToolOutputs.push(functionCallOutputItem);
         }
       } else {
         // 没有函数调用，这是最终响应
