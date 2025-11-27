@@ -105,316 +105,230 @@ async function getProjectFileContext(supabase, bucket, path) {
     return ""; // 失败不阻断流程，只是没上下文
   }
 }
+// Chat Completions API 工具定义格式
 const TOOLS = [
   {
     type: 'function' as const,
-    name: 'generate_image',
-    description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        prompt: {
-          type: 'string',
-          description: '图片生成的详细描述,用英文描述'
+    function: {
+      name: 'generate_image',
+      description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: '图片生成的详细描述,用英文描述'
+          },
+          aspect_ratio: {
+            type: 'string',
+            description: '图片的宽高比',
+            enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+          }
         },
-        aspect_ratio: {
-          type: 'string',
-          description: '图片的宽高比',
-          enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
-        }
-      },
-      required: ['prompt']
+        required: ['prompt']
+      }
     }
   },
   {
     type: 'function' as const,
-    name: 'list_files',
-    description: '列出项目目录下的文件和子目录。用于了解项目结构。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
-        }
-      },
-      required: []
-    }
-  },
-  {
-    type: 'function' as const,
-    name: 'read_file',
-    description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要读取的文件路径，相对于项目根目录'
-        }
-      },
-      required: ['path']
-    }
-  },
-  {
-    type: 'function' as const,
-    name: 'write_file',
-    description: '写入或创建文件。用于生成新代码或修改现有文件。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要写入的文件路径，相对于项目根目录'
+    function: {
+      name: 'list_files',
+      description: '列出项目目录下的文件和子目录。用于了解项目结构。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
+          }
         },
-        content: {
-          type: 'string',
-          description: '要写入的文件内容'
-        }
-      },
-      required: ['path', 'content']
+        required: []
+      }
     }
   },
   {
     type: 'function' as const,
-    name: 'delete_file',
-    description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '要删除的文件路径，相对于项目根目录'
-        }
-      },
-      required: ['path']
-    }
-  },
-  {
-    type: 'function' as const,
-    name: 'search_files',
-    description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {
-        keyword: {
-          type: 'string',
-          description: '要搜索的关键词'
+    function: {
+      name: 'read_file',
+      description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要读取的文件路径，相对于项目根目录'
+          }
         },
-        file_extension: {
-          type: 'string',
-          description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
-        }
-      },
-      required: ['keyword']
+        required: ['path']
+      }
     }
   },
   {
     type: 'function' as const,
-    name: 'get_project_structure',
-    description: '获取完整的项目文件树结构。用于全局了解项目组成。',
-    strict: null,
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: []
+    function: {
+      name: 'write_file',
+      description: '写入或创建文件。用于生成新代码或修改现有文件。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要写入的文件路径，相对于项目根目录'
+          },
+          content: {
+            type: 'string',
+            description: '要写入的文件内容'
+          }
+        },
+        required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'delete_file',
+      description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要删除的文件路径，相对于项目根目录'
+          }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'search_files',
+      description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
+      parameters: {
+        type: 'object',
+        properties: {
+          keyword: {
+            type: 'string',
+            description: '要搜索的关键词'
+          },
+          file_extension: {
+            type: 'string',
+            description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
+          }
+        },
+        required: ['keyword']
+      }
+    }
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_project_structure',
+      description: '获取完整的项目文件树结构。用于全局了解项目组成。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
     }
   }
 ];
 
 // --- API 调用与日志 ---
 
-// Responses API 输入类型定义
-interface ResponsesApiMessageInput {
-  type: 'message';
-  role: 'user' | 'assistant' | 'system' | 'developer';
-  id?: string;
-  status?: 'completed' | 'in_progress' | 'incomplete';
-  content: Array<{ type: 'input_text' | 'output_text'; text: string; annotations?: Array<unknown> }>;
+// Chat Completions API 消息类型定义
+// 注意：为了支持 Gemini 模型的 thought_signature 和 reasoning_details，
+// 我们需要允许透传 OpenRouter 返回的所有字段
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: {
+      name: string;
+      arguments: string;
+    };
+    // 允许 provider 自定义字段（如 thought_signature）
+    [key: string]: unknown;
+  }>;
+  tool_call_id?: string;
+  // Gemini 模型需要的 reasoning 相关字段
+  reasoning?: string;
+  reasoning_details?: unknown;
+  refusal?: unknown;
+  // 允许 provider 自定义字段透传
+  [key: string]: unknown;
 }
-
-interface ResponsesApiFunctionCall {
-  type: 'function_call';
-  id: string;
-  call_id: string;
-  name: string;
-  arguments: string;
-}
-
-interface ResponsesApiFunctionCallOutput {
-  type: 'function_call_output';
-  id: string;
-  call_id: string;
-  output: string;
-}
-
-type ResponsesApiInputItem = ResponsesApiMessageInput | ResponsesApiFunctionCall | ResponsesApiFunctionCallOutput;
 
 interface CallOpenRouterOptions {
   tools?: typeof TOOLS | null;
-  toolChoice?: 'auto' | 'none' | { type: 'function'; name: string };
-  reasoning?: {
-    effort: 'minimal' | 'low' | 'medium' | 'high';
-  } | null;
-  plugins?: Array<{ id: string; max_results?: number }> | null;
+  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
 }
 
-// 将内部消息格式转换为 Responses API 输入格式
-function convertToResponsesApiInput(
-  messages: Array<{ role: string; content: string; tool_call_id?: string; name?: string }>,
-  pendingToolCalls: Array<{ id: string; call_id: string; name: string; arguments: string }> = [],
-  toolResults: Array<{ call_id: string; output: string }> = []
-): ResponsesApiInputItem[] {
-  const input: ResponsesApiInputItem[] = [];
-  let messageIdCounter = 0;
-  
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      input.push({
-        type: 'message',
-        role: 'system',
-        content: [{ type: 'input_text', text: msg.content }]
-      });
-    } else if (msg.role === 'developer') {
-      input.push({
-        type: 'message',
-        role: 'developer',
-        content: [{ type: 'input_text', text: msg.content }]
-      });
-    } else if (msg.role === 'user') {
-      input.push({
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: msg.content }]
-      });
-    } else if (msg.role === 'assistant') {
-      input.push({
-        type: 'message',
-        role: 'assistant',
-        id: `msg_${++messageIdCounter}`,
-        status: 'completed',
-        content: [{ type: 'output_text', text: msg.content, annotations: [] }]
-      });
-    }
-  }
-  
-  for (const tc of pendingToolCalls) {
-    input.push({
-      type: 'function_call',
-      id: tc.id,
-      call_id: tc.call_id,
-      name: tc.name,
-      arguments: tc.arguments
-    });
-  }
-  
-  for (const tr of toolResults) {
-    input.push({
-      type: 'function_call_output',
-      id: `fc_output_${tr.call_id}`,
-      call_id: tr.call_id,
-      output: tr.output
-    });
-  }
-  
-  return input;
-}
-
-// 解析 Responses API 输出
-interface ParsedResponsesApiOutput {
-  role: 'assistant';
+// Chat Completions API 响应解析结果
+// 包含原始 message 对象以保留 Gemini 的 reasoning_details 和 thought_signature
+interface ParsedChatCompletionOutput {
   content: string;
-  function_calls?: Array<{
+  tool_calls?: Array<{
     id: string;
-    call_id: string;
     name: string;
     arguments: string;
   }>;
-  reasoning_summary?: string[];
+  // 原始 message 对象，用于透传给下一次请求
+  rawMessage: ChatMessage;
 }
 
-function parseResponsesApiOutput(data: Record<string, unknown>): ParsedResponsesApiOutput {
-  const output = data.output as Array<{ type: string; [key: string]: unknown }> || [];
+// 解析 Chat Completions API 输出
+function parseChatCompletionOutput(data: Record<string, unknown>): ParsedChatCompletionOutput {
+  const choices = data.choices as Array<{
+    message: Record<string, unknown>;
+  }> || [];
   
-  const messageOutput = output.find(o => o.type === 'message') as {
-    type: string;
-    id?: string;
-    content?: Array<{ type: string; text?: string }>;
-  } | undefined;
+  // 获取原始 message 对象（保留所有字段）
+  const rawMessage = (choices[0]?.message || { role: 'assistant' }) as ChatMessage;
   
-  const reasoningOutput = output.find(o => o.type === 'reasoning') as {
-    type: string;
-    summary?: Array<{ type?: string; text?: string } | string>;
-  } | undefined;
-  
-  const functionCalls = output.filter(o => o.type === 'function_call') as Array<{
-    type: string;
+  // 提取 tool_calls 用于执行工具
+  const toolCalls = rawMessage.tool_calls as Array<{
     id: string;
-    call_id: string;
-    name: string;
-    arguments: string;
-  }>;
+    type: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }> | undefined;
   
-  let content = '';
-  if (messageOutput?.content) {
-    const textContent = messageOutput.content.find(c => c.type === 'output_text');
-    content = textContent?.text || '';
-  }
-  
-  const result: ParsedResponsesApiOutput = {
-    role: 'assistant',
-    content: content
+  const result: ParsedChatCompletionOutput = {
+    content: typeof rawMessage.content === 'string' ? rawMessage.content : '',
+    rawMessage: rawMessage
   };
   
-  if (functionCalls.length > 0) {
-    result.function_calls = functionCalls.map(fc => ({
-      id: fc.id,
-      call_id: fc.call_id,
-      name: fc.name,
-      arguments: fc.arguments
+  if (toolCalls && toolCalls.length > 0) {
+    result.tool_calls = toolCalls.map(tc => ({
+      id: tc.id,
+      name: tc.function.name,
+      arguments: tc.function.arguments
     }));
-  }
-  
-  if (reasoningOutput?.summary && Array.isArray(reasoningOutput.summary)) {
-    const summaryTexts = reasoningOutput.summary
-      .map((item: { type?: string; text?: string } | string) => {
-        if (typeof item === 'string') {
-          return item;
-        }
-        if (item && typeof item === 'object' && typeof item.text === 'string') {
-          return item.text;
-        }
-        return '';
-      })
-      .filter((text: string) => text.length > 0);
-    
-    if (summaryTexts.length > 0) {
-      result.reasoning_summary = summaryTexts;
-    }
   }
   
   return result;
 }
 
-// 调用 OpenRouter Responses API
-async function callOpenRouterResponsesApi(
-  input: ResponsesApiInputItem[],
+// 调用 OpenRouter Chat Completions API
+async function callOpenRouterChatCompletionsApi(
+  messages: ChatMessage[],
   apiKey: string,
   model: string,
   options: CallOpenRouterOptions = {}
-): Promise<ParsedResponsesApiOutput> {
-  const { tools = null, toolChoice = 'auto', reasoning = null, plugins = null } = options;
+): Promise<ParsedChatCompletionOutput> {
+  const { tools = null, toolChoice = 'auto' } = options;
   
   const requestBody: Record<string, unknown> = {
     model: model,
-    input: input,
-    max_output_tokens: 16000
+    messages: messages,
+    max_tokens: 16000
   };
   
   if (tools) {
@@ -422,17 +336,9 @@ async function callOpenRouterResponsesApi(
     requestBody.tool_choice = toolChoice;
   }
   
-  if (reasoning) {
-    requestBody.reasoning = reasoning;
-  }
+  console.log('Chat Completions API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
   
-  if (plugins) {
-    requestBody.plugins = plugins;
-  }
-  
-  console.log('Responses API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
-  
-  const response = await fetch('https://openrouter.ai/api/v1/responses', {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -445,13 +351,13 @@ async function callOpenRouterResponsesApi(
   
   if (!response.ok) {
     const errorData = await response.text();
-    throw new Error(`OpenRouter Responses API 错误: ${response.status} - ${errorData}`);
+    throw new Error(`OpenRouter Chat Completions API 错误: ${response.status} - ${errorData}`);
   }
   
   const data = await response.json();
-  console.log('Responses API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
+  console.log('Chat Completions API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
   
-  return parseResponsesApiOutput(data);
+  return parseChatCompletionOutput(data);
 }
 async function generateImage(prompt: string, apiKey: string, aspectRatio = '1:1') {
   const requestBody: any = {
@@ -978,55 +884,39 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
       throw new Error(`不支持的任务类型: ${task.type}`);
     }
     
-    console.log(`调用 OpenRouter Responses API, Model: ${model}, Msg Count: ${messages.length}`);
+    console.log(`调用 OpenRouter Chat Completions API, Model: ${model}, Msg Count: ${messages.length}`);
     
     let iteration = 0;
     let finalResponse = '';
     const generatedImages: string[] = [];
     const modifiedFiles: string[] = [];
     
-    // 用于跟踪待处理的工具调用和结果
-    let pendingToolCalls: Array<{ id: string; call_id: string; name: string; arguments: string }> = [];
-    let toolResults: Array<{ call_id: string; output: string }> = [];
+    // 使用 ChatMessage 类型的消息数组
+    const chatMessages: ChatMessage[] = messages.map(msg => ({
+      role: msg.role as 'system' | 'user' | 'assistant',
+      content: msg.content
+    }));
     
     while (true) {
       iteration++;
       console.log(`Agent 迭代 ${iteration}`);
       await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      // 转换消息为 Responses API 格式
-      const input = convertToResponsesApiInput(messages, pendingToolCalls, toolResults);
-      
-      // 调用 Responses API
-      const assistantResponse = await callOpenRouterResponsesApi(input, apiKey, model, { 
+      // 调用 Chat Completions API
+      const assistantResponse = await callOpenRouterChatCompletionsApi(chatMessages, apiKey, model, { 
         tools: TOOLS,
-        toolChoice: 'auto',
-        reasoning: { effort: 'medium' }
+        toolChoice: 'auto'
       });
       
-      // 记录推理摘要（如果有）
-      if (assistantResponse.reasoning_summary && assistantResponse.reasoning_summary.length > 0) {
-        console.log('推理摘要:', assistantResponse.reasoning_summary.join(' -> '));
-        await writeBuildLog(supabase, task.project_id, 'info', `AI 推理: ${assistantResponse.reasoning_summary.slice(0, 3).join(' -> ')}`);
-      }
-      
-      // 清空上一轮的工具调用和结果
-      pendingToolCalls = [];
-      toolResults = [];
-      
       // 如果有函数调用
-      if (assistantResponse.function_calls && assistantResponse.function_calls.length > 0) {
-        // 将助手的回复添加到消息历史（如果有内容）
-        if (assistantResponse.content) {
-          messages.push({
-            role: 'assistant',
-            content: assistantResponse.content
-          });
-        }
+      if (assistantResponse.tool_calls && assistantResponse.tool_calls.length > 0) {
+        // 将原始 assistant 消息添加到消息历史（保留 reasoning_details 和 thought_signature）
+        // 这是 Gemini 模型正常工作所必需的
+        chatMessages.push(assistantResponse.rawMessage);
         
-        for (const funcCall of assistantResponse.function_calls) {
-          const toolName = funcCall.name;
-          const args = JSON.parse(funcCall.arguments || '{}');
+        for (const toolCall of assistantResponse.tool_calls) {
+          const toolName = toolCall.name;
+          const args = JSON.parse(toolCall.arguments || '{}');
           
           console.log(`执行工具: ${toolName}`, args);
           await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
@@ -1094,17 +984,11 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
             toolOutput = JSON.stringify(result);
           }
           
-          // 记录工具调用和结果，用于下一次 API 调用
-          pendingToolCalls.push({
-            id: funcCall.id,
-            call_id: funcCall.call_id,
-            name: funcCall.name,
-            arguments: funcCall.arguments
-          });
-          
-          toolResults.push({
-            call_id: funcCall.call_id,
-            output: toolOutput
+          // 将工具结果添加到消息历史（使用 role: "tool" 格式）
+          chatMessages.push({
+            role: 'tool',
+            content: toolOutput,
+            tool_call_id: toolCall.id
           });
         }
       } else {
