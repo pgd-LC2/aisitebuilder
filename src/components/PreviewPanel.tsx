@@ -36,14 +36,73 @@ interface MemoryCard {
   matched: boolean;
 }
 
-const PREVIEW_STATUS_MESSAGES: Record<PreviewStatus, string> = {
-  idle: '选择一个项目以开始预览',
-  loading: '正在加载项目文件...',
-  installing: '正在安装依赖...',
-  starting: '正在启动开发服务器...',
-  running: '预览已就绪',
-  error: '渲染失败，请重试',
-  unsupported: '当前环境不支持 WebContainer 预览',
+type InstallMode = 'fresh' | 'cached' | 'unknown';
+
+interface StatusMessageConfig {
+  title: string;
+  subtitle: string;
+  tip?: string;
+  estimatedTime?: string;
+}
+
+const getStatusMessage = (status: PreviewStatus, installMode: InstallMode): StatusMessageConfig => {
+  switch (status) {
+    case 'idle':
+      return {
+        title: '等待开始',
+        subtitle: '选择一个项目以开始预览',
+      };
+    case 'loading':
+      return {
+        title: '加载中',
+        subtitle: '正在加载项目文件...',
+        tip: '正在从云端获取您的项目文件',
+      };
+    case 'installing':
+      if (installMode === 'cached') {
+        return {
+          title: '快速恢复中',
+          subtitle: '正在从缓存恢复依赖...',
+          tip: '检测到本地缓存，正在快速恢复',
+          estimatedTime: '预计 5-15 秒',
+        };
+      }
+      return {
+        title: '首次安装依赖',
+        subtitle: '正在下载并安装项目依赖...',
+        tip: '首次安装需要从网络下载依赖包，请耐心等待。下次打开相同项目会快很多！',
+        estimatedTime: '预计 2-5 分钟',
+      };
+    case 'starting':
+      return {
+        title: '即将就绪',
+        subtitle: '正在启动开发服务器...',
+        tip: '依赖安装完成，正在启动预览服务',
+        estimatedTime: '预计 10-30 秒',
+      };
+    case 'running':
+      return {
+        title: '预览就绪',
+        subtitle: '您的项目已成功运行',
+      };
+    case 'error':
+      return {
+        title: '出现问题',
+        subtitle: '渲染失败，请重试',
+        tip: '您可以点击"重启预览"按钮重新尝试',
+      };
+    case 'unsupported':
+      return {
+        title: '环境不支持',
+        subtitle: '当前浏览器环境不支持 WebContainer 预览',
+        tip: '请使用 Chrome、Edge 或其他支持 SharedArrayBuffer 的浏览器',
+      };
+    default:
+      return {
+        title: '处理中',
+        subtitle: '请稍候...',
+      };
+  }
 };
 
 const PREVIEW_LOADING_STATES: PreviewStatus[] = ['loading', 'installing', 'starting'];
@@ -153,6 +212,8 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   const [previewLogs, setPreviewLogs] = useState<string[]>([]);
   const [lastPreviewKey, setLastPreviewKey] = useState<string | null>(null);
   const [webcontainerReady, setWebcontainerReady] = useState(false);
+  const [installMode, setInstallMode] = useState<InstallMode>('unknown');
+  const [installStartTime, setInstallStartTime] = useState<number | null>(null);
   const devServerStopRequestedRef = useRef(false);
   const initializingRef = useRef(false);
   const dependencyHashRef = useRef<string | null>(null);
@@ -500,6 +561,8 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
       setPreviewError(null);
       setPreviewLogs([]);
       setPreviewUrl(null);
+      setInstallMode('unknown');
+      setInstallStartTime(null);
 
       try {
         const { data: files, error } = await fileService.getFilesByProject(currentProject.id, currentVersionId);
@@ -530,31 +593,41 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
         if (preloadNodeModules && dependencyHash) {
           const cachedSnapshot = await loadNodeModulesSnapshot(dependencyHash);
           if (cachedSnapshot) {
+            setInstallMode('cached');
+            setInstallStartTime(Date.now());
+            setPreviewStatus('installing');
             appendLog('检测到预制 node_modules，正在快速恢复...');
             await instance.fs.mkdir('node_modules', { recursive: true });
             await instance.mount(cachedSnapshot, { mountPoint: 'node_modules' });
             await ensureNodeModulesExecutables();
             reusedPrebuiltModules = true;
             reusedPrebuiltRef.current = true;
+            appendLog('缓存恢复完成');
           }
         } else if (!preloadNodeModules) {
           appendLog('已关闭预制 node_modules，使用全新依赖安装流程');
         }
 
         if (!reusedPrebuiltModules) {
+          setInstallMode('fresh');
+          setInstallStartTime(Date.now());
           await instance.fs.rm('node_modules', { recursive: true, force: true }).catch(() => null);
           setPreviewStatus('installing');
+          appendLog('开始首次安装依赖，这可能需要几分钟时间...');
           const { exitCode } = await runProcess('npm', ['install', '--prefer-offline', '--no-audit']);
 
           if (exitCode !== 0) {
             throw new Error('依赖安装失败，请检查 package.json');
           }
 
+          appendLog('依赖安装完成');
+
           if (preloadNodeModules && dependencyHash) {
+            appendLog('正在保存依赖缓存，下次启动会更快...');
             await ensureNodeModulesExecutables();
             const snapshot = await instance.export('node_modules', { format: 'binary' });
             await saveNodeModulesSnapshot(dependencyHash, snapshot);
-            appendLog('已缓存 node_modules，用于下次快速加载');
+            appendLog('已缓存 node_modules，下次打开相同项目将快速恢复');
           } else if (!preloadNodeModules) {
             appendLog('未缓存 node_modules（实验性预加载已关闭）');
           }
@@ -773,6 +846,8 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
                     error={previewError}
                     logs={previewLogs}
                     projectName={currentProject?.title}
+                    installMode={installMode}
+                    installStartTime={installStartTime}
                   />
                 )}
               </div>
@@ -802,24 +877,125 @@ interface PreviewLoadingScreenProps {
   error: string | null;
   logs: string[];
   projectName?: string;
+  installMode: InstallMode;
+  installStartTime: number | null;
 }
 
-function PreviewLoadingScreen({ status, error, logs, projectName }: PreviewLoadingScreenProps) {
-  const statusText = PREVIEW_STATUS_MESSAGES[status];
+function PreviewLoadingScreen({ status, error, logs, projectName, installMode, installStartTime }: PreviewLoadingScreenProps) {
+  const statusConfig = getStatusMessage(status, installMode);
   const isError = status === 'error';
   const isUnsupported = status === 'unsupported';
   const shouldShowMiniGame = PREVIEW_LOADING_STATES.includes(status);
   const showLogs = logs.length > 0;
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [showDetailedLogs, setShowDetailedLogs] = useState(false);
+
+  // 计算已用时间
+  useEffect(() => {
+    if (!installStartTime || status === 'running' || status === 'error') {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - installStartTime) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [installStartTime, status]);
+
+  const formatElapsedTime = (seconds: number) => {
+    if (seconds < 60) {
+      return `${seconds} 秒`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes} 分 ${remainingSeconds} 秒`;
+  };
+
+  // 获取进度步骤
+  const getProgressSteps = () => {
+    const steps = [
+      { key: 'loading', label: '加载文件', done: status !== 'loading' && status !== 'idle' },
+      { key: 'installing', label: installMode === 'cached' ? '恢复缓存' : '安装依赖', done: status === 'starting' || status === 'running' },
+      { key: 'starting', label: '启动服务', done: status === 'running' },
+    ];
+    return steps;
+  };
+
+  const progressSteps = getProgressSteps();
+  const currentStepIndex = progressSteps.findIndex(step => !step.done);
 
   return (
     <div className="h-full bg-gradient-to-br from-blue-50 via-white to-purple-50 rounded-lg border border-dashed border-gray-200 flex items-center justify-center p-6">
       <div className="w-full max-w-3xl space-y-6">
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-sm font-medium">
-            <Loader2 className={`w-4 h-4 ${shouldShowMiniGame ? 'animate-spin' : ''}`} />
-            <span>{projectName ? `正在为 ${projectName} 准备预览` : '正在准备预览环境'}</span>
+        {/* 主状态显示区 - 小白友好 */}
+        <div className="text-center space-y-4">
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 mx-auto rounded-full bg-blue-50 text-blue-700 text-xs sm:text-sm font-medium max-w-full">
+            <Loader2 className={`w-4 h-4 flex-shrink-0 ${shouldShowMiniGame ? 'animate-spin' : ''}`} />
+            <span className="whitespace-normal break-words text-center max-w-[16rem] sm:max-w-[20rem]">
+              {projectName ? `正在为「${projectName}」准备预览` : '正在准备预览环境'}
+            </span>
           </div>
-          <p className="text-gray-600 text-sm">{statusText}</p>
+          
+          {/* 状态标题和副标题 */}
+          <div className="space-y-1">
+            <h3 className="text-lg font-medium text-gray-900">{statusConfig.title}</h3>
+            <p className="text-gray-600 text-sm">{statusConfig.subtitle}</p>
+          </div>
+
+          {/* 友好提示 - 小白能看懂 */}
+          {statusConfig.tip && (
+            <div className="inline-block px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-amber-800 text-xs">{statusConfig.tip}</p>
+            </div>
+          )}
+
+          {/* 预估时间和已用时间 */}
+          {(statusConfig.estimatedTime || elapsedTime > 0) && shouldShowMiniGame && (
+            <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+              {statusConfig.estimatedTime && (
+                <span className="px-2 py-1 bg-gray-100 rounded">{statusConfig.estimatedTime}</span>
+              )}
+              {elapsedTime > 0 && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                  已用时: {formatElapsedTime(elapsedTime)}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 进度步骤指示器 */}
+          {shouldShowMiniGame && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              {progressSteps.map((step, index) => (
+                <div key={step.key} className="flex items-center">
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    step.done 
+                      ? 'bg-green-100 text-green-700' 
+                      : index === currentStepIndex 
+                        ? 'bg-blue-100 text-blue-700 animate-pulse' 
+                        : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {step.done ? (
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : index === currentStepIndex ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <span className="w-3 h-3 rounded-full border border-current" />
+                    )}
+                    <span>{step.label}</span>
+                  </div>
+                  {index < progressSteps.length - 1 && (
+                    <div className={`w-8 h-0.5 mx-1 ${step.done ? 'bg-green-300' : 'bg-gray-200'}`} />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 错误显示 */}
           {(isError || isUnsupported) && error && (
             <p className="text-sm text-red-500 flex items-center justify-center gap-1">
               <AlertTriangle className="w-4 h-4" />
@@ -828,6 +1004,7 @@ function PreviewLoadingScreen({ status, error, logs, projectName }: PreviewLoadi
           )}
         </div>
 
+        {/* 小游戏区域 */}
         {shouldShowMiniGame ? (
           <div className="mx-auto w-full max-w-[560px] md:max-w-[680px] lg:max-w-[720px] max-h-[520px] overflow-auto">
             <LoadingMiniGame />
@@ -846,28 +1023,68 @@ function PreviewLoadingScreen({ status, error, logs, projectName }: PreviewLoadi
           </div>
         )}
 
+        {/* 技术日志区域 - 专业用户可展开查看 */}
         {showLogs && (
-          <motion.div
-            className="bg-gray-900 text-gray-100 rounded-lg p-4 text-left max-h-48 overflow-auto text-xs font-mono space-y-1"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: LOG_EASE }}
-          >
-            <AnimatePresence initial={false}>
-              {logs.slice(-8).map((log, index) => (
+          <div className="space-y-2">
+            <button
+              onClick={() => setShowDetailedLogs(!showDetailedLogs)}
+              className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 transition-colors mx-auto"
+            >
+              <span>{showDetailedLogs ? '收起' : '展开'}技术日志</span>
+              <svg 
+                className={`w-4 h-4 transition-transform ${showDetailedLogs ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            <AnimatePresence>
+              {showDetailedLogs && (
                 <motion.div
-                  key={`${log}-${index}`}
-                  className="whitespace-pre-wrap"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.25, ease: LOG_EASE }}
+                  className="bg-gray-900 text-gray-100 rounded-lg p-4 text-left max-h-[40vh] overflow-auto text-xs font-mono space-y-1"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: LOG_EASE }}
                 >
-                  {log}
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
+                    <span className="text-gray-400">WebContainer 日志</span>
+                    <span className="text-gray-500">{logs.length} 条记录</span>
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {logs.slice(-20).map((log, index) => (
+                      <motion.div
+                        key={`${log}-${index}`}
+                        className="whitespace-pre-wrap py-0.5 hover:bg-gray-800 px-1 rounded"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.25, ease: LOG_EASE }}
+                      >
+                        <span className="text-gray-500 mr-2">{String(index + 1).padStart(2, '0')}</span>
+                        {log}
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 </motion.div>
-              ))}
+              )}
             </AnimatePresence>
-          </motion.div>
+
+            {/* 简化的最新日志预览 - 始终显示 */}
+            {!showDetailedLogs && logs.length > 0 && (
+              <motion.div
+                className="bg-gray-100 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono truncate"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <span className="text-gray-400 mr-2">最新:</span>
+                {logs[logs.length - 1]}
+              </motion.div>
+            )}
+          </div>
         )}
       </div>
     </div>
