@@ -930,9 +930,11 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
       <div className="w-full max-w-3xl space-y-6">
         {/* 主状态显示区 - 小白友好 */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-sm font-medium">
-            <Loader2 className={`w-4 h-4 ${shouldShowMiniGame ? 'animate-spin' : ''}`} />
-            <span>{projectName ? `正在为「${projectName}」准备预览` : '正在准备预览环境'}</span>
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 mx-auto rounded-full bg-blue-50 text-blue-700 text-xs sm:text-sm font-medium max-w-full">
+            <Loader2 className={`w-4 h-4 flex-shrink-0 ${shouldShowMiniGame ? 'animate-spin' : ''}`} />
+            <span className="whitespace-normal break-words text-center max-w-[16rem] sm:max-w-[20rem]">
+              {projectName ? `正在为「${projectName}」准备预览` : '正在准备预览环境'}
+            </span>
           </div>
           
           {/* 状态标题和副标题 */}
@@ -1042,7 +1044,7 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
             <AnimatePresence>
               {showDetailedLogs && (
                 <motion.div
-                  className="bg-gray-900 text-gray-100 rounded-lg p-4 text-left max-h-64 overflow-auto text-xs font-mono space-y-1"
+                  className="bg-gray-900 text-gray-100 rounded-lg p-4 text-left max-h-[40vh] overflow-auto text-xs font-mono space-y-1"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
