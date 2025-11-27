@@ -239,9 +239,11 @@ const TOOLS = [
 // --- API 调用与日志 ---
 
 // Chat Completions API 消息类型定义
+// 注意：为了支持 Gemini 模型的 thought_signature 和 reasoning_details，
+// 我们需要允许透传 OpenRouter 返回的所有字段
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content?: string | null;
   tool_calls?: Array<{
     id: string;
     type: 'function';
@@ -249,8 +251,16 @@ interface ChatMessage {
       name: string;
       arguments: string;
     };
+    // 允许 provider 自定义字段（如 thought_signature）
+    [key: string]: unknown;
   }>;
   tool_call_id?: string;
+  // Gemini 模型需要的 reasoning 相关字段
+  reasoning?: string;
+  reasoning_details?: unknown;
+  refusal?: unknown;
+  // 允许 provider 自定义字段透传
+  [key: string]: unknown;
 }
 
 interface CallOpenRouterOptions {
@@ -259,42 +269,44 @@ interface CallOpenRouterOptions {
 }
 
 // Chat Completions API 响应解析结果
+// 包含原始 message 对象以保留 Gemini 的 reasoning_details 和 thought_signature
 interface ParsedChatCompletionOutput {
-  role: 'assistant';
   content: string;
   tool_calls?: Array<{
     id: string;
     name: string;
     arguments: string;
   }>;
+  // 原始 message 对象，用于透传给下一次请求
+  rawMessage: ChatMessage;
 }
 
 // 解析 Chat Completions API 输出
 function parseChatCompletionOutput(data: Record<string, unknown>): ParsedChatCompletionOutput {
   const choices = data.choices as Array<{
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: string;
-        function: {
-          name: string;
-          arguments: string;
-        };
-      }>;
-    };
+    message: Record<string, unknown>;
   }> || [];
   
-  const message = choices[0]?.message;
+  // 获取原始 message 对象（保留所有字段）
+  const rawMessage = (choices[0]?.message || { role: 'assistant' }) as ChatMessage;
+  
+  // 提取 tool_calls 用于执行工具
+  const toolCalls = rawMessage.tool_calls as Array<{
+    id: string;
+    type: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }> | undefined;
   
   const result: ParsedChatCompletionOutput = {
-    role: 'assistant',
-    content: message?.content || ''
+    content: typeof rawMessage.content === 'string' ? rawMessage.content : '',
+    rawMessage: rawMessage
   };
   
-  if (message?.tool_calls && message.tool_calls.length > 0) {
-    result.tool_calls = message.tool_calls.map(tc => ({
+  if (toolCalls && toolCalls.length > 0) {
+    result.tool_calls = toolCalls.map(tc => ({
       id: tc.id,
       name: tc.function.name,
       arguments: tc.function.arguments
@@ -898,19 +910,9 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
       
       // 如果有函数调用
       if (assistantResponse.tool_calls && assistantResponse.tool_calls.length > 0) {
-        // 将助手的回复（包含 tool_calls）添加到消息历史
-        chatMessages.push({
-          role: 'assistant',
-          content: assistantResponse.content || null,
-          tool_calls: assistantResponse.tool_calls.map(tc => ({
-            id: tc.id,
-            type: 'function' as const,
-            function: {
-              name: tc.name,
-              arguments: tc.arguments
-            }
-          }))
-        });
+        // 将原始 assistant 消息添加到消息历史（保留 reasoning_details 和 thought_signature）
+        // 这是 Gemini 模型正常工作所必需的
+        chatMessages.push(assistantResponse.rawMessage);
         
         for (const toolCall of assistantResponse.tool_calls) {
           const toolName = toolCall.name;
