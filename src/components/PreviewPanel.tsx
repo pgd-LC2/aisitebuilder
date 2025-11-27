@@ -5,15 +5,13 @@ import { useProject } from '../contexts/ProjectContext';
 import { fileService } from '../services/fileService';
 import FileManagerPanel from './FileManagerPanel';
 import type { ProjectFile } from '../types/project';
-import type { WebContainer as WebContainerInstance, WebContainerProcess } from '@webcontainer/api';
 import {
   clearNodeModulesCache,
   loadNodeModulesSnapshot,
   saveNodeModulesSnapshot
 } from '../lib/nodeModulesCache';
 import { useSettings } from '../contexts/SettingsContext';
-type WebContainerConstructor = typeof import('@webcontainer/api').WebContainer;
-let webcontainerBootPromise: Promise<WebContainerInstance> | null = null;
+import { webContainerManager } from '../lib/webContainerManager';
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile';
 type PanelMode = 'preview' | 'files';
@@ -155,9 +153,6 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   const [previewLogs, setPreviewLogs] = useState<string[]>([]);
   const [lastPreviewKey, setLastPreviewKey] = useState<string | null>(null);
   const [webcontainerReady, setWebcontainerReady] = useState(false);
-  const webcontainerClassRef = useRef<WebContainerConstructor | null>(null);
-  const webcontainerRef = useRef<WebContainerInstance | null>(null);
-  const devServerProcessRef = useRef<WebContainerProcess | null>(null);
   const devServerStopRequestedRef = useRef(false);
   const initializingRef = useRef(false);
   const dependencyHashRef = useRef<string | null>(null);
@@ -204,16 +199,17 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   }, [previewUrl]);
 
   const stopDevServer = useCallback(async () => {
-    if (devServerProcessRef.current) {
+    const process = webContainerManager.getDevServerProcess();
+    if (process) {
       devServerStopRequestedRef.current = true;
-      devServerProcessRef.current.kill();
-      devServerProcessRef.current = null;
+      process.kill();
+      webContainerManager.setDevServerProcess(null);
     }
     setPreviewUrl(null);
   }, []);
 
   const clearWorkspace = useCallback(async () => {
-    const instance = webcontainerRef.current;
+    const instance = webContainerManager.getInstance();
     if (!instance) return;
 
     try {
@@ -237,7 +233,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   }, []);
 
   const ensureNodeModulesExecutables = useCallback(async () => {
-    const instance = webcontainerRef.current;
+    const instance = webContainerManager.getInstance();
     if (!instance) return;
 
     try {
@@ -256,36 +252,13 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
 
   const resetWebcontainer = useCallback(async () => {
     await stopDevServer();
-    if (webcontainerRef.current) {
-      try {
-        await webcontainerRef.current.teardown();
-      } catch (error) {
-        console.error('销毁 WebContainer 失败:', error);
-      } finally {
-        webcontainerRef.current = null;
-      }
-    }
-    webcontainerBootPromise = null;
+    await webContainerManager.teardown();
     dependencyHashRef.current = null;
     reusedPrebuiltRef.current = false;
   }, [stopDevServer]);
 
   const ensureWebcontainer = useCallback(async () => {
-    if (!webcontainerClassRef.current) {
-      return null;
-    }
-
-    if (webcontainerRef.current) {
-      return webcontainerRef.current;
-    }
-
-    if (!webcontainerBootPromise) {
-      webcontainerBootPromise = webcontainerClassRef.current.boot();
-    }
-
-    const instance = await webcontainerBootPromise;
-    webcontainerRef.current = instance;
-    return instance;
+    return webContainerManager.boot();
   }, []);
 
   useEffect(() => {
@@ -294,34 +267,22 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
       return;
     }
 
-    const secureContext = window.isSecureContext || window.location.hostname === 'localhost';
-
-    if (!secureContext) {
+    if (!webContainerManager.isSupported()) {
       setPreviewStatus('unsupported');
-      setPreviewError('WebContainer 需要通过 HTTPS 或在 localhost 环境下运行');
-      return;
-    }
-
-    if (!window.crossOriginIsolated) {
-      setPreviewStatus('unsupported');
-      setPreviewError('浏览器未启用跨源隔离 (COOP/COEP)，无法加载 WebContainer 预览');
+      setPreviewError(webContainerManager.getUnsupportedReason() || '当前环境不支持 WebContainer 预览');
       return;
     }
 
     const loadWebcontainer = async () => {
-      try {
-        const mod = await import('@webcontainer/api');
-        if (cancelled) {
-          return;
-        }
-        webcontainerClassRef.current = mod.WebContainer;
+      const loaded = await webContainerManager.loadWebContainerClass();
+      if (cancelled) {
+        return;
+      }
+      if (loaded) {
         setWebcontainerReady(true);
-      } catch (err) {
-        console.error('加载 WebContainer 失败:', err);
-        if (!cancelled) {
-          setPreviewStatus('unsupported');
-          setPreviewError('当前浏览器不支持 WebContainer 预览');
-        }
+      } else {
+        setPreviewStatus('unsupported');
+        setPreviewError(webContainerManager.getUnsupportedReason() || '当前浏览器不支持 WebContainer 预览');
       }
     };
 
@@ -393,7 +354,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
 
   const writeFilesToWebcontainer = useCallback(
     async (files: ProjectFile[]) => {
-      const instance = webcontainerRef.current;
+      const instance = webContainerManager.getInstance();
       if (!instance) {
         throw new Error('WebContainer 尚未初始化');
       }
@@ -443,7 +404,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
 
   const runProcess = useCallback(
     async (command: string, args: string[] = []) => {
-      const instance = webcontainerRef.current;
+      const instance = webContainerManager.getInstance();
       if (!instance) return { exitCode: 1 };
       const process = await instance.spawn(command, args);
 
@@ -466,11 +427,11 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   );
 
   const startDevServer = useCallback(async () => {
-    const instance = webcontainerRef.current;
+    const instance = webContainerManager.getInstance();
     if (!instance) return;
 
     const process = await instance.spawn('npm', ['run', 'dev', '--', '--host', '0.0.0.0', '--port', '4173']);
-    devServerProcessRef.current = process;
+    webContainerManager.setDevServerProcess(process);
     devServerStopRequestedRef.current = false;
 
     process.output
@@ -516,7 +477,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
 
   const initializePreview = useCallback(
     async (force = false) => {
-      if (!currentProject || !webcontainerReady || !webcontainerClassRef.current) {
+      if (!currentProject || !webcontainerReady) {
         return;
       }
 

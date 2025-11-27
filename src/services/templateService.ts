@@ -3,6 +3,8 @@ import { fileService } from './fileService';
 import { versionService } from './versionService';
 import { buildLogService } from './buildLogService';
 
+const MAX_PARALLEL_UPLOADS = 5;
+
 export const templateService = {
   async initializeProjectWithTemplate(
     projectId: string,
@@ -33,11 +35,12 @@ export const templateService = {
 
       await buildLogService.addBuildLog(projectId, 'success', `创建版本 v${version.version_number}`);
 
-      const uploadedFiles = [];
+      const uploadedFiles: any[] = [];
       let successCount = 0;
       let errorCount = 0;
+      let lastLoggedCount = 0;
 
-      for (const templateFile of template.files) {
+      const uploadSingleFile = async (templateFile: typeof template.files[0]) => {
         try {
           const blob = new Blob([templateFile.content], { type: templateFile.mimeType });
           const file = new File([blob], templateFile.path.split('/').pop() || templateFile.path, {
@@ -59,16 +62,29 @@ export const templateService = {
 
           if (uploadError) {
             errorCount++;
-            await buildLogService.addBuildLog(
-              projectId,
-              'error',
-              `上传文件失败: ${templateFile.path}`
-            );
+            console.error(`上传文件失败: ${templateFile.path}`, uploadError);
           } else if (uploadedFile) {
             successCount++;
             uploadedFiles.push(uploadedFile);
+          }
+        } catch (err) {
+          errorCount++;
+          console.error(`上传文件出错 ${templateFile.path}:`, err);
+        }
+      };
 
-            if (successCount % 3 === 0 || successCount === template.files.length) {
+      const fileQueue = [...template.files];
+      const workers: Promise<void>[] = [];
+
+      const worker = async () => {
+        while (fileQueue.length > 0) {
+          const templateFile = fileQueue.shift();
+          if (templateFile) {
+            await uploadSingleFile(templateFile);
+
+            const currentTotal = successCount + errorCount;
+            if (currentTotal - lastLoggedCount >= 5 || currentTotal === template.files.length) {
+              lastLoggedCount = currentTotal;
               await buildLogService.addBuildLog(
                 projectId,
                 'info',
@@ -76,16 +92,14 @@ export const templateService = {
               );
             }
           }
-        } catch (err) {
-          errorCount++;
-          console.error(`上传文件出错 ${templateFile.path}:`, err);
-          await buildLogService.addBuildLog(
-            projectId,
-            'error',
-            `上传文件出错: ${templateFile.path}`
-          );
         }
+      };
+
+      for (let i = 0; i < Math.min(MAX_PARALLEL_UPLOADS, template.files.length); i++) {
+        workers.push(worker());
       }
+
+      await Promise.all(workers);
 
       if (errorCount > 0) {
         await buildLogService.addBuildLog(
