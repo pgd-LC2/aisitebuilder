@@ -1,5 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { Client } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+import { 
+  isRepairableError as checkRepairableError, 
+  classifyError, 
+  parseDebuggerOutput as parseDebuggerOutputEnhanced
+} from './errorPatterns.ts';
 // --- 配置与常量 ---
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1311,35 +1316,14 @@ async function updateTaskStatus(supabase, taskId, status, result, errorMsg) {
   if (error) console.error('更新任务状态失败:', error);
 }
 
-// --- 自我修复循环辅助函数 (Step 4) ---
+// --- 自我修复循环辅助函数 (Step 4 + Step 5 优化) ---
 
-// 判断错误是否可修复
+// 判断错误是否可修复 - 使用外部化的错误模式配置
 function isRepairableError(error: Error | string): boolean {
-  const errorMessage = typeof error === 'string' ? error : error.message;
-  const repairablePatterns = [
-    /Module not found/i,
-    /Cannot find module/i,
-    /SyntaxError/i,
-    /TypeError/i,
-    /ReferenceError/i,
-    /is not defined/i,
-    /Cannot read propert/i,
-    /undefined is not/i,
-    /Type '.*' is not assignable/i,
-    /Expected .* but got/i,
-    /Unexpected token/i,
-    /Missing .* in/i,
-    /npm ERR!/i,
-    /Build failed/i,
-    /Compilation failed/i,
-    /lint.*error/i,
-    /typecheck.*error/i
-  ];
-  
-  return repairablePatterns.some(pattern => pattern.test(errorMessage));
+  return checkRepairableError(error);
 }
 
-// 收集错误上下文
+// 收集错误上下文 - 使用外部化的错误分类函数
 async function collectErrorContext(
   supabase: ReturnType<typeof createClient>,
   projectId: string,
@@ -1356,14 +1340,8 @@ async function collectErrorContext(
     ? JSON.stringify(structureResult.structure, null, 2)
     : undefined;
   
-  // 确定错误类型
-  let errorType = 'unknown';
-  if (/SyntaxError/i.test(errorMessage)) errorType = 'syntax_error';
-  else if (/TypeError/i.test(errorMessage)) errorType = 'type_error';
-  else if (/ReferenceError/i.test(errorMessage)) errorType = 'reference_error';
-  else if (/Module not found|Cannot find module/i.test(errorMessage)) errorType = 'module_not_found';
-  else if (/Build failed|Compilation failed/i.test(errorMessage)) errorType = 'build_error';
-  else if (/lint.*error/i.test(errorMessage)) errorType = 'lint_error';
+  // 使用外部化的错误分类函数
+  const errorType = classifyError(error);
   
   return {
     errorType,
@@ -1453,42 +1431,18 @@ ${errorContext.projectStructure ? `### 项目结构\n\`\`\`json\n${errorContext.
   }
 }
 
-// 解析 Debugger 输出
+// 解析 Debugger 输出 - 使用增强的解析函数，支持多种 JSON 格式
 function parseDebuggerOutput(content: string): DebuggerSuggestion | null {
-  try {
-    // 尝试从响应中提取 JSON
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      const parsed = JSON.parse(jsonMatch[1]);
-      
-      // 验证必要字段
-      if (parsed.rootCause && parsed.fileModifications) {
-        return {
-          rootCause: parsed.rootCause || '',
-          errorCategory: parsed.errorCategory || 'unknown',
-          fileModifications: Array.isArray(parsed.fileModifications) ? parsed.fileModifications : [],
-          verificationCommands: Array.isArray(parsed.verificationCommands) ? parsed.verificationCommands : []
-        };
-      }
-    }
-    
-    // 如果没有找到 JSON，尝试直接解析整个内容
-    const directParse = JSON.parse(content);
-    if (directParse.rootCause && directParse.fileModifications) {
-      return {
-        rootCause: directParse.rootCause || '',
-        errorCategory: directParse.errorCategory || 'unknown',
-        fileModifications: Array.isArray(directParse.fileModifications) ? directParse.fileModifications : [],
-        verificationCommands: Array.isArray(directParse.verificationCommands) ? directParse.verificationCommands : []
-      };
-    }
-    
-    console.log('[SelfRepairLoop] 无法从 Debugger 输出中解析修复建议');
-    return null;
-  } catch (e) {
-    console.error('[SelfRepairLoop] 解析 Debugger 输出失败:', e);
-    return null;
+  const result = parseDebuggerOutputEnhanced(content);
+  
+  if (result.success && result.data) {
+    console.log('[SelfRepairLoop] 成功解析 Debugger 输出');
+    return result.data;
   }
+  
+  // 解析失败时记录结构化错误信息
+  console.log(`[SelfRepairLoop] ${result.error || 'Debugger output malformed: 未知解析错误'}`);
+  return null;
 }
 
 // 应用修复建议
@@ -1553,14 +1507,17 @@ async function runVerificationCommands(
   };
 }
 
-// 自我修复循环日志
+// 自我修复循环日志 - Step 5 优化：增强结构化字段
 async function logSelfRepairAttempt(
   supabase: ReturnType<typeof createClient>,
   projectId: string,
   taskId: string,
   taskType: string,
-  attempt: RepairAttempt
+  attempt: RepairAttempt,
+  startTime?: number
 ) {
+  const duration = startTime ? Date.now() - startTime : undefined;
+  
   const logMessage = `[SelfRepairLoop] 修复尝试 #${attempt.attemptNumber}
 - 任务ID: ${taskId}
 - 任务类型: ${taskType}
@@ -1568,21 +1525,36 @@ async function logSelfRepairAttempt(
 - 错误摘要: ${attempt.errorContext.errorMessage.substring(0, 200)}
 - Debugger 已调用: ${attempt.debuggerResponse ? '是' : '否'}
 - 修复已应用: ${attempt.repairApplied}
-- 验证结果: ${attempt.verificationResult?.success ? '成功' : '待验证'}`;
+- 验证结果: ${attempt.verificationResult?.success ? '成功' : '待验证'}
+${duration ? `- 耗时: ${duration}ms` : ''}`;
 
+  // Step 5 优化：结构化日志字段
   await writeBuildLog(supabase, projectId, 'info', logMessage, {
+    taskId,
+    taskType,
+    attempt: attempt.attemptNumber,
+    errorCategory: attempt.errorContext.errorType,
+    status: attempt.repairApplied ? 'repair_applied' : 'repair_pending',
+    duration,
     selfRepairAttempt: attempt.attemptNumber,
     errorType: attempt.errorContext.errorType,
-    repairApplied: attempt.repairApplied
+    repairApplied: attempt.repairApplied,
+    // Step 5 优化：repairHistory 增强字段
+    attemptIndex: attempt.attemptNumber - 1,
+    fixApplied: attempt.repairApplied,
+    verifications: attempt.verificationResult ? [attempt.verificationResult.command] : [],
+    result: attempt.verificationResult?.success ? 'success' : 'pending'
   });
 }
 
-// 自我修复循环最终状态日志
+// 自我修复循环最终状态日志 - Step 5 优化：增强结构化字段
 async function logSelfRepairFinalStatus(
   supabase: ReturnType<typeof createClient>,
   projectId: string,
   taskId: string,
-  result: SelfRepairLoopResult
+  taskType: string,
+  result: SelfRepairLoopResult,
+  totalDuration?: number
 ) {
   const statusMessages = {
     'completed': '任务成功完成（无需修复）',
@@ -1594,15 +1566,29 @@ async function logSelfRepairFinalStatus(
   const logMessage = `[SelfRepairLoop] 最终状态: ${result.status}
 - ${statusMessages[result.status]}
 - 总尝试次数: ${result.totalAttempts}
-${result.finalError ? `- 最终错误: ${result.finalError}` : ''}`;
+${result.finalError ? `- 最终错误: ${result.finalError}` : ''}
+${totalDuration ? `- 总耗时: ${totalDuration}ms` : ''}`;
 
+  // Step 5 优化：结构化日志字段
   await writeBuildLog(supabase, projectId, result.status === 'recovered' || result.status === 'completed' ? 'success' : 'error', logMessage, {
+    taskId,
+    taskType,
+    attempt: result.totalAttempts,
+    errorCategory: result.repairHistory.length > 0 ? result.repairHistory[result.repairHistory.length - 1].errorContext.errorType : 'none',
+    status: result.status,
+    duration: totalDuration,
     selfRepairStatus: result.status,
     totalAttempts: result.totalAttempts,
+    // Step 5 优化：repairHistory 增强字段
     repairHistory: result.repairHistory.map(h => ({
+      attemptIndex: h.attemptNumber - 1,
       attempt: h.attemptNumber,
       errorType: h.errorContext.errorType,
-      repairApplied: h.repairApplied
+      errorCategory: h.errorContext.errorType,
+      fixApplied: h.repairApplied,
+      repairApplied: h.repairApplied,
+      verifications: h.verificationResult ? [h.verificationResult.command] : [],
+      result: h.verificationResult?.success ? 'success' : 'pending'
     }))
   });
 }
@@ -1903,7 +1889,7 @@ async function processTaskWithSelfRepair(
         repairHistory
       };
       
-      await logSelfRepairFinalStatus(supabase, task.project_id, task.id, result);
+      await logSelfRepairFinalStatus(supabase, task.project_id, task.id, task.type, result);
       return result;
       
     } catch (error) {
@@ -1919,7 +1905,7 @@ async function processTaskWithSelfRepair(
           repairHistory,
           finalError: error.message
         };
-        await logSelfRepairFinalStatus(supabase, task.project_id, task.id, result);
+        await logSelfRepairFinalStatus(supabase, task.project_id, task.id, task.type, result);
         throw error;
       }
       
@@ -2004,7 +1990,7 @@ async function processTaskWithSelfRepair(
     finalError: lastError?.message || '未知错误'
   };
   
-  await logSelfRepairFinalStatus(supabase, task.project_id, task.id, result);
+  await logSelfRepairFinalStatus(supabase, task.project_id, task.id, task.type, result);
   
   // 更新任务状态为失败
   await updateTaskStatus(supabase, task.id, 'failed', {
