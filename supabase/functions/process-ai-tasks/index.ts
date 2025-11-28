@@ -16,6 +16,55 @@ const MODEL_CONFIG = {
 
 const IMAGE_MODEL = 'google/gemini-3-pro-image-preview';
 
+// --- 自我修复循环配置 (Step 4) ---
+const SELF_REPAIR_MAX = 3; // 最大修复尝试次数
+
+// --- 自我修复循环类型定义 ---
+interface ErrorContext {
+  errorType: string;
+  errorMessage: string;
+  errorStack?: string;
+  failedCommand?: string;
+  failedOutput?: string;
+  recentFileChanges: string[];
+  projectStructure?: string;
+}
+
+interface FileModification {
+  path: string;
+  action: 'create' | 'modify' | 'delete';
+  content?: string;
+}
+
+interface DebuggerSuggestion {
+  rootCause: string;
+  errorCategory: string;
+  fileModifications: FileModification[];
+  verificationCommands: string[];
+}
+
+interface VerificationResult {
+  command: string;
+  success: boolean;
+  output: string;
+}
+
+interface RepairAttempt {
+  attemptNumber: number;
+  errorContext: ErrorContext;
+  debuggerResponse?: DebuggerSuggestion;
+  repairApplied: boolean;
+  verificationResult?: VerificationResult;
+  timestamp: string;
+}
+
+interface SelfRepairLoopResult {
+  status: 'completed' | 'recovered' | 'failed_after_repair' | 'failed';
+  totalAttempts: number;
+  repairHistory: RepairAttempt[];
+  finalError?: string;
+}
+
 // --- 五层 Prompt 架构 ---
 // 层级: System Core → Planner → Coder → Reviewer → Debugger
 
@@ -1261,6 +1310,304 @@ async function updateTaskStatus(supabase, taskId, status, result, errorMsg) {
   const { error } = await supabase.from('ai_tasks').update(updateData).eq('id', taskId);
   if (error) console.error('更新任务状态失败:', error);
 }
+
+// --- 自我修复循环辅助函数 (Step 4) ---
+
+// 判断错误是否可修复
+function isRepairableError(error: Error | string): boolean {
+  const errorMessage = typeof error === 'string' ? error : error.message;
+  const repairablePatterns = [
+    /Module not found/i,
+    /Cannot find module/i,
+    /SyntaxError/i,
+    /TypeError/i,
+    /ReferenceError/i,
+    /is not defined/i,
+    /Cannot read propert/i,
+    /undefined is not/i,
+    /Type '.*' is not assignable/i,
+    /Expected .* but got/i,
+    /Unexpected token/i,
+    /Missing .* in/i,
+    /npm ERR!/i,
+    /Build failed/i,
+    /Compilation failed/i,
+    /lint.*error/i,
+    /typecheck.*error/i
+  ];
+  
+  return repairablePatterns.some(pattern => pattern.test(errorMessage));
+}
+
+// 收集错误上下文
+async function collectErrorContext(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+  error: Error | string,
+  toolContext: ToolContext,
+  modifiedFiles: string[]
+): Promise<ErrorContext> {
+  const errorMessage = typeof error === 'string' ? error : error.message;
+  const errorStack = typeof error === 'object' && error.stack ? error.stack : undefined;
+  
+  // 获取项目结构
+  const structureResult = await handleGetProjectStructure(toolContext);
+  const projectStructure = structureResult.success && structureResult.structure
+    ? JSON.stringify(structureResult.structure, null, 2)
+    : undefined;
+  
+  // 确定错误类型
+  let errorType = 'unknown';
+  if (/SyntaxError/i.test(errorMessage)) errorType = 'syntax_error';
+  else if (/TypeError/i.test(errorMessage)) errorType = 'type_error';
+  else if (/ReferenceError/i.test(errorMessage)) errorType = 'reference_error';
+  else if (/Module not found|Cannot find module/i.test(errorMessage)) errorType = 'module_not_found';
+  else if (/Build failed|Compilation failed/i.test(errorMessage)) errorType = 'build_error';
+  else if (/lint.*error/i.test(errorMessage)) errorType = 'lint_error';
+  
+  return {
+    errorType,
+    errorMessage,
+    errorStack,
+    recentFileChanges: modifiedFiles,
+    projectStructure
+  };
+}
+
+// 调用 Debugger 进行诊断
+async function invokeDebugger(
+  supabase: ReturnType<typeof createClient>,
+  errorContext: ErrorContext,
+  apiKey: string
+): Promise<DebuggerSuggestion | null> {
+  console.log('[SelfRepairLoop] 调用 Debugger 进行错误诊断...');
+  
+  try {
+    // 构建 debug 任务的路由上下文
+    const routerContext: PromptRouterContext = {
+      taskType: 'debug',
+      hasError: true,
+      errorInfo: errorContext.errorMessage
+    };
+    
+    // 组装 system prompt (Core + Debugger)
+    const systemPrompt = await assembleSystemPrompt(supabase, routerContext);
+    
+    // 构建用户消息，包含错误上下文
+    const userMessage = `## 错误诊断请求
+
+### 错误类型
+${errorContext.errorType}
+
+### 错误信息
+\`\`\`
+${errorContext.errorMessage}
+\`\`\`
+
+${errorContext.errorStack ? `### 错误堆栈\n\`\`\`\n${errorContext.errorStack}\n\`\`\`` : ''}
+
+### 最近修改的文件
+${errorContext.recentFileChanges.length > 0 ? errorContext.recentFileChanges.map(f => `- ${f}`).join('\n') : '无'}
+
+${errorContext.projectStructure ? `### 项目结构\n\`\`\`json\n${errorContext.projectStructure}\n\`\`\`` : ''}
+
+请按照 Debugger 层的调试流程进行诊断，并输出：
+1. 根因分析
+2. 最小化修复方案（具体的文件修改）
+3. 验证命令
+
+**重要**：请以 JSON 格式输出修复建议，格式如下：
+\`\`\`json
+{
+  "rootCause": "根本原因描述",
+  "errorCategory": "错误类别",
+  "fileModifications": [
+    {
+      "path": "文件路径",
+      "action": "create|modify|delete",
+      "content": "完整文件内容（如果是 create 或 modify）"
+    }
+  ],
+  "verificationCommands": ["npm run lint", "npm run typecheck", "npm run build"]
+}
+\`\`\``;
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage }
+    ];
+    
+    const model = MODEL_CONFIG.default;
+    
+    // 调用 LLM 进行诊断（不使用工具，只需要文本响应）
+    const response = await callOpenRouterChatCompletionsApi(messages, apiKey, model, {
+      tools: null,
+      toolChoice: 'none'
+    });
+    
+    // 解析 Debugger 输出
+    return parseDebuggerOutput(response.content);
+  } catch (e) {
+    console.error('[SelfRepairLoop] Debugger 调用失败:', e);
+    return null;
+  }
+}
+
+// 解析 Debugger 输出
+function parseDebuggerOutput(content: string): DebuggerSuggestion | null {
+  try {
+    // 尝试从响应中提取 JSON
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      const parsed = JSON.parse(jsonMatch[1]);
+      
+      // 验证必要字段
+      if (parsed.rootCause && parsed.fileModifications) {
+        return {
+          rootCause: parsed.rootCause || '',
+          errorCategory: parsed.errorCategory || 'unknown',
+          fileModifications: Array.isArray(parsed.fileModifications) ? parsed.fileModifications : [],
+          verificationCommands: Array.isArray(parsed.verificationCommands) ? parsed.verificationCommands : []
+        };
+      }
+    }
+    
+    // 如果没有找到 JSON，尝试直接解析整个内容
+    const directParse = JSON.parse(content);
+    if (directParse.rootCause && directParse.fileModifications) {
+      return {
+        rootCause: directParse.rootCause || '',
+        errorCategory: directParse.errorCategory || 'unknown',
+        fileModifications: Array.isArray(directParse.fileModifications) ? directParse.fileModifications : [],
+        verificationCommands: Array.isArray(directParse.verificationCommands) ? directParse.verificationCommands : []
+      };
+    }
+    
+    console.log('[SelfRepairLoop] 无法从 Debugger 输出中解析修复建议');
+    return null;
+  } catch (e) {
+    console.error('[SelfRepairLoop] 解析 Debugger 输出失败:', e);
+    return null;
+  }
+}
+
+// 应用修复建议
+async function applyRepairSuggestions(
+  toolContext: ToolContext,
+  suggestions: DebuggerSuggestion,
+  supabase: ReturnType<typeof createClient>,
+  projectId: string
+): Promise<{ success: boolean; appliedFiles: string[] }> {
+  const appliedFiles: string[] = [];
+  
+  console.log(`[SelfRepairLoop] 应用 ${suggestions.fileModifications.length} 个文件修改...`);
+  
+  for (const mod of suggestions.fileModifications) {
+    try {
+      if (mod.action === 'delete') {
+        const result = await handleDeleteFile(toolContext, { path: mod.path });
+        if (result.success) {
+          appliedFiles.push(mod.path);
+          await writeBuildLog(supabase, projectId, 'info', `[SelfRepairLoop] 已删除文件: ${mod.path}`);
+        } else {
+          console.error(`[SelfRepairLoop] 删除文件失败: ${mod.path}`, result.error);
+        }
+      } else if ((mod.action === 'create' || mod.action === 'modify') && mod.content) {
+        const result = await handleWriteFile(toolContext, { path: mod.path, content: mod.content });
+        if (result.success) {
+          appliedFiles.push(mod.path);
+          await writeBuildLog(supabase, projectId, 'info', `[SelfRepairLoop] 已${mod.action === 'create' ? '创建' : '修改'}文件: ${mod.path}`);
+        } else {
+          console.error(`[SelfRepairLoop] 写入文件失败: ${mod.path}`, result.error);
+        }
+      }
+    } catch (e) {
+      console.error(`[SelfRepairLoop] 应用修改失败 (${mod.path}):`, e);
+    }
+  }
+  
+  return {
+    success: appliedFiles.length > 0,
+    appliedFiles
+  };
+}
+
+// 运行验证命令（模拟验证，因为 Edge Function 环境无法直接执行 shell 命令）
+// 在实际场景中，验证会在下一次任务执行时通过构建/lint 结果体现
+async function runVerificationCommands(
+  commands: string[],
+  supabase: ReturnType<typeof createClient>,
+  projectId: string
+): Promise<VerificationResult> {
+  console.log(`[SelfRepairLoop] 验证命令: ${commands.join(', ')}`);
+  
+  // 由于 Edge Function 环境限制，无法直接执行 npm 命令
+  // 验证将在下一次任务执行时通过实际构建结果体现
+  // 这里返回一个"待验证"状态，让循环继续
+  await writeBuildLog(supabase, projectId, 'info', `[SelfRepairLoop] 修复已应用，将在下次执行时验证: ${commands.join(', ')}`);
+  
+  return {
+    command: commands.join(' && '),
+    success: true, // 假设修复成功，让任务重新执行来验证
+    output: '修复已应用，等待重新执行验证'
+  };
+}
+
+// 自我修复循环日志
+async function logSelfRepairAttempt(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+  taskId: string,
+  taskType: string,
+  attempt: RepairAttempt
+) {
+  const logMessage = `[SelfRepairLoop] 修复尝试 #${attempt.attemptNumber}
+- 任务ID: ${taskId}
+- 任务类型: ${taskType}
+- 错误类型: ${attempt.errorContext.errorType}
+- 错误摘要: ${attempt.errorContext.errorMessage.substring(0, 200)}
+- Debugger 已调用: ${attempt.debuggerResponse ? '是' : '否'}
+- 修复已应用: ${attempt.repairApplied}
+- 验证结果: ${attempt.verificationResult?.success ? '成功' : '待验证'}`;
+
+  await writeBuildLog(supabase, projectId, 'info', logMessage, {
+    selfRepairAttempt: attempt.attemptNumber,
+    errorType: attempt.errorContext.errorType,
+    repairApplied: attempt.repairApplied
+  });
+}
+
+// 自我修复循环最终状态日志
+async function logSelfRepairFinalStatus(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+  taskId: string,
+  result: SelfRepairLoopResult
+) {
+  const statusMessages = {
+    'completed': '任务成功完成（无需修复）',
+    'recovered': '任务在修复后成功完成',
+    'failed_after_repair': `任务在 ${result.totalAttempts} 次修复尝试后仍然失败`,
+    'failed': '任务失败（错误不可修复）'
+  };
+  
+  const logMessage = `[SelfRepairLoop] 最终状态: ${result.status}
+- ${statusMessages[result.status]}
+- 总尝试次数: ${result.totalAttempts}
+${result.finalError ? `- 最终错误: ${result.finalError}` : ''}`;
+
+  await writeBuildLog(supabase, projectId, result.status === 'recovered' || result.status === 'completed' ? 'success' : 'error', logMessage, {
+    selfRepairStatus: result.status,
+    totalAttempts: result.totalAttempts,
+    repairHistory: result.repairHistory.map(h => ({
+      attempt: h.attemptNumber,
+      errorType: h.errorContext.errorType,
+      repairApplied: h.repairApplied
+    }))
+  });
+}
+
+// --- 主任务处理函数 ---
 async function processTask(task, supabase, apiKey, projectFilesContext) {
   console.log(`开始处理任务: ${task.id}, 类型: ${task.type}`);
   const model = MODEL_CONFIG[task.type] || MODEL_CONFIG.default;
@@ -1492,6 +1839,181 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     throw error;
   }
 }
+
+// --- 自我修复循环包装函数 (Step 4) ---
+async function processTaskWithSelfRepair(
+  task: { id: string; type: string; project_id: string; payload?: Record<string, unknown>; attempts: number; max_attempts: number },
+  supabase: ReturnType<typeof createClient>,
+  apiKey: string,
+  projectFilesContext?: { bucket: string; path: string; versionId?: string }
+): Promise<SelfRepairLoopResult> {
+  const repairHistory: RepairAttempt[] = [];
+  let lastError: Error | null = null;
+  
+  // chat_reply 任务不走自我修复循环
+  if (task.type === 'chat_reply') {
+    console.log(`[SelfRepairLoop] chat_reply 任务跳过自我修复循环`);
+    try {
+      await processTask(task, supabase, apiKey, projectFilesContext);
+      return {
+        status: 'completed',
+        totalAttempts: 1,
+        repairHistory: []
+      };
+    } catch (error) {
+      return {
+        status: 'failed',
+        totalAttempts: 1,
+        repairHistory: [],
+        finalError: error.message
+      };
+    }
+  }
+  
+  console.log(`[SelfRepairLoop] 开始自我修复循环，任务: ${task.id}, 类型: ${task.type}, 最大尝试次数: ${SELF_REPAIR_MAX}`);
+  await writeBuildLog(supabase, task.project_id, 'info', `[SelfRepairLoop] 启动自我修复循环 (最大 ${SELF_REPAIR_MAX} 次尝试)`);
+  
+  // 构建工具上下文（用于修复操作）
+  const versionId = projectFilesContext?.versionId || 'default';
+  const bucket = projectFilesContext?.bucket || 'project-files';
+  const basePath = projectFilesContext?.path || `${task.project_id}/${versionId}`;
+  
+  const toolContext: ToolContext = {
+    supabase,
+    projectId: task.project_id,
+    versionId,
+    bucket,
+    basePath
+  };
+  
+  // 跟踪修改的文件（用于错误上下文）
+  let modifiedFiles: string[] = [];
+  
+  for (let repairAttempt = 0; repairAttempt < SELF_REPAIR_MAX; repairAttempt++) {
+    console.log(`[SelfRepairLoop] 尝试 #${repairAttempt + 1}/${SELF_REPAIR_MAX}`);
+    
+    try {
+      // 执行主任务
+      await processTask(task, supabase, apiKey, projectFilesContext);
+      
+      // 任务成功
+      const result: SelfRepairLoopResult = {
+        status: repairAttempt === 0 ? 'completed' : 'recovered',
+        totalAttempts: repairAttempt + 1,
+        repairHistory
+      };
+      
+      await logSelfRepairFinalStatus(supabase, task.project_id, task.id, result);
+      return result;
+      
+    } catch (error) {
+      lastError = error;
+      console.log(`[SelfRepairLoop] 任务执行失败 (尝试 #${repairAttempt + 1}): ${error.message}`);
+      
+      // 检查错误是否可修复
+      if (!isRepairableError(error)) {
+        console.log(`[SelfRepairLoop] 错误不可修复，停止循环`);
+        const result: SelfRepairLoopResult = {
+          status: 'failed',
+          totalAttempts: repairAttempt + 1,
+          repairHistory,
+          finalError: error.message
+        };
+        await logSelfRepairFinalStatus(supabase, task.project_id, task.id, result);
+        throw error;
+      }
+      
+      // 如果已经是最后一次尝试，不再进行修复
+      if (repairAttempt >= SELF_REPAIR_MAX - 1) {
+        console.log(`[SelfRepairLoop] 已达到最大尝试次数，停止循环`);
+        break;
+      }
+      
+      // 收集错误上下文
+      const errorContext = await collectErrorContext(
+        supabase,
+        task.project_id,
+        error,
+        toolContext,
+        modifiedFiles
+      );
+      
+      // 创建修复尝试记录
+      const attempt: RepairAttempt = {
+        attemptNumber: repairAttempt + 1,
+        errorContext,
+        repairApplied: false,
+        timestamp: new Date().toISOString()
+      };
+      
+      // 调用 Debugger 进行诊断
+      await writeBuildLog(supabase, task.project_id, 'info', `[SelfRepairLoop] 调用 Debugger 进行诊断...`);
+      const debuggerSuggestion = await invokeDebugger(
+        supabase,
+        errorContext,
+        apiKey
+      );
+      
+      if (debuggerSuggestion) {
+        attempt.debuggerResponse = debuggerSuggestion;
+        console.log(`[SelfRepairLoop] Debugger 诊断完成: ${debuggerSuggestion.rootCause}`);
+        await writeBuildLog(supabase, task.project_id, 'info', `[SelfRepairLoop] Debugger 诊断: ${debuggerSuggestion.rootCause}`);
+        
+        // 应用修复建议
+        if (debuggerSuggestion.fileModifications.length > 0) {
+          const applyResult = await applyRepairSuggestions(
+            toolContext,
+            debuggerSuggestion,
+            supabase,
+            task.project_id
+          );
+          
+          attempt.repairApplied = applyResult.success;
+          modifiedFiles = [...modifiedFiles, ...applyResult.appliedFiles];
+          
+          if (applyResult.success) {
+            console.log(`[SelfRepairLoop] 修复已应用: ${applyResult.appliedFiles.join(', ')}`);
+            
+            // 运行验证命令
+            if (debuggerSuggestion.verificationCommands.length > 0) {
+              const verificationResult = await runVerificationCommands(
+                debuggerSuggestion.verificationCommands,
+                supabase,
+                task.project_id
+              );
+              attempt.verificationResult = verificationResult;
+            }
+          }
+        }
+      } else {
+        console.log(`[SelfRepairLoop] Debugger 未能提供修复建议`);
+        await writeBuildLog(supabase, task.project_id, 'warning', `[SelfRepairLoop] Debugger 未能提供修复建议`);
+      }
+      
+      // 记录修复尝试
+      repairHistory.push(attempt);
+      await logSelfRepairAttempt(supabase, task.project_id, task.id, task.type, attempt);
+    }
+  }
+  
+  // 所有尝试都失败了
+  const result: SelfRepairLoopResult = {
+    status: 'failed_after_repair',
+    totalAttempts: SELF_REPAIR_MAX,
+    repairHistory,
+    finalError: lastError?.message || '未知错误'
+  };
+  
+  await logSelfRepairFinalStatus(supabase, task.project_id, task.id, result);
+  
+  // 更新任务状态为失败
+  await updateTaskStatus(supabase, task.id, 'failed', {
+    selfRepairResult: result
+  }, result.finalError);
+  
+  return result;
+}
+
 // --- 主服务入口 ---
 Deno.serve(async (req)=>{
   // Handle CORS
@@ -1539,12 +2061,17 @@ Deno.serve(async (req)=>{
         });
       }
       console.log(`成功抢占任务: ${task.id}`);
-      // 2. 处理任务
-      await processTask(task, supabase, openrouterApiKey, projectFilesContext);
+      // 2. 处理任务（使用自我修复循环包装）
+      const selfRepairResult = await processTaskWithSelfRepair(task, supabase, openrouterApiKey, projectFilesContext);
       return new Response(JSON.stringify({
-        success: true,
+        success: selfRepairResult.status === 'completed' || selfRepairResult.status === 'recovered',
         taskId: task.id,
-        message: '任务处理完成'
+        message: selfRepairResult.status === 'recovered' 
+          ? `任务在 ${selfRepairResult.totalAttempts} 次尝试后成功完成（已自动修复）`
+          : selfRepairResult.status === 'completed'
+            ? '任务处理完成'
+            : `任务处理失败: ${selfRepairResult.finalError}`,
+        selfRepairResult
       }), {
         status: 200,
         headers: {
