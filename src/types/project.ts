@@ -106,3 +106,18 @@ export interface AITask {
   started_at?: string;
   finished_at?: string;
 }
+
+export type PromptCategory = 'system' | 'task' | 'tool';
+
+export interface Prompt {
+  id: string;
+  key: string;
+  content: string;
+  description?: string;
+  category: PromptCategory;
+  version: number;
+  is_active: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}

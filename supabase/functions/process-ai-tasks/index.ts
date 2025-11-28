@@ -15,6 +15,143 @@ const MODEL_CONFIG = {
 };
 
 const IMAGE_MODEL = 'google/gemini-3-pro-image-preview';
+
+// --- 默认提示词（Fallback）---
+const DEFAULT_PROMPTS = {
+  'agent.system.base': `你是一个专业的全栈开发 AI Agent。请用简体中文回复。
+
+你拥有以下工具能力，可以通过函数调用来使用它们：
+
+**文件操作工具：**
+- list_files: 列出项目目录下的文件和子目录，用于了解项目结构
+- read_file: 读取指定文件的内容，用于查看现有代码或配置
+- write_file: 写入或创建文件，用于生成新代码或修改现有文件
+- delete_file: 删除指定文件（谨慎使用，仅在用户明确要求时调用）
+- search_files: 在项目文件中搜索关键词，用于定位相关代码
+- get_project_structure: 获取完整的项目文件树结构
+
+**创意工具：**
+- generate_image: 根据描述生成图片
+
+**工作流程指南：**
+1. 当需要了解项目现状时，先使用 get_project_structure 或 list_files 查看项目结构
+2. 当需要修改代码时，先使用 read_file 读取现有文件内容，理解上下文
+3. 使用 write_file 创建或修改文件，将生成的代码保存到项目中
+4. 当需要查找特定功能或变量时，使用 search_files 搜索
+5. 完成所有必要的文件操作后，给出最终的总结回复
+
+**重要提示：**
+- 你可以多次调用工具来完成复杂任务
+- 每次工具调用后，根据结果决定下一步行动
+- 在完成所有步骤后再给出最终答案
+- 所有文件操作都限定在当前项目范围内`,
+
+  'agent.task.build_site': `**当前任务：构建网站**
+你的任务是根据用户需求生成网站代码。请按以下步骤执行：
+1. 首先使用 get_project_structure 了解现有项目结构
+2. 根据需求规划要创建或修改的文件
+3. 使用 write_file 工具创建必要的文件（如 index.html, styles.css, script.js 等）
+4. 如果需要图片，使用 generate_image 生成
+5. 完成后给出构建总结`,
+
+  'agent.task.refactor_code': `**当前任务：代码重构**
+你的任务是重构代码，关注性能、可读性和最佳实践。请按以下步骤执行：
+1. 如果提供了文件路径，使用 read_file 读取完整文件内容
+2. 分析代码结构和问题
+3. 使用 write_file 将重构后的代码写回文件
+4. 给出重构说明和改进点`
+};
+
+// --- 提示词缓存 ---
+const promptCache: Map<string, { content: string; timestamp: number }> = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
+
+// --- 获取提示词函数 ---
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getPrompt(supabase: ReturnType<typeof createClient>, key: string): Promise<string> {
+  const cached = promptCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`使用缓存的提示词: ${key}`);
+    return cached.content;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('content')
+      .eq('key', key)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error(`获取提示词失败 (${key}):`, error);
+      return DEFAULT_PROMPTS[key] || '';
+    }
+
+    if (data?.content) {
+      promptCache.set(key, { content: data.content, timestamp: Date.now() });
+      console.log(`从数据库加载提示词: ${key}`);
+      return data.content;
+    }
+
+    console.log(`提示词不存在，使用默认值: ${key}`);
+    return DEFAULT_PROMPTS[key] || '';
+  } catch (e) {
+    console.error(`获取提示词异常 (${key}):`, e);
+    return DEFAULT_PROMPTS[key] || '';
+  }
+}
+
+async function getMultiplePrompts(supabase: ReturnType<typeof createClient>, keys: string[]): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  const keysToFetch: string[] = [];
+
+  for (const key of keys) {
+    const cached = promptCache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      result[key] = cached.content;
+    } else {
+      keysToFetch.push(key);
+    }
+  }
+
+  if (keysToFetch.length > 0) {
+    try {
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('key, content')
+        .in('key', keysToFetch)
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('批量获取提示词失败:', error);
+        for (const key of keysToFetch) {
+          result[key] = DEFAULT_PROMPTS[key] || '';
+        }
+      } else {
+        const fetchedKeys = new Set<string>();
+        for (const item of data || []) {
+          result[item.key] = item.content;
+          promptCache.set(item.key, { content: item.content, timestamp: Date.now() });
+          fetchedKeys.add(item.key);
+        }
+        for (const key of keysToFetch) {
+          if (!fetchedKeys.has(key)) {
+            result[key] = DEFAULT_PROMPTS[key] || '';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('批量获取提示词异常:', e);
+      for (const key of keysToFetch) {
+        result[key] = DEFAULT_PROMPTS[key] || '';
+      }
+    }
+  }
+
+  return result;
+}
+
 // --- 数据库操作函数 ---
 async function claimTask(pgClient, projectId) {
   try {
@@ -789,33 +926,10 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     
     let messages = [];
     
-    const agentSystemPrompt = `你是一个专业的全栈开发 AI Agent。请用简体中文回复。
-
-你拥有以下工具能力，可以通过函数调用来使用它们：
-
-**文件操作工具：**
-- list_files: 列出项目目录下的文件和子目录，用于了解项目结构
-- read_file: 读取指定文件的内容，用于查看现有代码或配置
-- write_file: 写入或创建文件，用于生成新代码或修改现有文件
-- delete_file: 删除指定文件（谨慎使用，仅在用户明确要求时调用）
-- search_files: 在项目文件中搜索关键词，用于定位相关代码
-- get_project_structure: 获取完整的项目文件树结构
-
-**创意工具：**
-- generate_image: 根据描述生成图片
-
-**工作流程指南：**
-1. 当需要了解项目现状时，先使用 get_project_structure 或 list_files 查看项目结构
-2. 当需要修改代码时，先使用 read_file 读取现有文件内容，理解上下文
-3. 使用 write_file 创建或修改文件，将生成的代码保存到项目中
-4. 当需要查找特定功能或变量时，使用 search_files 搜索
-5. 完成所有必要的文件操作后，给出最终的总结回复
-
-**重要提示：**
-- 你可以多次调用工具来完成复杂任务
-- 每次工具调用后，根据结果决定下一步行动
-- 在完成所有步骤后再给出最终答案
-- 所有文件操作都限定在当前项目范围内`;
+    const promptKeys = ['agent.system.base', 'agent.task.build_site', 'agent.task.refactor_code'];
+    await writeBuildLog(supabase, task.project_id, 'info', `正在加载提示词...`);
+    const prompts = await getMultiplePrompts(supabase, promptKeys);
+    const agentSystemPrompt = prompts['agent.system.base'];
     
     if (task.type === 'chat_reply') {
       const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 10);
@@ -832,15 +946,10 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
       ];
     } else if (task.type === 'build_site') {
       const requirement = task.payload?.requirement || "创建基础着陆页";
+      const buildTaskPrompt = prompts['agent.task.build_site'];
       const buildPrompt = `${agentSystemPrompt}
 
-**当前任务：构建网站**
-你的任务是根据用户需求生成网站代码。请按以下步骤执行：
-1. 首先使用 get_project_structure 了解现有项目结构
-2. 根据需求规划要创建或修改的文件
-3. 使用 write_file 工具创建必要的文件（如 index.html, styles.css, script.js 等）
-4. 如果需要图片，使用 generate_image 生成
-5. 完成后给出构建总结
+${buildTaskPrompt}
 
 ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
       
@@ -857,14 +966,10 @@ ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
     } else if (task.type === 'refactor_code') {
       const code = task.payload?.code || "";
       const filePath = task.payload?.filePath || "";
+      const refactorTaskPrompt = prompts['agent.task.refactor_code'];
       const refactorPrompt = `${agentSystemPrompt}
 
-**当前任务：代码重构**
-你的任务是重构代码，关注性能、可读性和最佳实践。请按以下步骤执行：
-1. 如果提供了文件路径，使用 read_file 读取完整文件内容
-2. 分析代码结构和问题
-3. 使用 write_file 将重构后的代码写回文件
-4. 给出重构说明和改进点
+${refactorTaskPrompt}
 
 ${fileContextStr ? `\n当前项目文件参考:\n${fileContextStr}` : ''}`;
       
