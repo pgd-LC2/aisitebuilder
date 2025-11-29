@@ -81,6 +81,144 @@ export type FileAction =
   | { type: 'REMOVE_FILE'; payload: string };
 
 // ============================================
+// Activity Timeline 事件类型 (Bolt 风格)
+// ============================================
+
+export type TimelineEventType =
+  | 'agent_phase'      // Agent 阶段变化（Planner/Coder/Reviewer/Debugger）
+  | 'tool_call'        // 工具调用
+  | 'file_update'      // 文件操作（create/update/delete/move）
+  | 'self_repair'      // 自修复尝试
+  | 'log'              // 通用日志
+  | 'error';           // 错误事件
+
+export type AgentPhase = 'planner' | 'coder' | 'reviewer' | 'debugger';
+
+export type FileUpdateOp = 'create' | 'update' | 'delete' | 'move';
+
+export interface BaseTimelineEvent {
+  id: string;
+  type: TimelineEventType;
+  timestamp: string;
+  taskId: string;
+  projectId: string;
+}
+
+export interface AgentPhaseEvent extends BaseTimelineEvent {
+  type: 'agent_phase';
+  payload: {
+    phase: AgentPhase;
+    action: 'enter' | 'exit';
+    summary?: string;
+  };
+}
+
+export interface ToolCallEvent extends BaseTimelineEvent {
+  type: 'tool_call';
+  payload: {
+    toolName: string;
+    argsSummary?: string;
+    resultSummary?: string;
+    success: boolean;
+    duration?: number;
+    fromPath?: string;
+    toPath?: string;
+  };
+}
+
+export interface FileUpdateEvent extends BaseTimelineEvent {
+  type: 'file_update';
+  payload: {
+    path: string;
+    op: FileUpdateOp;
+    summary?: string;
+    fromPath?: string;
+    toPath?: string;
+    fileSize?: number;
+    mimeType?: string;
+  };
+}
+
+export interface SelfRepairEvent extends BaseTimelineEvent {
+  type: 'self_repair';
+  payload: {
+    attemptNumber: number;
+    maxAttempts: number;
+    trigger: string;
+    errorType?: string;
+    errorMessage?: string;
+    suggestion?: string;
+    result: 'pending' | 'success' | 'failed';
+  };
+}
+
+export interface LogEvent extends BaseTimelineEvent {
+  type: 'log';
+  payload: {
+    level: 'info' | 'warn' | 'error' | 'debug';
+    message: string;
+    metadata?: Record<string, unknown>;
+  };
+}
+
+export interface ErrorEvent extends BaseTimelineEvent {
+  type: 'error';
+  payload: {
+    errorType: string;
+    message: string;
+    stack?: string;
+    recoverable: boolean;
+  };
+}
+
+export type TimelineEvent =
+  | AgentPhaseEvent
+  | ToolCallEvent
+  | FileUpdateEvent
+  | SelfRepairEvent
+  | LogEvent
+  | ErrorEvent;
+
+// Timeline 状态
+export interface TimelineState {
+  events: TimelineEvent[];
+  phases: AgentPhaseEvent[];
+  tools: ToolCallEvent[];
+  files: FileUpdateEvent[];
+  repairs: SelfRepairEvent[];
+  logs: LogEvent[];
+  errors: ErrorEvent[];
+  currentPhase: AgentPhase | null;
+}
+
+export type TimelineAction =
+  | { type: 'ADD_EVENT'; payload: TimelineEvent }
+  | { type: 'SET_EVENTS'; payload: TimelineEvent[] }
+  | { type: 'CLEAR_EVENTS' }
+  | { type: 'SET_CURRENT_PHASE'; payload: AgentPhase | null };
+
+// Timeline Hook 选项和返回类型
+export interface UseTimelineEventsOptions {
+  projectId: string | undefined;
+  taskId?: string;
+  maxEvents?: number;
+}
+
+export interface UseTimelineEventsReturn {
+  events: TimelineEvent[];
+  phases: AgentPhaseEvent[];
+  tools: ToolCallEvent[];
+  files: FileUpdateEvent[];
+  repairs: SelfRepairEvent[];
+  logs: LogEvent[];
+  errors: ErrorEvent[];
+  currentPhase: AgentPhase | null;
+  isConnected: boolean;
+  addEvent: (event: TimelineEvent) => void;
+  clearEvents: () => void;
+}
+
+// ============================================
 // 构建日志事件流类型
 // ============================================
 
