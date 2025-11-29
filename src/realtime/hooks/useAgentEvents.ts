@@ -3,6 +3,8 @@
  * 
  * 提供 AI 任务和聊天消息的实时订阅功能。
  * 组件通过此 hook 获取消息列表和任务状态，无需直接操作 Supabase。
+ * 
+ * 修复：使用 ref 存储回调函数，避免因回调变化导致的订阅循环。
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
@@ -85,6 +87,12 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   // 用于追踪加载版本，防止过期数据覆盖新数据
   const loadVersionRef = useRef(0);
   const lastFetchAtRef = useRef(0);
+  
+  // 使用 ref 存储回调，避免订阅循环
+  const onTaskCompletedRef = useRef(onTaskCompleted);
+  const onMessageReceivedRef = useRef(onMessageReceived);
+  onTaskCompletedRef.current = onTaskCompleted;
+  onMessageReceivedRef.current = onMessageReceived;
 
   // 加载消息列表
   const refreshMessages = useCallback(async () => {
@@ -92,7 +100,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
     loadVersionRef.current += 1;
     const currentVersion = loadVersionRef.current;
-    console.log(`[useAgentEvents] 加载消息 (版本 ${currentVersion})`);
+    console.log(`[useAgentEvents] 加载消息 (版本 ${currentVersion}), projectId:`, projectId);
 
     const { data, error } = await messageService.getMessagesByProjectId(projectId);
 
@@ -102,7 +110,10 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       return;
     }
 
-    if (!error && data) {
+    if (error) {
+      console.error('[useAgentEvents] 加载消息失败:', error);
+    } else if (data) {
+      console.log('[useAgentEvents] 加载到', data.length, '条消息');
       dispatch({ type: 'SET_MESSAGES', payload: data });
 
       // 加载任务中的图片
@@ -139,14 +150,15 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     lastFetchAtRef.current = Date.now();
   }, [projectId]);
 
-  // 添加消息
+  // 添加消息（使用 ref 访问最新的 onMessageReceived）
   const appendMessage = useCallback((message: ChatMessage) => {
+    console.log('[useAgentEvents] 添加消息到状态:', message.id, message.role);
     dispatch({ type: 'APPEND_MESSAGE', payload: message });
-    onMessageReceived?.(message);
-  }, [onMessageReceived]);
+    onMessageReceivedRef.current?.(message);
+  }, []);
 
-  // 处理任务更新
-  const handleTaskUpdate = useCallback(async (task: AITask) => {
+  // 处理任务更新的内部函数（用于订阅回调）
+  const handleTaskUpdateInternal = useCallback(async (task: AITask) => {
     console.log('[useAgentEvents] 任务更新:', task.id, task.status);
 
     if (task.type !== 'chat_reply') {
@@ -158,7 +170,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
     if (task.status === 'completed') {
       dispatch({ type: 'TASK_COMPLETED', payload: task });
-      onTaskCompleted?.(task);
+      onTaskCompletedRef.current?.(task);
 
       // 处理生成的图片
       const messageId = task.result?.messageId as string | undefined;
@@ -185,13 +197,21 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       if (messageId) {
         const { data } = await messageService.getMessageById(messageId);
         if (data) {
-          appendMessage(data);
+          console.log('[useAgentEvents] 获取到任务关联的消息:', data.id);
+          dispatch({ type: 'APPEND_MESSAGE', payload: data });
+          onMessageReceivedRef.current?.(data);
         } else {
           // 消息可能还未写入，延迟刷新
-          setTimeout(() => refreshMessages(), 500);
+          console.log('[useAgentEvents] 消息未找到，延迟刷新');
+          setTimeout(() => {
+            loadVersionRef.current += 1;
+            messageService.getMessagesByProjectId(task.project_id).then(({ data: messages }) => {
+              if (messages) {
+                dispatch({ type: 'SET_MESSAGES', payload: messages });
+              }
+            });
+          }, 500);
         }
-      } else {
-        await refreshMessages();
       }
     } else if (task.status === 'failed') {
       dispatch({
@@ -199,15 +219,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         payload: { taskId: task.id, error: task.error || '任务处理失败' }
       });
     }
-  }, [onTaskCompleted, appendMessage, refreshMessages]);
+  }, []);
 
-  // 处理新消息
-  const handleMessageCreated = useCallback((message: ChatMessage) => {
-    console.log('[useAgentEvents] 新消息:', message.id, message.role);
-    appendMessage(message);
-  }, [appendMessage]);
-
-  // 设置订阅
+  // 设置订阅 - 只依赖 projectId，避免订阅循环
   useEffect(() => {
     if (!projectId) {
       dispatch({ type: 'SET_MESSAGES', payload: [] });
@@ -215,14 +229,20 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       return;
     }
 
+    console.log('[useAgentEvents] 设置订阅, projectId:', projectId);
+
     // 加载初始数据
     refreshMessages();
 
-    // 订阅事件
+    // 订阅事件 - 使用内联函数和 ref 避免依赖外部回调
     const unsubscribe = subscribeAgentEvents({
       projectId,
-      onTaskUpdate: handleTaskUpdate,
-      onMessageCreated: handleMessageCreated,
+      onTaskUpdate: handleTaskUpdateInternal,
+      onMessageCreated: (message: ChatMessage) => {
+        console.log('[useAgentEvents] 收到新消息事件:', message.id, message.role);
+        dispatch({ type: 'APPEND_MESSAGE', payload: message });
+        onMessageReceivedRef.current?.(message);
+      },
       onError: (error) => {
         console.error('[useAgentEvents] 订阅错误:', error);
         dispatch({ type: 'SET_ERROR', payload: error.message });
@@ -232,11 +252,11 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     setIsConnected(true);
 
     return () => {
-      console.log('[useAgentEvents] 清理订阅');
+      console.log('[useAgentEvents] 清理订阅, projectId:', projectId);
       unsubscribe();
       setIsConnected(false);
     };
-  }, [projectId, refreshMessages, handleTaskUpdate, handleMessageCreated]);
+  }, [projectId, refreshMessages, handleTaskUpdateInternal]);
 
   // 清理 blob URLs
   useEffect(() => {

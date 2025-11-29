@@ -86,19 +86,25 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         console.error('创建 AI 任务失败:', taskError);
       } else {
         console.log('AI 任务已创建:', task);
+        
+        // 在触发 Edge Function 之前记录开始处理日志
+        console.log('开始触发 Edge Function 处理任务...');
+        
         const { error: triggerError } = await aiTaskService.triggerProcessor(
           projectId,
           projectFilesContext
         );
+        
+        // 根据结果记录完成或失败日志
         if (triggerError) {
-          console.error('触发 AI 任务处理失败:', triggerError);
+          console.error('Edge Function 处理失败:', triggerError);
           await buildLogService.addBuildLog(
             projectId,
             'error',
             '触发 AI 任务处理失败，请稍后重试'
           );
         } else {
-          console.log('已触发 Edge Function 处理任务');
+          console.log('Edge Function 处理完成');
         }
       }
     }
