@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Download, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { BuildLog } from '../types/project';
-import { buildLogService } from '../services/buildLogService';
-import { supabase } from '../lib/supabase';
+import { useBuildLogs } from '../realtime';
 
 interface BuildLogPanelProps {
   projectId: string;
@@ -22,89 +21,14 @@ const logTypeColors = {
 };
 
 export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelProps) {
-  const [logs, setLogs] = useState<BuildLog[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [loading, setLoading] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  const appendLog = useCallback((log: BuildLog) => {
-    setLogs(prev => {
-      if (prev.some(item => item.id === log.id)) {
-        console.log('日志已存在，跳过');
-        return prev;
-      }
-      console.log('添加日志到界面');
-      return [...prev, log];
-    });
-  }, []);
-
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await buildLogService.getBuildLogsByProjectId(projectId);
-    if (!error && data) {
-      setLogs(data);
-    }
-    setLoading(false);
-  }, [projectId]);
-
-  useEffect(() => {
-    loadLogs();
-
-    const channelName = `build-logs-${projectId}`;
-
-    supabase.getChannels().forEach(channel => {
-      if (channel.topic === channelName) {
-        console.log('移除旧的日志订阅');
-        supabase.removeChannel(channel);
-      }
-    });
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'build_logs',
-          filter: `project_id=eq.${projectId}`
-        },
-        (payload) => {
-          console.log('🔔 收到新日志 Realtime 推送', payload);
-          const log = payload.new as BuildLog;
-          console.log('payload.new:', log);
-          appendLog(log);
-          if (onLogAdded) {
-            onLogAdded(log);
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        console.log('日志订阅状态', status);
-        if (err) console.error('订阅错误:', err);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ 日志 Realtime 订阅成功');
-        }
-      });
-
-    const handleBuildLogAdded = ((e: CustomEvent) => {
-      const log = e.detail as BuildLog;
-      console.log('📢 通过 CustomEvent 接收日志:', log);
-      appendLog(log);
-      if (onLogAdded) {
-        onLogAdded(log);
-      }
-    }) as EventListener;
-
-    window.addEventListener('buildlog-added', handleBuildLogAdded);
-    console.log('✅ CustomEvent 监听器已注册');
-
-    return () => {
-      console.log('清理日志订阅');
-      supabase.removeChannel(channel);
-      window.removeEventListener('buildlog-added', handleBuildLogAdded);
-    };
-  }, [projectId, onLogAdded, appendLog, loadLogs]);
+  // 使用新的 useBuildLogs hook，统一管理订阅
+  const { logs, isLoading: loading } = useBuildLogs({
+    projectId,
+    onLogAdded
+  });
 
   useEffect(() => {
     if (isExpanded && logsEndRef.current) {

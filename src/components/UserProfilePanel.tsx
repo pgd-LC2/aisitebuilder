@@ -6,8 +6,6 @@ interface UserProfilePanelProps {
   email: string;
   preloadNodeModules: boolean;
   onTogglePreload: (value: boolean) => void;
-  enableWatchdog: boolean;
-  onToggleWatchdog: (value: boolean) => void;
 }
 
 export default function UserProfilePanel({
@@ -15,9 +13,7 @@ export default function UserProfilePanel({
   onClose,
   email,
   preloadNodeModules,
-  onTogglePreload,
-  enableWatchdog,
-  onToggleWatchdog
+  onTogglePreload
 }: UserProfilePanelProps) {
   if (!open) {
     return null;
@@ -76,40 +72,6 @@ export default function UserProfilePanel({
                         <span
                           className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
                             preloadNodeModules ? 'translate-x-5' : ''
-                          }`}
-                        />
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 border border-dashed border-purple-200 rounded-xl bg-purple-50/60 flex gap-3">
-                <div className="text-purple-500">
-                  <FlaskConical className="w-5 h-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">启用 Watchdog 定时器</p>
-                      <p className="text-xs text-gray-600">
-                        当 AI 回复延迟时自动刷新消息，关闭后需手动刷新。
-                      </p>
-                    </div>
-                    <label className="inline-flex items-center cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={enableWatchdog}
-                        onChange={event => onToggleWatchdog(event.target.checked)}
-                      />
-                      <span
-                        className={`w-10 h-5 flex items-center rounded-full p-1 transition-colors ${
-                          enableWatchdog ? 'bg-purple-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span
-                          className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                            enableWatchdog ? 'translate-x-5' : ''
                           }`}
                         />
                       </span>
