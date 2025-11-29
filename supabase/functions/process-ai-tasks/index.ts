@@ -1140,6 +1140,9 @@ async function handleWriteFile(ctx: ToolContext, args: { path: string; content: 
       .eq('file_path', fullPath)
       .maybeSingle();
     
+    // 判断是创建还是更新操作
+    const isUpdate = !!existingFile;
+    
     if (existingFile) {
       await ctx.supabase
         .from('project_files')
@@ -1165,6 +1168,17 @@ async function handleWriteFile(ctx: ToolContext, args: { path: string; content: 
         });
     }
     
+    // Step 3: 写入文件事件
+    await logFileEvent(
+      ctx.supabase,
+      ctx.projectId,
+      args.path,
+      isUpdate ? 'update' : 'create',
+      isUpdate ? `更新文件: ${fileName}` : `创建文件: ${fileName}`,
+      fullPath,
+      ctx.versionId
+    );
+    
     return { success: true, file_path: fullPath };
   } catch (e) {
     return { success: false, error: `写入文件异常: ${e.message}` };
@@ -1174,6 +1188,7 @@ async function handleWriteFile(ctx: ToolContext, args: { path: string; content: 
 async function handleDeleteFile(ctx: ToolContext, args: { path: string }): Promise<{ success: boolean; error?: string }> {
   try {
     const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
+    const fileName = args.path.split('/').pop() || 'unnamed';
     
     const { error: deleteError } = await ctx.supabase.storage
       .from(ctx.bucket)
@@ -1188,6 +1203,15 @@ async function handleDeleteFile(ctx: ToolContext, args: { path: string }): Promi
       .delete()
       .eq('project_id', ctx.projectId)
       .eq('file_path', fullPath);
+    
+    // Step 3: 写入文件事件
+    await logFileEvent(
+      ctx.supabase,
+      ctx.projectId,
+      args.path,
+      'delete',
+      `删除文件: ${fileName}`
+    );
     
     return { success: true };
   } catch (e) {
@@ -1285,6 +1309,18 @@ async function handleMoveFile(ctx: ToolContext, args: { fromPath: string; toPath
           is_public: false
         });
     }
+    
+    // Step 3: 写入文件事件
+    await logFileEvent(
+      ctx.supabase,
+      ctx.projectId,
+      args.toPath,
+      'move',
+      `移动文件: ${args.fromPath} → ${args.toPath}`,
+      toFullPath,
+      ctx.versionId,
+      args.fromPath
+    );
     
     return { success: true, message: `文件已移动: ${args.fromPath} → ${args.toPath}` };
   } catch (e) {
@@ -1440,6 +1476,84 @@ async function updateTaskStatus(supabase, taskId, status, result, errorMsg) {
   if (errorMsg) updateData.error = errorMsg;
   const { error } = await supabase.from('ai_tasks').update(updateData).eq('id', taskId);
   if (error) console.error('更新任务状态失败:', error);
+}
+
+// --- Step 3: 事件写入工具函数 ---
+
+// Agent 事件类型定义
+type AgentEventType = 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error';
+
+// Agent 事件 payload 接口
+interface AgentEventPayload {
+  phase?: string;
+  status?: string;
+  toolName?: string;
+  toolArgs?: Record<string, unknown>;
+  toolResult?: unknown;
+  filePath?: string;
+  operation?: string;
+  attemptNumber?: number;
+  errorType?: string;
+  errorMessage?: string;
+  debuggerResponse?: unknown;
+  message?: string;
+  level?: string;
+  [key: string]: unknown;
+}
+
+// 写入 Agent 事件（尽力而为，不影响主流程）
+async function logAgentEvent(
+  supabase: ReturnType<typeof createClient>,
+  taskId: string | null,
+  projectId: string,
+  type: AgentEventType,
+  payload: AgentEventPayload
+): Promise<void> {
+  try {
+    const { error } = await supabase.from('agent_events').insert({
+      task_id: taskId,
+      project_id: projectId,
+      type,
+      payload
+    });
+    if (error) {
+      console.error('[AgentEvent] 写入事件失败:', error.message);
+    }
+  } catch (e) {
+    console.error('[AgentEvent] 写入事件异常:', e instanceof Error ? e.message : String(e));
+  }
+}
+
+// 文件事件操作类型
+type FileEventOp = 'create' | 'update' | 'delete' | 'move';
+
+// 写入文件事件（尽力而为，不影响主流程）
+async function logFileEvent(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+  path: string,
+  op: FileEventOp,
+  summary?: string,
+  contentRef?: string,
+  version?: string,
+  fromPath?: string
+): Promise<void> {
+  try {
+    const { error } = await supabase.from('file_events').insert({
+      project_id: projectId,
+      path,
+      op,
+      summary,
+      content_ref: contentRef,
+      version,
+      from_path: fromPath
+    });
+    if (error) {
+      console.error('[FileEvent] 写入事件失败:', error.message);
+    }
+  } catch (e) {
+    console.error('[FileEvent] 写入事件异常:', e instanceof Error ? e.message : String(e));
+  }
 }
 
 // --- 自我修复循环辅助函数 (Step 4 + Step 5 优化) ---
@@ -1727,6 +1841,14 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
   try {
     await writeBuildLog(supabase, task.project_id, 'info', `开始处理 AI 任务: ${task.type} (Model: ${model})`);
     
+    // Step 3: 记录任务开始事件
+    await logAgentEvent(supabase, task.id, task.project_id, 'agent_phase', {
+      phase: 'started',
+      status: 'running',
+      taskType: task.type,
+      model
+    });
+    
     // 读取项目文件上下文
     let fileContextStr = "";
     if (task.type !== 'chat_reply' && projectFilesContext?.bucket && projectFilesContext?.path) {
@@ -1843,6 +1965,13 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
           console.log(`执行工具: ${toolName}`, args);
           await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
           
+          // Step 3: 记录工具调用事件
+          await logAgentEvent(supabase, task.id, task.project_id, 'tool_call', {
+            toolName,
+            toolArgs: args,
+            status: 'started'
+          });
+          
           let toolOutput: string;
           
           if (toolName === 'generate_image') {
@@ -1936,9 +2065,25 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
     await writeBuildLog(supabase, task.project_id, 'success', `AI 任务处理完成 (${iteration} 次迭代, ${modifiedFiles.length} 个文件修改)`);
     await updateTaskStatus(supabase, task.id, 'completed', resultData);
     
+    // Step 3: 记录任务完成事件
+    await logAgentEvent(supabase, task.id, task.project_id, 'agent_phase', {
+      phase: 'completed',
+      status: 'completed',
+      iterations: iteration,
+      modifiedFilesCount: modifiedFiles.length,
+      generatedImagesCount: generatedImages.length
+    });
+    
   } catch (error) {
     console.error(`处理任务 ${task.id} 失败:`, error);
     await writeBuildLog(supabase, task.project_id, 'error', `AI 任务处理失败: ${error.message}`);
+    
+    // Step 3: 记录任务错误事件
+    await logAgentEvent(supabase, task.id, task.project_id, 'error', {
+      errorMessage: error.message,
+      errorType: 'task_execution_error',
+      attempts: task.attempts
+    });
     
     if (task.attempts >= task.max_attempts) {
       await updateTaskStatus(supabase, task.id, 'failed', undefined, error.message);
@@ -1984,6 +2129,13 @@ async function processTaskWithSelfRepair(
   
   console.log(`[SelfRepairLoop] 开始自我修复循环，任务: ${task.id}, 类型: ${task.type}, 最大尝试次数: ${SELF_REPAIR_MAX}`);
   await writeBuildLog(supabase, task.project_id, 'info', `[SelfRepairLoop] 启动自我修复循环 (最大 ${SELF_REPAIR_MAX} 次尝试)`);
+  
+  // Step 3: 记录自我修复循环开始事件
+  await logAgentEvent(supabase, task.id, task.project_id, 'self_repair', {
+    status: 'loop_started',
+    maxAttempts: SELF_REPAIR_MAX,
+    taskType: task.type
+  });
   
   // 构建工具上下文（用于修复操作）
   const versionId = projectFilesContext?.versionId || 'default';
@@ -2105,6 +2257,15 @@ async function processTaskWithSelfRepair(
       // 记录修复尝试
       repairHistory.push(attempt);
       await logSelfRepairAttempt(supabase, task.project_id, task.id, task.type, attempt);
+      
+      // Step 3: 记录自我修复尝试事件
+      await logAgentEvent(supabase, task.id, task.project_id, 'self_repair', {
+        status: 'attempt_completed',
+        attemptNumber: repairAttempt + 1,
+        repairApplied: attempt.repairApplied,
+        errorType: errorContext.errorType,
+        rootCause: debuggerSuggestion?.rootCause
+      });
     }
   }
   

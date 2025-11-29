@@ -2,6 +2,55 @@
 
 本文档定义了 AI Agent 在执行任务过程中产生的所有事件类型及其数据结构。这些事件用于驱动前端 Activity Timeline 的实时展示。
 
+## 0. 数据库表结构 (Step 3 新增)
+
+### agent_events 表
+
+```sql
+CREATE TABLE agent_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id uuid,                           -- 关联的 AI 任务 ID（可为空）
+  project_id uuid NOT NULL,               -- 关联的项目 ID
+  type text NOT NULL,                     -- 事件类型
+  payload jsonb NOT NULL DEFAULT '{}',    -- 事件详细数据
+  created_at timestamptz DEFAULT now()    -- 创建时间
+);
+
+-- 索引
+CREATE INDEX idx_agent_events_project_id ON agent_events(project_id);
+CREATE INDEX idx_agent_events_task_id ON agent_events(task_id);
+CREATE INDEX idx_agent_events_created_at ON agent_events(created_at DESC);
+CREATE INDEX idx_agent_events_type ON agent_events(type);
+
+-- 启用 Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_events;
+ALTER TABLE agent_events REPLICA IDENTITY FULL;
+```
+
+### 数据库事件类型约束
+
+```sql
+CHECK (type IN ('agent_phase', 'tool_call', 'file_update', 'self_repair', 'log', 'error'))
+```
+
+### 数据库记录示例
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "task_id": "123e4567-e89b-12d3-a456-426614174000",
+  "project_id": "789e0123-e45b-67d8-a901-234567890abc",
+  "type": "agent_phase",
+  "payload": {
+    "phase": "started",
+    "status": "running",
+    "taskType": "build_site",
+    "model": "google/gemini-3-pro-preview"
+  },
+  "created_at": "2025-11-29T14:00:00.000Z"
+}
+```
+
 ## 1. 事件基础结构
 
 所有事件共享以下基础结构：

@@ -2,20 +2,21 @@
  * Agent 事件订阅
  * 
  * 提供 AI 任务和聊天消息的实时订阅功能。
+ * Step 3: 新增 agent_events 表订阅，支持实时 Activity Timeline 更新。
  */
 
 import type { AITask, ChatMessage } from '../types/project';
 import { subscribeToTable } from './realtimeClient';
-import type { SubscribeAgentEventsOptions } from './types';
+import type { SubscribeAgentEventsOptions, DbAgentEvent } from './types';
 
 /**
- * 订阅 Agent 事件（AI 任务更新和新消息）
+ * 订阅 Agent 事件（AI 任务更新、新消息、agent_events 表事件）
  * 
  * @param options 订阅选项
  * @returns 取消订阅函数
  */
 export function subscribeAgentEvents(options: SubscribeAgentEventsOptions): () => void {
-  const { projectId, onTaskUpdate, onMessageCreated, onError } = options;
+  const { projectId, onTaskUpdate, onMessageCreated, onAgentEvent, onError } = options;
 
   if (!projectId) {
     console.warn('[subscribeAgentEvents] projectId 为空，跳过订阅');
@@ -53,6 +54,21 @@ export function subscribeAgentEvents(options: SubscribeAgentEventsOptions): () =
         }
       );
       unsubscribers.push(unsubscribeMessage);
+    }
+
+    // Step 3: 订阅 agent_events 表（实时 Activity Timeline 事件）
+    if (onAgentEvent) {
+      const unsubscribeAgentEvent = subscribeToTable<DbAgentEvent>(
+        `agent-events-${projectId}`,
+        'agent_events',
+        'INSERT',
+        `project_id=eq.${projectId}`,
+        (event) => {
+          console.log('[subscribeAgentEvents] 收到 agent_events:', event.id, event.type);
+          onAgentEvent(event);
+        }
+      );
+      unsubscribers.push(unsubscribeAgentEvent);
     }
 
     console.log(`[subscribeAgentEvents] 已订阅项目 ${projectId} 的 Agent 事件`);
