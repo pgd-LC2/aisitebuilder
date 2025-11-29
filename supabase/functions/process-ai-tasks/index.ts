@@ -94,6 +94,7 @@ const PROMPT_CORE_SYSTEM = `你是一名世界级的**全栈开发工程师兼 U
 | read_file | 读取文件内容 | 查看现有代码 |
 | write_file | 写入/创建文件 | 生成或修改代码 |
 | delete_file | 删除文件 | 清理无用文件 |
+| move_file | 移动/重命名文件 | 重构文件结构 |
 | search_files | 搜索文件内容 | 定位相关代码 |
 | get_project_structure | 获取项目结构 | 全局了解项目 |
 | generate_image | 生成图片 | 创建视觉资源 |
@@ -786,6 +787,31 @@ const TOOLS = [
         required: []
       }
     }
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'move_file',
+      description: '移动或重命名文件。将文件从一个路径移动到另一个路径。',
+      parameters: {
+        type: 'object',
+        properties: {
+          fromPath: {
+            type: 'string',
+            description: '源文件路径，相对于项目根目录'
+          },
+          toPath: {
+            type: 'string',
+            description: '目标文件路径，相对于项目根目录'
+          },
+          overwrite: {
+            type: 'boolean',
+            description: '目标文件已存在时是否覆盖（默认 false）'
+          }
+        },
+        required: ['fromPath', 'toPath']
+      }
+    }
   }
 ];
 
@@ -1169,6 +1195,104 @@ async function handleDeleteFile(ctx: ToolContext, args: { path: string }): Promi
   }
 }
 
+async function handleMoveFile(ctx: ToolContext, args: { fromPath: string; toPath: string; overwrite?: boolean }): Promise<{ success: boolean; message?: string }> {
+  try {
+    const fromFullPath = `${ctx.basePath}/${args.fromPath}`.replace(/\/+/g, '/');
+    const toFullPath = `${ctx.basePath}/${args.toPath}`.replace(/\/+/g, '/');
+    
+    // 检查源文件是否存在
+    const { data: sourceData, error: sourceError } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .download(fromFullPath);
+    
+    if (sourceError || !sourceData) {
+      return { success: false, message: `源文件不存在: ${args.fromPath}` };
+    }
+    
+    // 检查目标文件是否已存在
+    if (!args.overwrite) {
+      const { data: targetData } = await ctx.supabase.storage
+        .from(ctx.bucket)
+        .download(toFullPath);
+      
+      if (targetData) {
+        return { success: false, message: `目标文件已存在: ${args.toPath}` };
+      }
+    }
+    
+    // 获取源文件内容
+    const content = await sourceData.arrayBuffer();
+    const toFileName = args.toPath.split('/').pop() || 'unnamed';
+    const mimeType = getMimeType(toFileName);
+    const fileCategory = getFileCategory(toFileName);
+    
+    // 上传到新位置
+    const { error: uploadError } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .upload(toFullPath, content, {
+        contentType: mimeType,
+        upsert: args.overwrite || false
+      });
+    
+    if (uploadError) {
+      return { success: false, message: `移动文件失败: ${uploadError.message}` };
+    }
+    
+    // 删除源文件
+    const { error: deleteError } = await ctx.supabase.storage
+      .from(ctx.bucket)
+      .remove([fromFullPath]);
+    
+    if (deleteError) {
+      // 尝试回滚：删除已上传的目标文件
+      await ctx.supabase.storage.from(ctx.bucket).remove([toFullPath]);
+      return { success: false, message: `删除源文件失败: ${deleteError.message}` };
+    }
+    
+    // 更新 project_files 表
+    const { data: existingFile } = await ctx.supabase
+      .from('project_files')
+      .select('id, file_size')
+      .eq('project_id', ctx.projectId)
+      .eq('file_path', fromFullPath)
+      .maybeSingle();
+    
+    if (existingFile) {
+      // 更新现有记录的路径
+      await ctx.supabase
+        .from('project_files')
+        .update({
+          file_name: toFileName,
+          file_path: toFullPath,
+          mime_type: mimeType,
+          file_category: fileCategory,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingFile.id);
+    } else {
+      // 创建新记录
+      await ctx.supabase
+        .from('project_files')
+        .insert({
+          project_id: ctx.projectId,
+          version_id: ctx.versionId,
+          file_name: toFileName,
+          file_path: toFullPath,
+          file_size: content.byteLength,
+          mime_type: mimeType,
+          file_category: fileCategory,
+          source_type: 'ai_generated',
+          is_public: false
+        });
+    }
+    
+    return { success: true, message: `文件已移动: ${args.fromPath} → ${args.toPath}` };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    return { success: false, message: `移动文件异常: ${errorMessage}` };
+  }
+}
+
 async function handleSearchFiles(ctx: ToolContext, args: { keyword: string; file_extension?: string }): Promise<{ success: boolean; results?: Array<{ file: string; matches: string[] }>; error?: string }> {
   try {
     const { data: fileList, error: listError } = await ctx.supabase.storage
@@ -1263,24 +1387,26 @@ async function executeToolCall(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<{ success: boolean; result: unknown }> {
-  switch (toolName) {
-    case 'list_files':
-      return { success: true, result: await handleListFiles(ctx, args as { path?: string }) };
-    case 'read_file':
-      return { success: true, result: await handleReadFile(ctx, args as { path: string }) };
-    case 'write_file':
-      return { success: true, result: await handleWriteFile(ctx, args as { path: string; content: string }) };
-    case 'delete_file':
-      return { success: true, result: await handleDeleteFile(ctx, args as { path: string }) };
-    case 'search_files':
-      return { success: true, result: await handleSearchFiles(ctx, args as { keyword: string; file_extension?: string }) };
-    case 'get_project_structure':
-      return { success: true, result: await handleGetProjectStructure(ctx) };
-    case 'generate_image':
-      return { success: false, result: { error: 'generate_image handled separately' } };
-    default:
-      return { success: false, result: { error: `未知工具: ${toolName}` } };
-  }
+    switch (toolName) {
+      case 'list_files':
+        return { success: true, result: await handleListFiles(ctx, args as { path?: string }) };
+      case 'read_file':
+        return { success: true, result: await handleReadFile(ctx, args as { path: string }) };
+      case 'write_file':
+        return { success: true, result: await handleWriteFile(ctx, args as { path: string; content: string }) };
+      case 'delete_file':
+        return { success: true, result: await handleDeleteFile(ctx, args as { path: string }) };
+      case 'move_file':
+        return { success: true, result: await handleMoveFile(ctx, args as { fromPath: string; toPath: string; overwrite?: boolean }) };
+      case 'search_files':
+        return { success: true, result: await handleSearchFiles(ctx, args as { keyword: string; file_extension?: string }) };
+      case 'get_project_structure':
+        return { success: true, result: await handleGetProjectStructure(ctx) };
+      case 'generate_image':
+        return { success: false, result: { error: 'generate_image handled separately' } };
+      default:
+        return { success: false, result: { error: `未知工具: ${toolName}` } };
+    }
 }
 
 async function writeBuildLog(supabase, projectId, logType, message, metadata = {}) {

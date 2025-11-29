@@ -17,6 +17,22 @@ export type {
   FileEvent,
   FileState,
   FileAction,
+  // Timeline 类型 (Bolt 风格)
+  TimelineEventType,
+  BaseTimelineEvent,
+  AgentPhaseEvent,
+  ToolCallEvent,
+  FileUpdateEvent,
+  SelfRepairEvent,
+  LogEvent,
+  ErrorEvent,
+  TimelineEvent,
+  TimelineState,
+  TimelineAction,
+  AgentPhase,
+  FileUpdateOp,
+  UseTimelineEventsOptions,
+  UseTimelineEventsReturn,
   BuildLogEvent,
   BuildLogState,
   BuildLogAction,
@@ -52,3 +68,4 @@ export { subscribeFileEvents } from './subscribeFileEvents';
 export { useAgentEvents } from './hooks/useAgentEvents';
 export { useBuildLogs } from './hooks/useBuildLogs';
 export { useFileEvents } from './hooks/useFileEvents';
+export { useTimelineEvents } from './hooks/useTimelineEvents';
