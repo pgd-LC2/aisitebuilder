@@ -159,7 +159,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
   // 处理任务更新的内部函数（用于订阅回调）
   const handleTaskUpdateInternal = useCallback(async (task: AITask) => {
-    console.log('[useAgentEvents] 任务更新:', task.id, task.status);
+    console.log('[useAgentEvents] 任务更新:', task.id, task.status, 'result:', task.result);
 
     if (task.type !== 'chat_reply') {
       console.log('[useAgentEvents] 非 chat_reply 任务，跳过');
@@ -169,12 +169,14 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     dispatch({ type: 'TASK_UPDATED', payload: task });
 
     if (task.status === 'completed') {
+      console.log('[useAgentEvents] 任务完成，开始处理结果');
       dispatch({ type: 'TASK_COMPLETED', payload: task });
       onTaskCompletedRef.current?.(task);
 
       // 处理生成的图片
       const messageId = task.result?.messageId as string | undefined;
       const generatedImages = task.result?.generated_images as string[] | undefined;
+      console.log('[useAgentEvents] 从 task.result 获取 messageId:', messageId);
 
       if (generatedImages && generatedImages.length > 0 && messageId) {
         setMessageImages(prev => ({
@@ -195,23 +197,40 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
       // 获取消息
       if (messageId) {
-        const { data } = await messageService.getMessageById(messageId);
+        console.log('[useAgentEvents] 尝试通过 messageId 获取消息:', messageId);
+        const { data, error } = await messageService.getMessageById(messageId);
+        console.log('[useAgentEvents] getMessageById 结果:', { data, error });
         if (data) {
-          console.log('[useAgentEvents] 获取到任务关联的消息:', data.id);
+          console.log('[useAgentEvents] 获取到任务关联的消息:', data.id, data.role);
           dispatch({ type: 'APPEND_MESSAGE', payload: data });
           onMessageReceivedRef.current?.(data);
         } else {
           // 消息可能还未写入，延迟刷新
-          console.log('[useAgentEvents] 消息未找到，延迟刷新');
-          setTimeout(() => {
-            loadVersionRef.current += 1;
-            messageService.getMessagesByProjectId(task.project_id).then(({ data: messages }) => {
-              if (messages) {
-                dispatch({ type: 'SET_MESSAGES', payload: messages });
-              }
-            });
+          console.log('[useAgentEvents] 消息未找到，延迟 500ms 后刷新');
+          setTimeout(async () => {
+            console.log('[useAgentEvents] 延迟刷新开始');
+            const { data: messages } = await messageService.getMessagesByProjectId(task.project_id);
+            if (messages) {
+              console.log('[useAgentEvents] 延迟刷新获取到', messages.length, '条消息');
+              // 使用增量合并而不是覆盖，避免丢失已 append 的消息
+              dispatch({ type: 'SET_MESSAGES', payload: messages });
+            }
           }, 500);
         }
+      } else {
+        // messageId 为空，说明 task.result 中没有 messageId
+        // 这可能是因为 realtime 事件中的 result 字段不完整
+        console.warn('[useAgentEvents] task.result.messageId 为空，尝试刷新消息列表');
+        console.log('[useAgentEvents] task.result 完整内容:', JSON.stringify(task.result));
+        // 延迟刷新以获取最新消息
+        setTimeout(async () => {
+          console.log('[useAgentEvents] messageId 为空，延迟刷新开始');
+          const { data: messages } = await messageService.getMessagesByProjectId(task.project_id);
+          if (messages) {
+            console.log('[useAgentEvents] 延迟刷新获取到', messages.length, '条消息');
+            dispatch({ type: 'SET_MESSAGES', payload: messages });
+          }
+        }, 500);
       }
     } else if (task.status === 'failed') {
       dispatch({

@@ -105,6 +105,12 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           );
         } else {
           console.log('Edge Function 处理完成');
+          // Edge Function 完成后，延迟刷新消息列表作为 realtime 的备用方案
+          // 这不是轮询，而是一次性的刷新，确保 AI 回复能够显示
+          setTimeout(() => {
+            console.log('Edge Function 完成后刷新消息列表');
+            refreshMessages();
+          }, 1000);
         }
       }
     }
