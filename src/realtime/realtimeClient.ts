@@ -275,10 +275,21 @@ class RealtimeClient {
           // 通知外部订阅成功
           onStatusChange?.('SUBSCRIBED', null);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // 检查订阅是否已被取消，避免无限重试
+          const currentRetryInfo = this.retryInfoMap.get(subscriptionId);
+          if (currentRetryInfo?.cancelled) {
+            console.log(`[RealtimeClient] 订阅 ${subscriptionId} 已被取消，跳过状态回调中的重试`);
+            return;
+          }
+          
           // 通知外部状态变化
           const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
           onStatusChange?.(status, errorObj);
-          retryWithBackoff();
+          
+          // 使用 setTimeout 确保重试是异步的，避免同步递归导致栈溢出
+          setTimeout(() => {
+            retryWithBackoff();
+          }, 0);
         }
       });
 
