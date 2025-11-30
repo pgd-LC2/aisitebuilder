@@ -110,7 +110,8 @@ class RealtimeClient {
     table: string,
     event: RealtimeEvent,
     filter: string | undefined,
-    callback: (payload: T) => void
+    callback: (payload: T) => void,
+    onStatusChange?: (status: string | undefined, error?: Error | null) => void
   ): () => void {
     if (typeof window === 'undefined') {
       console.warn('[RealtimeClient] 无法在服务端订阅');
@@ -182,22 +183,31 @@ class RealtimeClient {
       }
 
       console.log(`[RealtimeClient] 频道 ${uniqueChannelName} 状态: ${status}`);
-      
+
       if (err) {
         console.error(`[RealtimeClient] 频道 ${uniqueChannelName} 错误:`, err);
         // 不再将单个 channel 的错误设置为全局 error 状态
         // 只记录错误，不影响其他 channel
         const errMessage = err instanceof Error ? err.message : String(err);
         this.config.onError?.(new Error(errMessage));
+        onStatusChange?.(status, err instanceof Error ? err : new Error(errMessage));
       }
 
       if (status === 'SUBSCRIBED') {
         this.connectionStatus = 'connected';
         this.config.onConnectionChange?.(true);
+        onStatusChange?.(status);
+      } else if (status === 'RETRYING') {
+        this.connectionStatus = 'connecting';
+        this.config.onConnectionChange?.(false);
+        onStatusChange?.(status);
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
         // 只有当所有 channel 都关闭时才设置为 disconnected
         // 单个 channel 的错误不应影响全局状态
         console.warn(`[RealtimeClient] 频道 ${uniqueChannelName} 状态异常: ${status}`);
+        this.connectionStatus = 'error';
+        this.config.onConnectionChange?.(false);
+        onStatusChange?.(status);
       }
     });
 
@@ -294,10 +304,11 @@ export const subscribeToTable = <T>(
   table: string,
   event: RealtimeEvent,
   filter: string | undefined,
-  callback: (payload: T) => void
+  callback: (payload: T) => void,
+  onStatusChange?: (status: string | undefined, error?: Error | null) => void
 ): (() => void) => {
   const client = getRealtimeClient();
-  return client.subscribe<T>(channelName, table, event, filter, callback);
+  return client.subscribe<T>(channelName, table, event, filter, callback, onStatusChange);
 };
 
 // 导出清理函数
