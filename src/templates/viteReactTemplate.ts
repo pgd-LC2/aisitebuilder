@@ -164,7 +164,8 @@ export default defineConfig({
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/icons/icon-32.png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${projectTitle}</title>
   </head>
@@ -180,6 +181,52 @@ export default defineConfig({
         mimeType: 'text/plain',
         category: 'document',
         content: `/*    /index.html    200
+`
+      },
+      {
+        path: 'public/favicon.svg',
+        mimeType: 'image/svg+xml',
+        category: 'asset',
+        content: `<svg width="512" height="512" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path 
+    d="M32 56C17.5 56 6 46.5 6 32C6 21.5 12.5 13.5 22 9" 
+    stroke="#334155" 
+    stroke-width="4" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+  
+  <path 
+    d="M12 50L6 58" 
+    stroke="#334155" 
+    stroke-width="4" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+
+  <path 
+    d="M22 26L32 31L42 26M32 31V43" 
+    stroke="#2563EB" 
+    stroke-width="4" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+  <path 
+    d="M22 26V38L32 43L42 38V26L32 21L22 26Z" 
+    stroke="#2563EB" 
+    stroke-width="4" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+
+  <path 
+    d="M44 20L56 8M56 8H46M56 8V18" 
+    stroke="#2563EB" 
+    stroke-width="4" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+</svg>
 `
       },
       {
