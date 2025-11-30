@@ -458,12 +458,17 @@ async function assembleSystemPrompt(
   // 获取所有需要的 prompts
   const prompts = await getMultiplePrompts(supabase, promptKeys);
   
-  // 检查 fallback 情况
+  // 统计加载结果
+  let loadedFromDb = 0;
+  let fallbackCount = 0;
   for (const key of promptKeys) {
-    if (!prompts[key] || prompts[key] === DEFAULT_PROMPTS[key]) {
-      console.log(`[PromptRouter] Fallback: ${key} 使用默认值`);
+    if (prompts[key] && prompts[key] !== DEFAULT_PROMPTS[key]) {
+      loadedFromDb++;
+    } else {
+      fallbackCount++;
     }
   }
+  console.log(`[PromptRouter] 加载统计: ${loadedFromDb}/${promptKeys.length} 从数据库加载, ${fallbackCount} 使用默认值`);
   
   // 组装 prompt（按层级顺序）
   const assembledPrompt = promptKeys
@@ -519,20 +524,42 @@ async function getPrompt(supabase: ReturnType<typeof createClient>, key: string)
   }
 }
 
+// 错误类型枚举，用于区分不同的 fallback 原因
+type PromptFetchErrorType = 'NOT_FOUND' | 'PERMISSION' | 'NETWORK_ERROR' | 'QUERY_ERROR';
+
+function classifyPromptError(error: { code?: string; message?: string; details?: string }): PromptFetchErrorType {
+  const errorCode = error?.code || '';
+  const errorMessage = error?.message?.toLowerCase() || '';
+  
+  // RLS/权限相关错误
+  if (errorCode === '42501' || errorMessage.includes('permission') || errorMessage.includes('rls') || errorMessage.includes('policy')) {
+    return 'PERMISSION';
+  }
+  // 网络/连接错误
+  if (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('connection') || errorMessage.includes('fetch')) {
+    return 'NETWORK_ERROR';
+  }
+  // 其他查询错误
+  return 'QUERY_ERROR';
+}
+
 async function getMultiplePrompts(supabase: ReturnType<typeof createClient>, keys: string[]): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
   const keysToFetch: string[] = [];
 
+  // 检查缓存
   for (const key of keys) {
     const cached = promptCache.get(key);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       result[key] = cached.content;
+      console.log(`[PromptRouter] 缓存命中: ${key}`);
     } else {
       keysToFetch.push(key);
     }
   }
 
   if (keysToFetch.length > 0) {
+    console.log(`[PromptRouter] 从数据库获取提示词: ${keysToFetch.join(', ')}`);
     try {
       const { data, error } = await supabase
         .from('prompts')
@@ -541,8 +568,16 @@ async function getMultiplePrompts(supabase: ReturnType<typeof createClient>, key
         .eq('is_active', true);
 
       if (error) {
-        console.error('批量获取提示词失败:', error);
+        const errorType = classifyPromptError(error);
+        console.error(`[PromptRouter] ${errorType} 批量获取提示词失败:`, {
+          errorType,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          keys: keysToFetch
+        });
         for (const key of keysToFetch) {
+          console.log(`[PromptRouter] Fallback (${errorType}): ${key} 使用默认值`);
           result[key] = DEFAULT_PROMPTS[key] || '';
         }
       } else {
@@ -551,16 +586,26 @@ async function getMultiplePrompts(supabase: ReturnType<typeof createClient>, key
           result[item.key] = item.content;
           promptCache.set(item.key, { content: item.content, timestamp: Date.now() });
           fetchedKeys.add(item.key);
+          console.log(`[PromptRouter] 成功加载: ${item.key} (len=${item.content.length}) source=supabase`);
         }
+        // 检查哪些 key 没有找到
         for (const key of keysToFetch) {
           if (!fetchedKeys.has(key)) {
+            console.log(`[PromptRouter] Fallback (NOT_FOUND): ${key} 数据库中不存在，使用默认值`);
             result[key] = DEFAULT_PROMPTS[key] || '';
+            // 注意：不缓存 NOT_FOUND 的结果，避免持续 fallback
           }
         }
       }
     } catch (e) {
-      console.error('批量获取提示词异常:', e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.error(`[PromptRouter] NETWORK_ERROR 批量获取提示词异常:`, {
+        errorType: 'NETWORK_ERROR',
+        message: errorMessage,
+        keys: keysToFetch
+      });
       for (const key of keysToFetch) {
+        console.log(`[PromptRouter] Fallback (NETWORK_ERROR): ${key} 使用默认值`);
         result[key] = DEFAULT_PROMPTS[key] || '';
       }
     }
