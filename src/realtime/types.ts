@@ -256,6 +256,8 @@ export interface RealtimeClientConfig {
   onError?: (error: Error) => void;
 }
 
+export type RealtimeSubscribeStatus = 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR' | 'RETRYING' | 'TIMED_OUT' | string;
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 // ============================================
@@ -291,6 +293,7 @@ export interface SubscribeAgentEventsOptions {
   onMessageCreated?: (message: ChatMessage) => void;
   onAgentEvent?: (event: DbAgentEvent) => void;
   onError?: (error: Error) => void;
+  onStatusChange?: (status: RealtimeSubscribeStatus | undefined, error?: Error | null) => void;
 }
 
 export interface SubscribeFileEventsOptions {
@@ -301,12 +304,14 @@ export interface SubscribeFileEventsOptions {
   onFileDeleted?: (fileId: string) => void;
   onFileEvent?: (event: DbFileEvent) => void;
   onError?: (error: Error) => void;
+  onStatusChange?: (status: RealtimeSubscribeStatus | undefined, error?: Error | null) => void;
 }
 
 export interface SubscribeBuildLogsOptions {
   projectId: string;
   onLogCreated?: (log: BuildLog) => void;
   onError?: (error: Error) => void;
+  onStatusChange?: (status: RealtimeSubscribeStatus | undefined, error?: Error | null) => void;
 }
 
 // ============================================

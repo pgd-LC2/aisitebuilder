@@ -16,7 +16,7 @@ import type { SubscribeAgentEventsOptions, DbAgentEvent } from './types';
  * @returns 取消订阅函数
  */
 export function subscribeAgentEvents(options: SubscribeAgentEventsOptions): () => void {
-  const { projectId, onTaskUpdate, onMessageCreated, onAgentEvent, onError } = options;
+  const { projectId, onTaskUpdate, onMessageCreated, onAgentEvent, onError, onStatusChange } = options;
 
   if (!projectId) {
     console.warn('[subscribeAgentEvents] projectId 为空，跳过订阅');
@@ -36,7 +36,8 @@ export function subscribeAgentEvents(options: SubscribeAgentEventsOptions): () =
         (task) => {
           console.log('[subscribeAgentEvents] 收到任务更新:', task.id, task.status);
           onTaskUpdate(task);
-        }
+        },
+        onStatusChange
       );
       unsubscribers.push(unsubscribeTask);
     }
@@ -51,7 +52,8 @@ export function subscribeAgentEvents(options: SubscribeAgentEventsOptions): () =
         (message) => {
           console.log('[subscribeAgentEvents] 收到新消息:', message.id, message.role);
           onMessageCreated(message);
-        }
+        },
+        onStatusChange
       );
       unsubscribers.push(unsubscribeMessage);
     }
@@ -66,7 +68,8 @@ export function subscribeAgentEvents(options: SubscribeAgentEventsOptions): () =
         (event) => {
           console.log('[subscribeAgentEvents] 收到 agent_events:', event.id, event.type);
           onAgentEvent(event);
-        }
+        },
+        onStatusChange
       );
       unsubscribers.push(unsubscribeAgentEvent);
     }

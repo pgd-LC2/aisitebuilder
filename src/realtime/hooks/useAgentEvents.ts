@@ -13,7 +13,13 @@ import { messageService } from '../../services/messageService';
 import { aiTaskService } from '../../services/aiTaskService';
 import { imageProxyService } from '../../services/imageProxyService';
 import { subscribeAgentEvents } from '../subscribeAgentEvents';
-import type { AgentState, AgentAction, UseAgentEventsOptions, UseAgentEventsReturn } from '../types';
+import type {
+  AgentState,
+  AgentAction,
+  UseAgentEventsOptions,
+  UseAgentEventsReturn,
+  RealtimeSubscribeStatus
+} from '../types';
 
 // 初始状态
 const initialState: AgentState = {
@@ -157,6 +163,26 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     onMessageReceivedRef.current?.(message);
   }, []);
 
+  const handleStatusChange = useCallback(
+    (status?: RealtimeSubscribeStatus, error?: Error | null) => {
+      if (status === 'SUBSCRIBED') {
+        setIsConnected(true);
+        return;
+      }
+
+      if (status === 'RETRYING') {
+        setIsConnected(false);
+        return;
+      }
+
+      if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
+        setIsConnected(false);
+        refreshMessages();
+      }
+    },
+    [refreshMessages]
+  );
+
   // 处理任务更新的内部函数（用于订阅回调）
   const handleTaskUpdateInternal = useCallback(async (task: AITask) => {
     console.log('[useAgentEvents] 任务更新:', task.id, task.status, 'result:', task.result);
@@ -265,17 +291,18 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       onError: (error) => {
         console.error('[useAgentEvents] 订阅错误:', error);
         dispatch({ type: 'SET_ERROR', payload: error.message });
-      }
+        setIsConnected(false);
+        refreshMessages();
+      },
+      onStatusChange: handleStatusChange
     });
-
-    setIsConnected(true);
 
     return () => {
       console.log('[useAgentEvents] 清理订阅, projectId:', projectId);
       unsubscribe();
       setIsConnected(false);
     };
-  }, [projectId, refreshMessages, handleTaskUpdateInternal]);
+  }, [handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal]);
 
   // 清理 blob URLs
   useEffect(() => {

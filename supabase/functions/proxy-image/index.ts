@@ -43,9 +43,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 从 Authorization header 中提取 JWT token
-    const token = authHeader.replace('Bearer ', '');
-    
     // 使用 service role key 创建 Supabase 客户端，并手动验证用户 token
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
