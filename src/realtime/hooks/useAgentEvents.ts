@@ -94,6 +94,11 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   const loadVersionRef = useRef(0);
   const lastFetchAtRef = useRef(0);
   
+  // 追踪 hook 是否仍然挂载/激活，用于防止卸载后的操作
+  const isMountedRef = useRef(true);
+  const currentProjectIdRef = useRef(projectId);
+  currentProjectIdRef.current = projectId;
+  
   // 使用 ref 存储回调，避免订阅循环
   const onTaskCompletedRef = useRef(onTaskCompleted);
   const onMessageReceivedRef = useRef(onMessageReceived);
@@ -102,7 +107,16 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
   // 加载消息列表
   const refreshMessages = useCallback(async () => {
-    if (!projectId) return;
+    // 检查是否仍然挂载且 projectId 有效
+    if (!projectId || !isMountedRef.current) {
+      return;
+    }
+    
+    // 检查 projectId 是否仍然是当前项目
+    if (projectId !== currentProjectIdRef.current) {
+      console.log(`[useAgentEvents] projectId 已变更，跳过加载`);
+      return;
+    }
 
     loadVersionRef.current += 1;
     const currentVersion = loadVersionRef.current;
@@ -110,9 +124,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
     const { data, error } = await messageService.getMessagesByProjectId(projectId);
 
-    // 检查版本是否过期
-    if (currentVersion < loadVersionRef.current) {
-      console.log(`[useAgentEvents] 版本 ${currentVersion} 已过期，忽略结果`);
+    // 检查是否仍然挂载且版本是否过期
+    if (!isMountedRef.current || currentVersion < loadVersionRef.current) {
+      console.log(`[useAgentEvents] 版本 ${currentVersion} 已过期或组件已卸载，忽略结果`);
       return;
     }
 
@@ -165,6 +179,12 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
   const handleStatusChange = useCallback(
     (status?: RealtimeSubscribeStatus, error?: Error | null) => {
+      // 如果组件已卸载，忽略状态变化
+      if (!isMountedRef.current) {
+        console.log(`[useAgentEvents] 组件已卸载，忽略状态变化: ${status}`);
+        return;
+      }
+
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
         return;
@@ -177,7 +197,10 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
         setIsConnected(false);
-        refreshMessages();
+        // 只有在组件仍然挂载时才刷新消息
+        if (isMountedRef.current) {
+          refreshMessages();
+        }
       }
     },
     [refreshMessages]
@@ -185,6 +208,12 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
   // 处理任务更新的内部函数（用于订阅回调）
   const handleTaskUpdateInternal = useCallback(async (task: AITask) => {
+    // 检查是否仍然挂载
+    if (!isMountedRef.current) {
+      console.log('[useAgentEvents] 组件已卸载，忽略任务更新');
+      return;
+    }
+
     console.log('[useAgentEvents] 任务更新:', task.id, task.status, 'result:', task.result);
 
     if (task.type !== 'chat_reply') {
@@ -205,6 +234,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       console.log('[useAgentEvents] 从 task.result 获取 messageId:', messageId);
 
       if (generatedImages && generatedImages.length > 0 && messageId) {
+        if (!isMountedRef.current) return;
         setMessageImages(prev => ({
           ...prev,
           [messageId]: generatedImages
@@ -212,21 +242,26 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
         const newImageBlobUrls: Record<string, string> = {};
         for (const imagePath of generatedImages) {
+          if (!isMountedRef.current) break;
           const { data: blob, error } = await imageProxyService.fetchImage(imagePath);
           if (blob && !error) {
             const blobUrl = URL.createObjectURL(blob);
             newImageBlobUrls[imagePath] = blobUrl;
           }
         }
-        setImageBlobUrls(prev => ({ ...prev, ...newImageBlobUrls }));
+        if (isMountedRef.current) {
+          setImageBlobUrls(prev => ({ ...prev, ...newImageBlobUrls }));
+        }
       }
 
       // 获取消息
       if (messageId) {
+        if (!isMountedRef.current) return;
         console.log('[useAgentEvents] 尝试通过 messageId 获取消息:', messageId);
         const { data, error } = await messageService.getMessageById(messageId);
         console.log('[useAgentEvents] getMessageById 结果:', { data, error });
         if (data) {
+          if (!isMountedRef.current) return;
           console.log('[useAgentEvents] 获取到任务关联的消息:', data.id, data.role);
           dispatch({ type: 'APPEND_MESSAGE', payload: data });
           onMessageReceivedRef.current?.(data);
@@ -234,9 +269,14 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
           // 消息可能还未写入，延迟刷新
           console.log('[useAgentEvents] 消息未找到，延迟 500ms 后刷新');
           setTimeout(async () => {
+            // 检查是否仍然挂载
+            if (!isMountedRef.current) {
+              console.log('[useAgentEvents] 组件已卸载，取消延迟刷新');
+              return;
+            }
             console.log('[useAgentEvents] 延迟刷新开始');
             const { data: messages } = await messageService.getMessagesByProjectId(task.project_id);
-            if (messages) {
+            if (messages && isMountedRef.current) {
               console.log('[useAgentEvents] 延迟刷新获取到', messages.length, '条消息');
               // 使用增量合并而不是覆盖，避免丢失已 append 的消息
               dispatch({ type: 'SET_MESSAGES', payload: messages });
@@ -250,9 +290,14 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         console.log('[useAgentEvents] task.result 完整内容:', JSON.stringify(task.result));
         // 延迟刷新以获取最新消息
         setTimeout(async () => {
+          // 检查是否仍然挂载
+          if (!isMountedRef.current) {
+            console.log('[useAgentEvents] 组件已卸载，取消延迟刷新');
+            return;
+          }
           console.log('[useAgentEvents] messageId 为空，延迟刷新开始');
           const { data: messages } = await messageService.getMessagesByProjectId(task.project_id);
-          if (messages) {
+          if (messages && isMountedRef.current) {
             console.log('[useAgentEvents] 延迟刷新获取到', messages.length, '条消息');
             dispatch({ type: 'SET_MESSAGES', payload: messages });
           }
@@ -268,6 +313,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
   // 设置订阅 - 只依赖 projectId，避免订阅循环
   useEffect(() => {
+    // 标记为已挂载
+    isMountedRef.current = true;
+    
     if (!projectId) {
       dispatch({ type: 'SET_MESSAGES', payload: [] });
       setIsConnected(false);
@@ -284,11 +332,18 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       projectId,
       onTaskUpdate: handleTaskUpdateInternal,
       onMessageCreated: (message: ChatMessage) => {
+        // 检查是否仍然挂载
+        if (!isMountedRef.current) return;
         console.log('[useAgentEvents] 收到新消息事件:', message.id, message.role);
         dispatch({ type: 'APPEND_MESSAGE', payload: message });
         onMessageReceivedRef.current?.(message);
       },
       onError: (error) => {
+        // 检查是否仍然挂载
+        if (!isMountedRef.current) {
+          console.log('[useAgentEvents] 组件已卸载，忽略错误回调');
+          return;
+        }
         console.error('[useAgentEvents] 订阅错误:', error);
         dispatch({ type: 'SET_ERROR', payload: error.message });
         setIsConnected(false);
@@ -299,6 +354,8 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
     return () => {
       console.log('[useAgentEvents] 清理订阅, projectId:', projectId);
+      // 标记为已卸载，阻止后续回调
+      isMountedRef.current = false;
       unsubscribe();
       setIsConnected(false);
     };
