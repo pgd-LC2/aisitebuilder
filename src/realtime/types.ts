@@ -254,6 +254,13 @@ export interface RealtimeSubscription {
 export interface RealtimeClientConfig {
   onConnectionChange?: (connected: boolean) => void;
   onError?: (error: Error) => void;
+  onChannelFailure?: (params: {
+    channelName: string;
+    table: string;
+    event: RealtimeEvent;
+    filter?: string;
+    error: Error;
+  }) => void;
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
