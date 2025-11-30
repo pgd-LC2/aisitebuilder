@@ -15,6 +15,11 @@ interface ChannelInfo {
   subscriptions: Set<string>;
 }
 
+interface RetryInfo {
+  timeoutId: ReturnType<typeof setTimeout> | null;
+  cancelled: boolean;
+}
+
 interface SubscriptionInfo<T> {
   channelName: string;
   callback: (payload: T) => void;
@@ -25,6 +30,7 @@ class RealtimeClient {
   private static instance: RealtimeClient | null = null;
   private channels: Map<string, ChannelInfo> = new Map();
   private subscriptions: Map<string, SubscriptionInfo<unknown>> = new Map();
+  private retryInfoMap: Map<string, RetryInfo> = new Map();
   private connectionStatus: ConnectionStatus = 'disconnected';
   private config: RealtimeClientConfig = {};
   private initialized = false;
@@ -128,6 +134,11 @@ class RealtimeClient {
       callback: callback as (payload: unknown) => void,
       subscriptionId
     });
+    
+    // 初始化重试信息
+    const retryInfo: RetryInfo = { timeoutId: null, cancelled: false };
+    this.retryInfoMap.set(subscriptionId, retryInfo);
+    
     const maxRetries = 3;
     const baseChannelName = `${channelName}-${subscriptionId}`;
 
@@ -139,8 +150,10 @@ class RealtimeClient {
     };
 
     const createAndSubscribe = (retryCount: number): void => {
-      if (!this.subscriptions.has(subscriptionId)) {
-        console.warn(`[RealtimeClient] 订阅 ${subscriptionId} 已被移除，跳过重试`);
+      // 检查订阅是否已被取消或移除
+      const currentRetryInfo = this.retryInfoMap.get(subscriptionId);
+      if (!this.subscriptions.has(subscriptionId) || currentRetryInfo?.cancelled) {
+        console.log(`[RealtimeClient] 订阅 ${subscriptionId} 已被取消或移除，跳过创建`);
         return;
       }
 
@@ -184,6 +197,13 @@ class RealtimeClient {
       );
 
       const retryWithBackoff = (): void => {
+        // 检查订阅是否已被取消
+        const currentRetryInfo = this.retryInfoMap.get(subscriptionId);
+        if (currentRetryInfo?.cancelled) {
+          console.log(`[RealtimeClient] 订阅 ${subscriptionId} 已被取消，跳过重试`);
+          return;
+        }
+
         const nextRetry = retryCount + 1;
         const backoff = Math.min(1000 * 2 ** (retryCount - 1), 8000);
 
@@ -207,13 +227,21 @@ class RealtimeClient {
           handleAllChannelDisconnected();
           // 通知外部最终失败
           onStatusChange?.('CHANNEL_ERROR', finalError);
+          // 清理重试信息
+          this.retryInfoMap.delete(subscriptionId);
           return;
         }
 
-        console.warn(`[RealtimeClient] 频道 ${uniqueChannelName} 状态异常，${backoff}ms 后重试（第 ${nextRetry} 次）`);
-        setTimeout(() => {
+        console.log(`[RealtimeClient] 频道 ${uniqueChannelName} 状态异常，${backoff}ms 后重试（第 ${nextRetry} 次）`);
+        
+        // 存储 timeout ID 以便取消
+        const timeoutId = setTimeout(() => {
           createAndSubscribe(nextRetry);
         }, backoff);
+        
+        if (currentRetryInfo) {
+          currentRetryInfo.timeoutId = timeoutId;
+        }
       };
 
       // 调用 .subscribe() 启动频道（在 .on() 之后调用）
@@ -275,6 +303,17 @@ class RealtimeClient {
       return;
     }
 
+    // 取消待执行的重试
+    const retryInfo = this.retryInfoMap.get(subscriptionId);
+    if (retryInfo) {
+      retryInfo.cancelled = true;
+      if (retryInfo.timeoutId) {
+        clearTimeout(retryInfo.timeoutId);
+        console.log(`[RealtimeClient] unsubscribe: 已取消订阅 ${subscriptionId} 的待执行重试`);
+      }
+      this.retryInfoMap.delete(subscriptionId);
+    }
+
     const { channelName } = subscriptionInfo;
     const channelInfo = this.channels.get(channelName);
 
@@ -310,7 +349,17 @@ class RealtimeClient {
     const existingChannels = supabase.getChannels?.() || [];
     console.log('[RealtimeClient] cleanup: 清理所有订阅');
     console.log('[RealtimeClient] cleanup: 清理前 supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
-    console.log(`[RealtimeClient] cleanup: 当前管理的频道数: ${this.channels.size}，订阅数: ${this.subscriptions.size}`);
+    console.log(`[RealtimeClient] cleanup: 当前管理的频道数: ${this.channels.size}，订阅数: ${this.subscriptions.size}，待执行重试数: ${this.retryInfoMap.size}`);
+
+    // 取消所有待执行的重试
+    this.retryInfoMap.forEach((retryInfo, subscriptionId) => {
+      retryInfo.cancelled = true;
+      if (retryInfo.timeoutId) {
+        clearTimeout(retryInfo.timeoutId);
+        console.log(`[RealtimeClient] cleanup: 已取消订阅 ${subscriptionId} 的待执行重试`);
+      }
+    });
+    this.retryInfoMap.clear();
 
     // 关闭所有频道
     this.channels.forEach((channelInfo, channelName) => {
