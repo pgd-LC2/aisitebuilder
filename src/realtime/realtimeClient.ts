@@ -314,15 +314,16 @@ class RealtimeClient {
       return;
     }
 
-    // 取消待执行的重试
+    // 取消待执行的重试（不删除 retryInfo，保留 cancelled 标记供后续回调检查）
     const retryInfo = this.retryInfoMap.get(subscriptionId);
     if (retryInfo) {
       retryInfo.cancelled = true;
       if (retryInfo.timeoutId) {
         clearTimeout(retryInfo.timeoutId);
+        retryInfo.timeoutId = null;
         console.log(`[RealtimeClient] unsubscribe: 已取消订阅 ${subscriptionId} 的待执行重试`);
       }
-      this.retryInfoMap.delete(subscriptionId);
+      // 注意：不删除 retryInfo，保留 cancelled 标记供后续异步回调检查
     }
 
     const { channelName } = subscriptionInfo;
