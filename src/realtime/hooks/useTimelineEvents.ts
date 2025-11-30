@@ -8,8 +8,6 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import type { BuildLog } from '../../types/project';
-import { subscribeBuildLogs } from '../subscribeBuildLogs';
 import { subscribeAgentEvents } from '../subscribeAgentEvents';
 import type {
   TimelineEvent,
@@ -115,172 +113,9 @@ function findCurrentPhase(events: TimelineEvent[]): AgentPhase | null {
   return null;
 }
 
-function parseBuildLogToTimelineEvent(log: BuildLog, projectId: string): TimelineEvent | null {
-  const message = log.message;
-  const timestamp = log.created_at;
-  const id = log.id;
-  const taskId = (log.metadata?.taskId as string) || '';
-
-  if (message.includes('[SelfRepairLoop]')) {
-    const attemptMatch = message.match(/Attempt (\d+)\/(\d+)/);
-    const attemptNumber = attemptMatch ? parseInt(attemptMatch[1], 10) : 1;
-    const maxAttempts = attemptMatch ? parseInt(attemptMatch[2], 10) : 3;
-    
-    let result: 'pending' | 'success' | 'failed' = 'pending';
-    if (message.includes('成功') || message.includes('success')) {
-      result = 'success';
-    } else if (message.includes('失败') || message.includes('failed')) {
-      result = 'failed';
-    }
-
-    return {
-      id,
-      type: 'self_repair',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        attemptNumber,
-        maxAttempts,
-        trigger: message,
-        result,
-      },
-    };
-  }
-
-  if (message.includes('[move]') || message.includes('[rename]') || message.includes('移动文件')) {
-    const pathMatch = message.match(/(?:from\s+)?([^\s→]+)\s*(?:→|to)\s*([^\s]+)/i);
-    const fromPath = pathMatch ? pathMatch[1] : '';
-    const toPath = pathMatch ? pathMatch[2] : '';
-
-    return {
-      id,
-      type: 'file_update',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        path: toPath,
-        op: 'move',
-        fromPath,
-        toPath,
-        summary: message,
-      },
-    };
-  }
-
-  if (message.includes('write_file') || message.includes('写入文件') || message.includes('创建文件')) {
-    const pathMatch = message.match(/(?:path|文件)[:\s]*([^\s,]+)/i);
-    const path = pathMatch ? pathMatch[1] : '';
-    const isCreate = message.includes('创建') || message.includes('create');
-
-    return {
-      id,
-      type: 'file_update',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        path,
-        op: isCreate ? 'create' : 'update',
-        summary: message,
-      },
-    };
-  }
-
-  if (message.includes('delete_file') || message.includes('删除文件')) {
-    const pathMatch = message.match(/(?:path|文件)[:\s]*([^\s,]+)/i);
-    const path = pathMatch ? pathMatch[1] : '';
-
-    return {
-      id,
-      type: 'file_update',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        path,
-        op: 'delete',
-        summary: message,
-      },
-    };
-  }
-
-  if (message.includes('move_file')) {
-    const fromMatch = message.match(/fromPath[:\s]*([^\s,]+)/i);
-    const toMatch = message.match(/toPath[:\s]*([^\s,]+)/i);
-    const fromPath = fromMatch ? fromMatch[1] : '';
-    const toPath = toMatch ? toMatch[1] : '';
-    const success = !message.includes('失败') && !message.includes('error');
-
-    return {
-      id,
-      type: 'tool_call',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        toolName: 'move_file',
-        argsSummary: `${fromPath} → ${toPath}`,
-        success,
-        fromPath,
-        toPath,
-      },
-    };
-  }
-
-  const toolMatch = message.match(/(?:调用|call|tool)[:\s]*(list_files|read_file|write_file|delete_file|search_files|get_project_structure|generate_image)/i);
-  if (toolMatch) {
-    const toolName = toolMatch[1];
-    const success = !message.includes('失败') && !message.includes('error');
-
-    return {
-      id,
-      type: 'tool_call',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        toolName,
-        argsSummary: message,
-        success,
-      },
-    };
-  }
-
-  const phaseMatch = message.match(/(?:进入|enter|phase)[:\s]*(planner|coder|reviewer|debugger)/i);
-  if (phaseMatch) {
-    const phase = phaseMatch[1].toLowerCase() as AgentPhase;
-
-    return {
-      id,
-      type: 'agent_phase',
-      timestamp,
-      taskId,
-      projectId,
-      payload: {
-        phase,
-        action: 'enter',
-        summary: message,
-      },
-    };
-  }
-
-  const level = log.log_type === 'error' ? 'error' : log.log_type === 'success' ? 'info' : 'info';
-
-  return {
-    id,
-    type: 'log',
-    timestamp,
-    taskId,
-    projectId,
-    payload: {
-      level,
-      message,
-      metadata: log.metadata,
-    },
-  };
-}
+// parseBuildLogToTimelineEvent 函数已移除
+// build_logs 订阅现在由 useBuildLogs hook 独立处理，避免重复订阅
+// Timeline 组件现在只依赖 agent_events 表的结构化事件
 
 /**
  * Step 3: 将 DbAgentEvent 转换为 TimelineEvent
@@ -441,26 +276,8 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
 
     console.log('[useTimelineEvents] 设置订阅, projectId:', projectId);
 
-    // 订阅 build_logs 表（兼容旧的日志解析方式）
-    const unsubscribeBuildLogs = subscribeBuildLogs({
-      projectId,
-      onLogCreated: (log: BuildLog) => {
-        if (processedLogIdsRef.current.has(log.id)) {
-          return;
-        }
-        processedLogIdsRef.current.add(log.id);
-
-        const event = parseBuildLogToTimelineEvent(log, projectId);
-        if (event) {
-          dispatch({ type: 'ADD_EVENT', payload: event });
-        }
-      },
-      onError: (error) => {
-        console.error('[useTimelineEvents] build_logs 订阅错误:', error);
-      },
-    });
-
-    // Step 3: 订阅 agent_events 表（新的结构化事件）
+    // Step 3: 只订阅 agent_events 表（新的结构化事件）
+    // 注意：build_logs 订阅已移至 useBuildLogs hook，避免重复订阅导致频道冲突
     const unsubscribeAgentEvents = subscribeAgentEvents({
       projectId,
       onAgentEvent: (dbEvent: DbAgentEvent) => {
@@ -482,7 +299,6 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
 
     return () => {
       console.log('[useTimelineEvents] 清理订阅, projectId:', projectId);
-      unsubscribeBuildLogs();
       unsubscribeAgentEvents();
       setIsConnected(false);
     };
