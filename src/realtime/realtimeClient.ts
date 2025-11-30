@@ -111,8 +111,7 @@ class RealtimeClient {
     event: RealtimeEvent,
     filter: string | undefined,
     callback: (payload: T) => void,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _onStatusChange?: (status: string | undefined, error?: Error | null) => void
+    onStatusChange?: (status: string | undefined, error?: Error | null) => void
   ): () => void {
     if (typeof window === 'undefined') {
       console.warn('[RealtimeClient] 无法在服务端订阅');
@@ -188,6 +187,9 @@ class RealtimeClient {
         const nextRetry = retryCount + 1;
         const backoff = Math.min(1000 * 2 ** (retryCount - 1), 8000);
 
+        // 通知外部正在重试
+        onStatusChange?.('RETRYING', null);
+
         supabase.removeChannel(channelInfo.channel);
         this.channels.delete(uniqueChannelName);
 
@@ -203,6 +205,8 @@ class RealtimeClient {
             error: finalError
           });
           handleAllChannelDisconnected();
+          // 通知外部最终失败
+          onStatusChange?.('CHANNEL_ERROR', finalError);
           return;
         }
 
@@ -240,7 +244,12 @@ class RealtimeClient {
         if (status === 'SUBSCRIBED') {
           this.connectionStatus = 'connected';
           this.config.onConnectionChange?.(true);
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          // 通知外部订阅成功
+          onStatusChange?.('SUBSCRIBED', null);
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // 通知外部状态变化
+          const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
+          onStatusChange?.(status, errorObj);
           retryWithBackoff();
         }
       });
