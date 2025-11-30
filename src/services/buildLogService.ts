@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { BuildLog, BuildLogType } from '../types/project';
+import { subscribeBuildLogs as subscribeToLogs } from '../realtime/subscribeBuildLogs';
 
 export const buildLogService = {
   async addBuildLog(
@@ -39,24 +40,21 @@ export const buildLogService = {
     return { data, error };
   },
 
-  async subscribeToBuildLogs(projectId: string, callback: (log: BuildLog) => void) {
-    const channel = supabase
-      .channel(`build-logs-${projectId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'build_logs',
-          filter: `project_id=eq.${projectId}`
-        },
-        (payload) => {
-          callback(payload.new as BuildLog);
-        }
-      )
-      .subscribe();
+  /**
+   * 订阅构建日志
+   * 
+   * 使用统一的 realtime 封装，避免直接调用 supabase.channel()
+   */
+  subscribeToBuildLogs(projectId: string, callback: (log: BuildLog) => void) {
+    // 调用统一封装并返回取消订阅函数
+    const unsubscribe = subscribeToLogs({
+      projectId,
+      onLogCreated: callback,
+      onError: (err) => console.error('[buildLogService] subscribe error', err)
+    });
 
-    return channel;
+    // 为兼容旧接口，返回包含 unsubscribe 的对象
+    return { unsubscribe };
   },
 
   async clearBuildLogs(projectId: string): Promise<{ error: any }> {

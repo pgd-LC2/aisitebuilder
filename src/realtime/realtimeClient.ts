@@ -92,37 +92,13 @@ class RealtimeClient {
   }
 
   /**
-   * 获取或创建频道
-   */
-  private getOrCreateChannel(channelName: string): ChannelInfo {
-    let channelInfo = this.channels.get(channelName);
-
-    if (!channelInfo) {
-      // 先移除可能存在的旧频道
-      supabase.getChannels().forEach(existingChannel => {
-        if (existingChannel.topic === channelName) {
-          console.log(`[RealtimeClient] 移除旧频道: ${channelName}`);
-          supabase.removeChannel(existingChannel);
-        }
-      });
-
-      const channel = supabase.channel(channelName);
-      channelInfo = {
-        channel,
-        refCount: 0,
-        subscriptions: new Set()
-      };
-      this.channels.set(channelName, channelInfo);
-      console.log(`[RealtimeClient] 创建新频道: ${channelName}`);
-    }
-
-    return channelInfo;
-  }
-
-  /**
    * 订阅数据库变更事件
    * 
-   * @param channelName 频道名称
+   * 重要：每个订阅都会创建独立的 channel，确保 .on() 在 .subscribe() 之前调用。
+   * 这是因为 Supabase Realtime 要求在调用 .subscribe() 之前配置所有 .on() 监听器。
+   * 如果在 .subscribe() 之后调用 .on()，新的监听器可能不会被正确注册到服务器。
+   * 
+   * @param channelName 频道名称（用于日志标识）
    * @param table 表名
    * @param event 事件类型 (INSERT, UPDATE, DELETE)
    * @param filter 过滤条件 (例如: "project_id=eq.xxx")
@@ -146,28 +122,40 @@ class RealtimeClient {
     }
 
     const subscriptionId = this.generateSubscriptionId();
-    const channelInfo = this.getOrCreateChannel(channelName);
+    
+    // 为每个订阅创建唯一的 channel 名称，确保 .on() 在 .subscribe() 之前调用
+    // 这避免了共享 channel 时 .on() 在 .subscribe() 之后调用导致监听器未注册的问题
+    const uniqueChannelName = `${channelName}-${subscriptionId}`;
+    
+    // 打印当前 Supabase 客户端的 channel 列表用于调试
+    const existingChannels = supabase.getChannels?.() || [];
+    console.log(`[RealtimeClient] 创建订阅 ${subscriptionId}，频道: ${uniqueChannelName}`);
+    console.log('[RealtimeClient] supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+
+    // 创建新的 channel
+    const channel = supabase.channel(uniqueChannelName);
+    
+    // 记录 channel 信息
+    const channelInfo: ChannelInfo = {
+      channel,
+      refCount: 1,
+      subscriptions: new Set([subscriptionId])
+    };
+    this.channels.set(uniqueChannelName, channelInfo);
 
     // 记录订阅信息
     this.subscriptions.set(subscriptionId, {
-      channelName,
+      channelName: uniqueChannelName,
       callback: callback as (payload: unknown) => void,
       subscriptionId
     });
 
-    channelInfo.subscriptions.add(subscriptionId);
-    channelInfo.refCount += 1;
-
-    // 配置频道监听
-    // 使用类型断言绕过 Supabase 类型定义的限制
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channel = channelInfo.channel as any;
-    
+    // 配置频道监听（必须在 .subscribe() 之前调用）
     const config = filter 
       ? { event, schema: 'public', table, filter }
       : { event, schema: 'public', table };
     
-    channel.on(
+    (channel as unknown as { on: (type: string, config: object, callback: (payload: { new: unknown }) => void) => void }).on(
       'postgres_changes',
       config,
       (payload: { new: unknown }) => {
@@ -176,26 +164,44 @@ class RealtimeClient {
       }
     );
 
-    // 如果是第一个订阅，启动频道
-    if (channelInfo.refCount === 1) {
-      channelInfo.channel.subscribe((status, err) => {
-        console.log(`[RealtimeClient] 频道 ${channelName} 状态: ${status}`);
-        
-        if (err) {
-          console.error(`[RealtimeClient] 频道 ${channelName} 错误:`, err);
-          this.connectionStatus = 'error';
-          this.config.onError?.(new Error(err.message));
-        }
+    // 调用 .subscribe() 启动频道（在 .on() 之后调用）
+    channel.subscribe((statusOrObj: string | { status?: string; state?: string; error?: unknown; err?: unknown }) => {
+      // 打印原始回调返回值用于调试
+      console.log(`[RealtimeClient] 频道 ${uniqueChannelName} subscribe 原始回调:`, statusOrObj);
 
-        if (status === 'SUBSCRIBED') {
-          this.connectionStatus = 'connected';
-          this.config.onConnectionChange?.(true);
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          this.connectionStatus = 'disconnected';
-          this.config.onConnectionChange?.(false);
-        }
-      });
-    }
+      // 同时支持字符串和对象两种形式的 status
+      let status: string | undefined;
+      let err: unknown = null;
+
+      if (typeof statusOrObj === 'string') {
+        status = statusOrObj;
+      } else if (statusOrObj && typeof statusOrObj === 'object') {
+        // supabase v2 有时返回 { status: 'SUBSCRIBED', ... } 或 { state: 'SUBSCRIBED', ... }
+        status = statusOrObj.status ?? statusOrObj.state;
+        err = statusOrObj.error ?? statusOrObj.err ?? null;
+      }
+
+      console.log(`[RealtimeClient] 频道 ${uniqueChannelName} 状态: ${status}`);
+      
+      if (err) {
+        console.error(`[RealtimeClient] 频道 ${uniqueChannelName} 错误:`, err);
+        // 不再将单个 channel 的错误设置为全局 error 状态
+        // 只记录错误，不影响其他 channel
+        const errMessage = err instanceof Error ? err.message : String(err);
+        this.config.onError?.(new Error(errMessage));
+      }
+
+      if (status === 'SUBSCRIBED') {
+        this.connectionStatus = 'connected';
+        this.config.onConnectionChange?.(true);
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        // 只有当所有 channel 都关闭时才设置为 disconnected
+        // 单个 channel 的错误不应影响全局状态
+        console.warn(`[RealtimeClient] 频道 ${uniqueChannelName} 状态异常: ${status}`);
+      }
+    });
+
+    console.log(`[RealtimeClient] 订阅已创建: ${uniqueChannelName}，表: ${table}，事件: ${event}`);
 
     // 返回取消订阅函数
     return () => {
@@ -209,11 +215,14 @@ class RealtimeClient {
   private unsubscribe(subscriptionId: string): void {
     const subscriptionInfo = this.subscriptions.get(subscriptionId);
     if (!subscriptionInfo) {
+      console.log(`[RealtimeClient] unsubscribe: 订阅 ${subscriptionId} 不存在`);
       return;
     }
 
     const { channelName } = subscriptionInfo;
     const channelInfo = this.channels.get(channelName);
+
+    console.log(`[RealtimeClient] unsubscribe: 取消订阅 ${subscriptionId}，频道: ${channelName}，当前 refCount: ${channelInfo?.refCount}`);
 
     if (channelInfo) {
       channelInfo.subscriptions.delete(subscriptionId);
@@ -221,9 +230,16 @@ class RealtimeClient {
 
       // 如果没有更多订阅，关闭频道
       if (channelInfo.refCount <= 0) {
-        console.log(`[RealtimeClient] 关闭频道: ${channelName}`);
+        // 打印当前 channel 列表用于调试
+        const existingChannels = supabase.getChannels?.() || [];
+        console.log(`[RealtimeClient] 关闭频道: ${channelName}，原因: refCount 为 0`);
+        console.log('[RealtimeClient] 关闭前 supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+        
         supabase.removeChannel(channelInfo.channel);
         this.channels.delete(channelName);
+        
+        const remainingChannels = supabase.getChannels?.() || [];
+        console.log('[RealtimeClient] 关闭后 supabase.getChannels()', remainingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
       }
     }
 
@@ -234,11 +250,15 @@ class RealtimeClient {
    * 清理所有订阅
    */
   cleanup(): void {
-    console.log('[RealtimeClient] 清理所有订阅');
+    // 打印清理前的 channel 列表用于调试
+    const existingChannels = supabase.getChannels?.() || [];
+    console.log('[RealtimeClient] cleanup: 清理所有订阅');
+    console.log('[RealtimeClient] cleanup: 清理前 supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+    console.log(`[RealtimeClient] cleanup: 当前管理的频道数: ${this.channels.size}，订阅数: ${this.subscriptions.size}`);
 
     // 关闭所有频道
     this.channels.forEach((channelInfo, channelName) => {
-      console.log(`[RealtimeClient] 关闭频道: ${channelName}`);
+      console.log(`[RealtimeClient] cleanup: 关闭频道: ${channelName}，refCount: ${channelInfo.refCount}`);
       supabase.removeChannel(channelInfo.channel);
     });
 
@@ -246,6 +266,10 @@ class RealtimeClient {
     this.subscriptions.clear();
     this.connectionStatus = 'disconnected';
     this.config.onConnectionChange?.(false);
+
+    // 打印清理后的 channel 列表用于调试
+    const remainingChannels = supabase.getChannels?.() || [];
+    console.log('[RealtimeClient] cleanup: 清理后 supabase.getChannels()', remainingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
   }
 
   /**
