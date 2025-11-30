@@ -93,29 +93,43 @@ class RealtimeClient {
 
   /**
    * 获取或创建频道
+   * 
+   * 优先复用已有 channel，避免 remove/recreate 竞态条件
    */
   private getOrCreateChannel(channelName: string): ChannelInfo {
     let channelInfo = this.channels.get(channelName);
 
-    if (!channelInfo) {
-      // 先移除可能存在的旧频道
-      supabase.getChannels().forEach(existingChannel => {
-        if (existingChannel.topic === channelName) {
-          console.log(`[RealtimeClient] 移除旧频道: ${channelName}`);
-          supabase.removeChannel(existingChannel);
-        }
-      });
+    if (channelInfo) {
+      return channelInfo;
+    }
 
-      const channel = supabase.channel(channelName);
+    // 打印当前 Supabase 客户端的 channel 列表用于调试
+    const existingChannels = supabase.getChannels?.() || [];
+    console.log('[RealtimeClient] supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+
+    // 尝试复用 Supabase 客户端已有的 channel（避免 remove/recreate 竞态条件）
+    const existing = existingChannels.find((c: RealtimeChannel) => c.topic === channelName);
+    if (existing) {
+      console.log(`[RealtimeClient] 复用已有 channel: ${channelName}`);
+      const channel = existing as RealtimeChannel;
       channelInfo = {
         channel,
         refCount: 0,
         subscriptions: new Set()
       };
       this.channels.set(channelName, channelInfo);
-      console.log(`[RealtimeClient] 创建新频道: ${channelName}`);
+      return channelInfo;
     }
 
+    // 否则创建新 channel
+    const channel = supabase.channel(channelName);
+    channelInfo = {
+      channel,
+      refCount: 0,
+      subscriptions: new Set()
+    };
+    this.channels.set(channelName, channelInfo);
+    console.log(`[RealtimeClient] 创建新频道: ${channelName}`);
     return channelInfo;
   }
 
@@ -160,7 +174,7 @@ class RealtimeClient {
 
     // 配置频道监听
     // 使用类型断言绕过 Supabase 类型定义的限制
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const channel = channelInfo.channel as any;
     
     const config = filter 
@@ -178,13 +192,30 @@ class RealtimeClient {
 
     // 如果是第一个订阅，启动频道
     if (channelInfo.refCount === 1) {
-      channelInfo.channel.subscribe((status, err) => {
+       
+      channelInfo.channel.subscribe((statusOrObj: any) => {
+        // 打印原始回调返回值用于调试
+        console.log(`[RealtimeClient] 频道 ${channelName} subscribe 原始回调:`, statusOrObj);
+
+        // 同时支持字符串和对象两种形式的 status
+        let status: string | undefined;
+         
+        let err: any = null;
+
+        if (typeof statusOrObj === 'string') {
+          status = statusOrObj;
+        } else if (statusOrObj && typeof statusOrObj === 'object') {
+          // supabase v2 有时返回 { status: 'SUBSCRIBED', ... } 或 { state: 'SUBSCRIBED', ... }
+          status = statusOrObj.status ?? statusOrObj.state;
+          err = statusOrObj.error ?? statusOrObj.err ?? null;
+        }
+
         console.log(`[RealtimeClient] 频道 ${channelName} 状态: ${status}`);
         
         if (err) {
           console.error(`[RealtimeClient] 频道 ${channelName} 错误:`, err);
           this.connectionStatus = 'error';
-          this.config.onError?.(new Error(err.message));
+          this.config.onError?.(new Error(err?.message || String(err)));
         }
 
         if (status === 'SUBSCRIBED') {
@@ -209,11 +240,14 @@ class RealtimeClient {
   private unsubscribe(subscriptionId: string): void {
     const subscriptionInfo = this.subscriptions.get(subscriptionId);
     if (!subscriptionInfo) {
+      console.log(`[RealtimeClient] unsubscribe: 订阅 ${subscriptionId} 不存在`);
       return;
     }
 
     const { channelName } = subscriptionInfo;
     const channelInfo = this.channels.get(channelName);
+
+    console.log(`[RealtimeClient] unsubscribe: 取消订阅 ${subscriptionId}，频道: ${channelName}，当前 refCount: ${channelInfo?.refCount}`);
 
     if (channelInfo) {
       channelInfo.subscriptions.delete(subscriptionId);
@@ -221,9 +255,16 @@ class RealtimeClient {
 
       // 如果没有更多订阅，关闭频道
       if (channelInfo.refCount <= 0) {
-        console.log(`[RealtimeClient] 关闭频道: ${channelName}`);
+        // 打印当前 channel 列表用于调试
+        const existingChannels = supabase.getChannels?.() || [];
+        console.log(`[RealtimeClient] 关闭频道: ${channelName}，原因: refCount 为 0`);
+        console.log('[RealtimeClient] 关闭前 supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+        
         supabase.removeChannel(channelInfo.channel);
         this.channels.delete(channelName);
+        
+        const remainingChannels = supabase.getChannels?.() || [];
+        console.log('[RealtimeClient] 关闭后 supabase.getChannels()', remainingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
       }
     }
 
@@ -234,11 +275,15 @@ class RealtimeClient {
    * 清理所有订阅
    */
   cleanup(): void {
-    console.log('[RealtimeClient] 清理所有订阅');
+    // 打印清理前的 channel 列表用于调试
+    const existingChannels = supabase.getChannels?.() || [];
+    console.log('[RealtimeClient] cleanup: 清理所有订阅');
+    console.log('[RealtimeClient] cleanup: 清理前 supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+    console.log(`[RealtimeClient] cleanup: 当前管理的频道数: ${this.channels.size}，订阅数: ${this.subscriptions.size}`);
 
     // 关闭所有频道
     this.channels.forEach((channelInfo, channelName) => {
-      console.log(`[RealtimeClient] 关闭频道: ${channelName}`);
+      console.log(`[RealtimeClient] cleanup: 关闭频道: ${channelName}，refCount: ${channelInfo.refCount}`);
       supabase.removeChannel(channelInfo.channel);
     });
 
@@ -246,6 +291,10 @@ class RealtimeClient {
     this.subscriptions.clear();
     this.connectionStatus = 'disconnected';
     this.config.onConnectionChange?.(false);
+
+    // 打印清理后的 channel 列表用于调试
+    const remainingChannels = supabase.getChannels?.() || [];
+    console.log('[RealtimeClient] cleanup: 清理后 supabase.getChannels()', remainingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
   }
 
   /**
