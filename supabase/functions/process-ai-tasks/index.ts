@@ -2015,22 +2015,30 @@ async function processTask(task, supabase, apiKey, projectFilesContext) {
             }
           } else {
             const { result } = await executeToolCall(toolName, args, toolContext);
+            const toolResult = result as { success: boolean; file_path?: string; error?: string };
             
-            if (toolName === 'write_file' && (result as { success: boolean; file_path?: string }).success) {
-              const writeResult = result as { success: boolean; file_path?: string };
-              if (writeResult.file_path) {
-                modifiedFiles.push(writeResult.file_path);
-                await writeBuildLog(supabase, task.project_id, 'success', `文件已写入: ${writeResult.file_path}`);
-              }
-            } else if (toolName === 'delete_file' && (result as { success: boolean }).success) {
-              await writeBuildLog(supabase, task.project_id, 'info', `文件已删除: ${args.path}`);
-            } else if (toolName === 'read_file') {
-              await writeBuildLog(supabase, task.project_id, 'info', `已读取文件: ${args.path}`);
-            } else if (toolName === 'list_files' || toolName === 'get_project_structure') {
-              await writeBuildLog(supabase, task.project_id, 'info', `已获取项目结构`);
-            } else if (toolName === 'search_files') {
-              await writeBuildLog(supabase, task.project_id, 'info', `已搜索关键词: ${args.keyword}`);
+            // Step 3: 检查工具执行是否失败，失败时写入构建日志
+            if (!toolResult.success) {
+              const errorMsg = toolResult.error || '未知错误';
+              await writeBuildLog(supabase, task.project_id, 'error', `工具执行失败 [${toolName}]: ${errorMsg}`);
+              
+              // 记录工具调用失败事件到 agent_events
+              await logAgentEvent(supabase, task.id, task.project_id, 'tool_call', {
+                toolName,
+                toolArgs: args,
+                status: 'failed',
+                error: errorMsg
+              });
             }
+            
+            if (toolName === 'write_file' && toolResult.success) {
+              if (toolResult.file_path) {
+                modifiedFiles.push(toolResult.file_path);
+                // 不再写入详细的文件操作日志到 build_logs（由 agent_events 处理）
+              }
+            }
+            // 移除其他工具的详细日志写入（由 agent_events 表处理）
+            // 只保留错误日志写入 build_logs
             
             toolOutput = JSON.stringify(result);
           }
