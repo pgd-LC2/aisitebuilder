@@ -152,7 +152,7 @@ function App() {
     >
       <header className="bg-white border-b border-gray-200 px-6 py-1.5 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <div className="text-xl font-bold text-gray-900">AI BUILD</div>
+          <img src="/favicon.svg" alt="AI BUILD" className="h-8 w-8" />
           <nav className="flex items-center gap-1">
             <motion.button
               onClick={() => setCurrentView('home')}
