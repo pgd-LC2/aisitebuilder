@@ -11,7 +11,13 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { BuildLog } from '../../types/project';
 import { buildLogService } from '../../services/buildLogService';
 import { subscribeBuildLogs } from '../subscribeBuildLogs';
-import type { BuildLogState, BuildLogAction, UseBuildLogsOptions, UseBuildLogsReturn } from '../types';
+import type {
+  BuildLogState,
+  BuildLogAction,
+  UseBuildLogsOptions,
+  UseBuildLogsReturn,
+  RealtimeSubscribeStatus
+} from '../types';
 
 // 初始状态
 const initialState: BuildLogState = {
@@ -80,6 +86,26 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
     onLogAddedRef.current?.(log);
   }, []);
 
+  const handleStatusChange = useCallback(
+    (status?: RealtimeSubscribeStatus, error?: Error | null) => {
+      if (status === 'SUBSCRIBED') {
+        setIsConnected(true);
+        return;
+      }
+
+      if (status === 'RETRYING') {
+        setIsConnected(false);
+        return;
+      }
+
+      if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
+        setIsConnected(false);
+        refreshLogs();
+      }
+    },
+    [refreshLogs]
+  );
+
   // 设置订阅 - 只依赖 projectId，避免订阅循环
   useEffect(() => {
     if (!projectId) {
@@ -103,17 +129,18 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       },
       onError: (error) => {
         console.error('[useBuildLogs] 订阅错误:', error);
-      }
+        setIsConnected(false);
+        refreshLogs();
+      },
+      onStatusChange: handleStatusChange
     });
-
-    setIsConnected(true);
 
     return () => {
       console.log('[useBuildLogs] 清理订阅, projectId:', projectId);
       unsubscribe();
       setIsConnected(false);
     };
-  }, [projectId, refreshLogs]);
+  }, [handleStatusChange, projectId, refreshLogs]);
 
   return {
     logs: state.logs,

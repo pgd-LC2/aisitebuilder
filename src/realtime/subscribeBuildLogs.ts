@@ -15,7 +15,7 @@ import type { SubscribeBuildLogsOptions } from './types';
  * @returns 取消订阅函数
  */
 export function subscribeBuildLogs(options: SubscribeBuildLogsOptions): () => void {
-  const { projectId, onLogCreated, onError } = options;
+  const { projectId, onLogCreated, onError, onStatusChange } = options;
 
   if (!projectId) {
     console.warn('[subscribeBuildLogs] projectId 为空，跳过订阅');
@@ -32,7 +32,8 @@ export function subscribeBuildLogs(options: SubscribeBuildLogsOptions): () => vo
       (log) => {
         console.log('[subscribeBuildLogs] 收到新日志:', log.id, log.log_type);
         onLogCreated?.(log);
-      }
+      },
+      onStatusChange
     );
 
     console.log(`[subscribeBuildLogs] 已订阅项目 ${projectId} 的构建日志`);

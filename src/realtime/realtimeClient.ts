@@ -110,7 +110,8 @@ class RealtimeClient {
     table: string,
     event: RealtimeEvent,
     filter: string | undefined,
-    callback: (payload: T) => void
+    callback: (payload: T) => void,
+    onStatusChange?: (status: string | undefined, error?: Error | null) => void
   ): () => void {
     if (typeof window === 'undefined') {
       console.warn('[RealtimeClient] 无法在服务端订阅');
@@ -339,10 +340,11 @@ export const subscribeToTable = <T>(
   table: string,
   event: RealtimeEvent,
   filter: string | undefined,
-  callback: (payload: T) => void
+  callback: (payload: T) => void,
+  onStatusChange?: (status: string | undefined, error?: Error | null) => void
 ): (() => void) => {
   const client = getRealtimeClient();
-  return client.subscribe<T>(channelName, table, event, filter, callback);
+  return client.subscribe<T>(channelName, table, event, filter, callback, onStatusChange);
 };
 
 // 导出清理函数
