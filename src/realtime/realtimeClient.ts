@@ -19,7 +19,16 @@ interface SubscriptionInfo<T> {
   channelName: string;
   callback: (payload: T) => void;
   subscriptionId: string;
+  // 用于重试的参数
+  originalChannelName: string;
+  table: string;
+  event: RealtimeEvent;
+  filter: string | undefined;
 }
+
+// 重试配置
+const MAX_RETRY_COUNT = 3;
+const RETRY_DELAY_MS = 1000;
 
 class RealtimeClient {
   private static instance: RealtimeClient | null = null;
@@ -29,6 +38,10 @@ class RealtimeClient {
   private config: RealtimeClientConfig = {};
   private initialized = false;
   private subscriptionCounter = 0;
+  // 记录每个订阅的重试次数
+  private retryCountMap: Map<string, number> = new Map();
+  // 记录正在重试的订阅，避免重复重试
+  private retryingSubscriptions: Set<string> = new Set();
 
   private constructor() {
     // 私有构造函数，确保单例模式
@@ -143,11 +156,15 @@ class RealtimeClient {
     };
     this.channels.set(uniqueChannelName, channelInfo);
 
-    // 记录订阅信息
+    // 记录订阅信息（包含重试所需的参数）
     this.subscriptions.set(subscriptionId, {
       channelName: uniqueChannelName,
       callback: callback as (payload: unknown) => void,
-      subscriptionId
+      subscriptionId,
+      originalChannelName: channelName,
+      table,
+      event,
+      filter
     });
 
     // 配置频道监听（必须在 .subscribe() 之前调用）
@@ -194,10 +211,21 @@ class RealtimeClient {
       if (status === 'SUBSCRIBED') {
         this.connectionStatus = 'connected';
         this.config.onConnectionChange?.(true);
+        // 订阅成功，清除重试计数
+        this.retryCountMap.delete(subscriptionId);
+        this.retryingSubscriptions.delete(subscriptionId);
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        // 只有当所有 channel 都关闭时才设置为 disconnected
-        // 单个 channel 的错误不应影响全局状态
-        console.warn(`[RealtimeClient] 频道 ${uniqueChannelName} 状态异常: ${status}`);
+        // 打印详细错误信息用于调试
+        console.error(`[RealtimeClient] 频道 ${uniqueChannelName} 状态异常:`, {
+          status,
+          fullResponse: JSON.stringify(statusOrObj),
+          table,
+          filter,
+          event
+        });
+        
+        // 触发自动重试
+        this.handleSubscriptionError(subscriptionId, uniqueChannelName, status);
       }
     });
 
@@ -207,6 +235,147 @@ class RealtimeClient {
     return () => {
       this.unsubscribe(subscriptionId);
     };
+  }
+
+  /**
+   * 处理订阅错误，触发自动重试
+   */
+  private handleSubscriptionError(subscriptionId: string, channelName: string, status: string): void {
+    // 检查是否已经在重试中
+    if (this.retryingSubscriptions.has(subscriptionId)) {
+      console.log(`[RealtimeClient] 订阅 ${subscriptionId} 已在重试中，跳过`);
+      return;
+    }
+
+    const subscriptionInfo = this.subscriptions.get(subscriptionId);
+    if (!subscriptionInfo) {
+      console.log(`[RealtimeClient] 订阅 ${subscriptionId} 不存在，无法重试`);
+      return;
+    }
+
+    const retryCount = this.retryCountMap.get(subscriptionId) || 0;
+    
+    if (retryCount >= MAX_RETRY_COUNT) {
+      console.error(`[RealtimeClient] 订阅 ${subscriptionId} 已达到最大重试次数 ${MAX_RETRY_COUNT}，放弃重试`);
+      // 通知错误回调
+      this.config.onError?.(new Error(`频道 ${channelName} 订阅失败，状态: ${status}`));
+      return;
+    }
+
+    // 标记为正在重试
+    this.retryingSubscriptions.add(subscriptionId);
+    this.retryCountMap.set(subscriptionId, retryCount + 1);
+
+    const delay = RETRY_DELAY_MS * (retryCount + 1);
+    console.log(`[RealtimeClient] 订阅 ${subscriptionId} 将在 ${delay}ms 后重试（第 ${retryCount + 1} 次）`);
+
+    // 延迟后重试
+    setTimeout(() => {
+      this.retrySubscription(subscriptionId);
+    }, delay);
+  }
+
+  /**
+   * 重试订阅
+   */
+  private retrySubscription(subscriptionId: string): void {
+    const subscriptionInfo = this.subscriptions.get(subscriptionId);
+    if (!subscriptionInfo) {
+      console.log(`[RealtimeClient] 重试时订阅 ${subscriptionId} 已不存在`);
+      this.retryingSubscriptions.delete(subscriptionId);
+      return;
+    }
+
+    const { originalChannelName, table, event, filter, callback, channelName: oldChannelName } = subscriptionInfo;
+    
+    console.log(`[RealtimeClient] 开始重试订阅 ${subscriptionId}，原频道: ${oldChannelName}`);
+
+    // 先移除旧的频道
+    const oldChannelInfo = this.channels.get(oldChannelName);
+    if (oldChannelInfo) {
+      console.log(`[RealtimeClient] 移除旧频道: ${oldChannelName}`);
+      supabase.removeChannel(oldChannelInfo.channel);
+      this.channels.delete(oldChannelName);
+    }
+
+    // 创建新的唯一频道名称
+    const newUniqueChannelName = `${originalChannelName}-${subscriptionId}-retry${this.retryCountMap.get(subscriptionId)}`;
+    
+    console.log(`[RealtimeClient] 创建新频道: ${newUniqueChannelName}`);
+
+    // 创建新的 channel
+    const channel = supabase.channel(newUniqueChannelName);
+    
+    // 更新 channel 信息
+    const channelInfo: ChannelInfo = {
+      channel,
+      refCount: 1,
+      subscriptions: new Set([subscriptionId])
+    };
+    this.channels.set(newUniqueChannelName, channelInfo);
+
+    // 更新订阅信息中的频道名称
+    subscriptionInfo.channelName = newUniqueChannelName;
+
+    // 配置频道监听（必须在 .subscribe() 之前调用）
+    const config = filter 
+      ? { event, schema: 'public', table, filter }
+      : { event, schema: 'public', table };
+    
+    (channel as unknown as { on: (type: string, config: object, callback: (payload: { new: unknown }) => void) => void }).on(
+      'postgres_changes',
+      config,
+      (payload: { new: unknown }) => {
+        console.log(`[RealtimeClient] 收到事件 ${event} on ${table}:`, payload);
+        callback(payload.new);
+      }
+    );
+
+    // 调用 .subscribe() 启动频道
+    channel.subscribe((statusOrObj: string | { status?: string; state?: string; error?: unknown; err?: unknown }) => {
+      console.log(`[RealtimeClient] 重试频道 ${newUniqueChannelName} subscribe 原始回调:`, statusOrObj);
+
+      let status: string | undefined;
+      let err: unknown = null;
+
+      if (typeof statusOrObj === 'string') {
+        status = statusOrObj;
+      } else if (statusOrObj && typeof statusOrObj === 'object') {
+        status = statusOrObj.status ?? statusOrObj.state;
+        err = statusOrObj.error ?? statusOrObj.err ?? null;
+      }
+
+      console.log(`[RealtimeClient] 重试频道 ${newUniqueChannelName} 状态: ${status}`);
+      
+      if (err) {
+        console.error(`[RealtimeClient] 重试频道 ${newUniqueChannelName} 错误:`, err);
+      }
+
+      if (status === 'SUBSCRIBED') {
+        console.log(`[RealtimeClient] 重试成功！订阅 ${subscriptionId} 已恢复`);
+        this.connectionStatus = 'connected';
+        this.config.onConnectionChange?.(true);
+        // 重试成功，清除重试状态
+        this.retryCountMap.delete(subscriptionId);
+        this.retryingSubscriptions.delete(subscriptionId);
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        console.error(`[RealtimeClient] 重试频道 ${newUniqueChannelName} 状态异常:`, {
+          status,
+          fullResponse: JSON.stringify(statusOrObj),
+          table,
+          filter,
+          event
+        });
+        
+        // 标记为不再重试中，允许下一次重试
+        this.retryingSubscriptions.delete(subscriptionId);
+        
+        // 继续重试
+        this.handleSubscriptionError(subscriptionId, newUniqueChannelName, status);
+      }
+    });
+
+    console.log(`[RealtimeClient] 重试订阅已创建: ${newUniqueChannelName}，表: ${table}，事件: ${event}`);
   }
 
   /**
@@ -264,6 +433,8 @@ class RealtimeClient {
 
     this.channels.clear();
     this.subscriptions.clear();
+    this.retryCountMap.clear();
+    this.retryingSubscriptions.clear();
     this.connectionStatus = 'disconnected';
     this.config.onConnectionChange?.(false);
 
