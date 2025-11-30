@@ -262,10 +262,34 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 // 订阅选项类型
 // ============================================
 
+// 数据库 agent_events 表记录类型
+export interface DbAgentEvent {
+  id: string;
+  task_id: string | null;
+  project_id: string;
+  type: 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error';
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+// 数据库 file_events 表记录类型
+export interface DbFileEvent {
+  id: string;
+  project_id: string;
+  path: string;
+  op: 'create' | 'update' | 'delete' | 'move';
+  summary: string | null;
+  content_ref: string | null;
+  version: string | null;
+  from_path: string | null;
+  created_at: string;
+}
+
 export interface SubscribeAgentEventsOptions {
   projectId: string;
   onTaskUpdate?: (task: AITask) => void;
   onMessageCreated?: (message: ChatMessage) => void;
+  onAgentEvent?: (event: DbAgentEvent) => void;
   onError?: (error: Error) => void;
 }
 
@@ -275,6 +299,7 @@ export interface SubscribeFileEventsOptions {
   onFileCreated?: (file: ProjectFile) => void;
   onFileUpdated?: (file: ProjectFile) => void;
   onFileDeleted?: (fileId: string) => void;
+  onFileEvent?: (event: DbFileEvent) => void;
   onError?: (error: Error) => void;
 }
 

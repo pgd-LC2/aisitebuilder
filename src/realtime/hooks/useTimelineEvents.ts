@@ -3,11 +3,14 @@
  * 
  * 提供 Activity Timeline 事件的实时订阅和状态管理功能。
  * 支持 Bolt 风格的 Agent 行为流展示。
+ * 
+ * Step 3: 新增 agent_events 表订阅，支持实时 Activity Timeline 更新。
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { BuildLog } from '../../types/project';
 import { subscribeBuildLogs } from '../subscribeBuildLogs';
+import { subscribeAgentEvents } from '../subscribeAgentEvents';
 import type {
   TimelineEvent,
   TimelineState,
@@ -21,6 +24,7 @@ import type {
   AgentPhase,
   UseTimelineEventsOptions,
   UseTimelineEventsReturn,
+  DbAgentEvent,
 } from '../types';
 
 const MAX_EVENTS_DEFAULT = 100;
@@ -278,6 +282,139 @@ function parseBuildLogToTimelineEvent(log: BuildLog, projectId: string): Timelin
   };
 }
 
+/**
+ * Step 3: 将 DbAgentEvent 转换为 TimelineEvent
+ * 
+ * 从 agent_events 表接收的事件转换为前端 Timeline 组件使用的格式
+ */
+function parseDbAgentEventToTimelineEvent(dbEvent: DbAgentEvent): TimelineEvent {
+  const { id, task_id, project_id, type, payload, created_at } = dbEvent;
+  const taskId = task_id || '';
+  const timestamp = created_at;
+
+  switch (type) {
+    case 'agent_phase': {
+      const phase = (payload.phase as string)?.toLowerCase() as AgentPhase || 'coder';
+      const status = payload.status as string;
+      const action = status === 'running' || status === 'started' ? 'enter' : 'exit';
+      
+      return {
+        id,
+        type: 'agent_phase',
+        timestamp,
+        taskId,
+        projectId: project_id,
+        payload: {
+          phase,
+          action,
+          summary: payload.taskType as string || '',
+        },
+      };
+    }
+
+    case 'tool_call': {
+      const toolName = payload.toolName as string || 'unknown';
+      const status = payload.status as string;
+      const success = status !== 'failed' && status !== 'error';
+      
+      return {
+        id,
+        type: 'tool_call',
+        timestamp,
+        taskId,
+        projectId: project_id,
+        payload: {
+          toolName,
+          argsSummary: JSON.stringify(payload.toolArgs || {}),
+          resultSummary: payload.result as string,
+          success,
+        },
+      };
+    }
+
+    case 'file_update': {
+      const path = payload.path as string || '';
+      const op = (payload.op as string || 'update') as 'create' | 'update' | 'delete' | 'move';
+      
+      return {
+        id,
+        type: 'file_update',
+        timestamp,
+        taskId,
+        projectId: project_id,
+        payload: {
+          path,
+          op,
+          summary: payload.summary as string,
+          fromPath: payload.fromPath as string,
+        },
+      };
+    }
+
+    case 'self_repair': {
+      const attemptNumber = (payload.attemptNumber as number) || 1;
+      const maxAttempts = (payload.maxAttempts as number) || 3;
+      const status = payload.status as string;
+      
+      let result: 'pending' | 'success' | 'failed' = 'pending';
+      if (status === 'success' || status === 'completed') {
+        result = 'success';
+      } else if (status === 'failed' || status === 'error') {
+        result = 'failed';
+      }
+      
+      return {
+        id,
+        type: 'self_repair',
+        timestamp,
+        taskId,
+        projectId: project_id,
+        payload: {
+          attemptNumber,
+          maxAttempts,
+          trigger: payload.errorType as string || '',
+          errorType: payload.errorType as string,
+          errorMessage: payload.errorMessage as string,
+          suggestion: payload.rootCause as string,
+          result,
+        },
+      };
+    }
+
+    case 'error': {
+      return {
+        id,
+        type: 'error',
+        timestamp,
+        taskId,
+        projectId: project_id,
+        payload: {
+          errorType: payload.errorType as string || 'unknown',
+          message: payload.errorMessage as string || 'Unknown error',
+          stack: payload.stack as string,
+          recoverable: (payload.recoverable as boolean) ?? true,
+        },
+      };
+    }
+
+    case 'log':
+    default: {
+      return {
+        id,
+        type: 'log',
+        timestamp,
+        taskId,
+        projectId: project_id,
+        payload: {
+          level: (payload.level as 'info' | 'warn' | 'error' | 'debug') || 'info',
+          message: payload.message as string || JSON.stringify(payload),
+          metadata: payload,
+        },
+      };
+    }
+  }
+}
+
 export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelineEventsReturn {
   const { projectId, maxEvents = MAX_EVENTS_DEFAULT } = options;
   
@@ -304,7 +441,8 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
 
     console.log('[useTimelineEvents] 设置订阅, projectId:', projectId);
 
-    const unsubscribe = subscribeBuildLogs({
+    // 订阅 build_logs 表（兼容旧的日志解析方式）
+    const unsubscribeBuildLogs = subscribeBuildLogs({
       projectId,
       onLogCreated: (log: BuildLog) => {
         if (processedLogIdsRef.current.has(log.id)) {
@@ -318,7 +456,25 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
         }
       },
       onError: (error) => {
-        console.error('[useTimelineEvents] 订阅错误:', error);
+        console.error('[useTimelineEvents] build_logs 订阅错误:', error);
+      },
+    });
+
+    // Step 3: 订阅 agent_events 表（新的结构化事件）
+    const unsubscribeAgentEvents = subscribeAgentEvents({
+      projectId,
+      onAgentEvent: (dbEvent: DbAgentEvent) => {
+        // 避免重复处理
+        if (processedLogIdsRef.current.has(dbEvent.id)) {
+          return;
+        }
+        processedLogIdsRef.current.add(dbEvent.id);
+
+        const event = parseDbAgentEventToTimelineEvent(dbEvent);
+        dispatch({ type: 'ADD_EVENT', payload: event });
+      },
+      onError: (error) => {
+        console.error('[useTimelineEvents] agent_events 订阅错误:', error);
       },
     });
 
@@ -326,7 +482,8 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
 
     return () => {
       console.log('[useTimelineEvents] 清理订阅, projectId:', projectId);
-      unsubscribe();
+      unsubscribeBuildLogs();
+      unsubscribeAgentEvents();
       setIsConnected(false);
     };
   }, [projectId]);

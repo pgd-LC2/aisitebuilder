@@ -7,6 +7,7 @@ import { aiTaskService } from '../services/aiTaskService';
 import { ProjectFilesContext, BuildLog } from '../types/project';
 import { useAgentEvents } from '../realtime';
 import BuildLogPanel from './BuildLogPanel';
+import ActivityTimeline from './ActivityTimeline';
 
 interface ChatPanelProps {
   projectFilesContext?: ProjectFilesContext;
@@ -206,10 +207,16 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       </div>
 
       {currentProject && (
-        <BuildLogPanel
-          projectId={currentProject.id}
-          onLogAdded={handleBuildLogAdded}
-        />
+        <>
+          <ActivityTimeline
+            projectId={currentProject.id}
+            maxEvents={50}
+          />
+          <BuildLogPanel
+            projectId={currentProject.id}
+            onLogAdded={handleBuildLogAdded}
+          />
+        </>
       )}
 
       <div className="px-4 py-2 bg-gray-50">

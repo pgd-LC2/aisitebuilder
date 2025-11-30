@@ -2,21 +2,21 @@
  * 文件事件订阅
  * 
  * 提供项目文件变更的实时订阅功能。
- * 注意：此功能为预留接口，当前后端可能尚未完全支持文件变更事件。
+ * Step 3: 新增 file_events 表订阅，支持实时文件变更通知和热刷新。
  */
 
 import type { ProjectFile } from '../types/project';
 import { subscribeToTable } from './realtimeClient';
-import type { SubscribeFileEventsOptions } from './types';
+import type { SubscribeFileEventsOptions, DbFileEvent } from './types';
 
 /**
- * 订阅文件事件（创建、更新、删除）
+ * 订阅文件事件（创建、更新、删除、file_events 表事件）
  * 
  * @param options 订阅选项
  * @returns 取消订阅函数
  */
 export function subscribeFileEvents(options: SubscribeFileEventsOptions): () => void {
-  const { projectId, versionId, onFileCreated, onFileUpdated, onFileDeleted, onError } = options;
+  const { projectId, versionId, onFileCreated, onFileUpdated, onFileDeleted, onFileEvent, onError } = options;
 
   if (!projectId) {
     console.warn('[subscribeFileEvents] projectId 为空，跳过订阅');
@@ -74,6 +74,21 @@ export function subscribeFileEvents(options: SubscribeFileEventsOptions): () => 
         }
       );
       unsubscribers.push(unsubscribeDelete);
+    }
+
+    // Step 3: 订阅 file_events 表（实时文件变更事件，用于热刷新）
+    if (onFileEvent) {
+      const unsubscribeFileEvent = subscribeToTable<DbFileEvent>(
+        `file-events-table-${projectId}`,
+        'file_events',
+        'INSERT',
+        baseFilter,
+        (event) => {
+          console.log('[subscribeFileEvents] 收到 file_events:', event.id, event.op, event.path);
+          onFileEvent(event);
+        }
+      );
+      unsubscribers.push(unsubscribeFileEvent);
     }
 
     console.log(`[subscribeFileEvents] 已订阅项目 ${projectId} 的文件事件`);

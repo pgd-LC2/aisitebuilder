@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Download, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { BuildLog } from '../types/project';
 import { useBuildLogs } from '../realtime';
@@ -20,15 +20,74 @@ const logTypeColors = {
   error: 'text-red-500 bg-red-50'
 };
 
+/**
+ * 判断日志是否为任务生命周期事件或工具执行失败
+ * 
+ * 只显示以下类型的日志：
+ * 1. 任务开始/完成/失败状态
+ * 2. 工具执行失败（error 类型）
+ * 3. 用户输入
+ * 
+ * 过滤掉的日志（现在由 agent_events 表处理）：
+ * - AI 工具调用详情
+ * - 文件操作详情
+ * - 阶段变化详情
+ */
+function isTaskLifecycleLog(log: BuildLog): boolean {
+  const message = log.message.toLowerCase();
+  
+  // 任务生命周期事件
+  if (message.includes('任务') && (
+    message.includes('开始') || 
+    message.includes('完成') || 
+    message.includes('失败') ||
+    message.includes('处理中')
+  )) {
+    return true;
+  }
+  
+  // 英文任务生命周期事件
+  if (message.includes('task') && (
+    message.includes('started') || 
+    message.includes('completed') || 
+    message.includes('failed') ||
+    message.includes('processing')
+  )) {
+    return true;
+  }
+  
+  // 用户输入
+  if (message.includes('用户输入') || message.includes('user input')) {
+    return true;
+  }
+  
+  // 工具执行失败（error 类型的日志）
+  if (log.log_type === 'error') {
+    return true;
+  }
+  
+  // AI 任务处理相关的高级状态
+  if (message.includes('ai 任务') || message.includes('ai任务') || message.includes('edge function')) {
+    return true;
+  }
+  
+  return false;
+}
+
 export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // 使用新的 useBuildLogs hook，统一管理订阅
-  const { logs, isLoading: loading } = useBuildLogs({
+  const { logs: allLogs, isLoading: loading } = useBuildLogs({
     projectId,
     onLogAdded
   });
+  
+  // 过滤日志，只显示任务生命周期事件和工具执行失败
+  const logs = useMemo(() => {
+    return allLogs.filter(isTaskLifecycleLog);
+  }, [allLogs]);
 
   useEffect(() => {
     if (isExpanded && logsEndRef.current) {
