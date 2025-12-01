@@ -13,6 +13,9 @@ interface ChannelInfo {
   channel: RealtimeChannel;
   refCount: number;
   subscriptions: Set<string>;
+  /** 记录底层 channel 最后一次收到的状态，用于复用时立即通知新订阅者 */
+  lastStatus?: string;
+  lastError?: Error | null;
 }
 
 interface RetryInfo {
@@ -24,6 +27,8 @@ interface SubscriptionInfo<T> {
   channelName: string;
   callback: (payload: T) => void;
   subscriptionId: string;
+  /** 状态变化回调，用于广播 SUBSCRIBED/CLOSED 等状态给所有订阅者 */
+  onStatusChange?: (status?: string | undefined, error?: Error | null) => void;
 }
 
 class RealtimeClient {
@@ -181,7 +186,7 @@ class RealtimeClient {
         }
       );
 
-      // subscribe 回调：负责把订阅状态透传给上层
+      // subscribe 回调：负责把订阅状态广播给该 channel 下所有订阅者
       channel.subscribe((statusOrObj: string | { status?: string; state?: string; error?: unknown; err?: unknown }) => {
         console.log(`[RealtimeClient] 频道 ${baseChannelKey} subscribe 原始回调:`, statusOrObj);
 
@@ -201,13 +206,44 @@ class RealtimeClient {
           console.error(`[RealtimeClient] 频道 ${baseChannelKey} 错误:`, err);
         }
 
+        // 获取当前 channelInfo 并更新 lastStatus/lastError
+        const currentChannelInfo = this.channels.get(baseChannelKey);
+        if (currentChannelInfo && status) {
+          currentChannelInfo.lastStatus = status;
+          currentChannelInfo.lastError = err instanceof Error ? err : err ? new Error(String(err)) : null;
+        }
+
         if (status === 'SUBSCRIBED') {
           this.connectionStatus = 'connected';
           this.config.onConnectionChange?.(true);
-          onStatusChange?.('SUBSCRIBED', null);
+          // 广播给所有订阅此 channel 的订阅者
+          const subs = currentChannelInfo?.subscriptions;
+          if (subs) {
+            console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=SUBSCRIBED, subs=[${Array.from(subs).join(', ')}]`);
+            subs.forEach(subId => {
+              const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
+              try {
+                subInfo?.onStatusChange?.('SUBSCRIBED', null);
+              } catch (e) {
+                console.error(`[RealtimeClient] 广播 SUBSCRIBED 到订阅 ${subId} 时出错:`, e);
+              }
+            });
+          }
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
-          onStatusChange?.(status, errorObj);
+          // 广播给所有订阅此 channel 的订阅者
+          const subs = currentChannelInfo?.subscriptions;
+          if (subs) {
+            console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=${status}, subs=[${Array.from(subs).join(', ')}]`);
+            subs.forEach(subId => {
+              const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
+              try {
+                subInfo?.onStatusChange?.(status, errorObj);
+              } catch (e) {
+                console.error(`[RealtimeClient] 广播 ${status} 到订阅 ${subId} 时出错:`, e);
+              }
+            });
+          }
         }
       });
 
@@ -230,10 +266,30 @@ class RealtimeClient {
     this.subscriptions.set(subscriptionId, {
       channelName: baseChannelKey,
       callback: callback as (payload: unknown) => void,
-      subscriptionId
+      subscriptionId,
+      onStatusChange
     });
 
     console.log(`[RealtimeClient] 订阅已创建: ${baseChannelKey}，表: ${table}，事件: ${event}，refCount: ${channelInfo.refCount}`);
+
+    // 如果复用已有 channel 且底层已经处于 SUBSCRIBED，立即通知新订阅者
+    // 这样可以确保新订阅者能触发 catch-up 刷新
+    if (channelInfo.lastStatus === 'SUBSCRIBED') {
+      console.log(`[RealtimeClient] 复用已 SUBSCRIBED 的频道，立即通知新订阅者: ${subscriptionId}`);
+      try {
+        onStatusChange?.('SUBSCRIBED', null);
+      } catch (e) {
+        console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} SUBSCRIBED 时出错:`, e);
+      }
+    } else if (channelInfo.lastStatus === 'CLOSED' || channelInfo.lastStatus === 'CHANNEL_ERROR' || channelInfo.lastStatus === 'TIMED_OUT') {
+      // 如果底层 channel 已经处于错误状态，也立即通知新订阅者
+      console.log(`[RealtimeClient] 复用已 ${channelInfo.lastStatus} 的频道，立即通知新订阅者: ${subscriptionId}`);
+      try {
+        onStatusChange?.(channelInfo.lastStatus, channelInfo.lastError);
+      } catch (e) {
+        console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} ${channelInfo.lastStatus} 时出错:`, e);
+      }
+    }
 
     // 返回取消订阅函数
     return () => {
