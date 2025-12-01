@@ -35,7 +35,7 @@ const logTypeColors = {
  */
 function isTaskLifecycleLog(log: BuildLog): boolean {
   const message = log.message.toLowerCase();
-  
+  console.log("message:",message)
   // 任务生命周期事件
   if (message.includes('任务') && (
     message.includes('开始') || 
@@ -86,9 +86,10 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
   
   
   // 过滤日志，只显示任务生命周期事件和工具执行失败
-  const logs = useMemo(() => {
-    return allLogs.filter(isTaskLifecycleLog);
-  }, [allLogs]);
+  //const logs = useMemo(() => {
+  //  return allLogs.filter(isTaskLifecycleLog);
+  //}, [allLogs]);
+  const logs = allLogs.filter(isTaskLifecycleLog);
   console.log("logs:",logs)
   
   useEffect(() => {
