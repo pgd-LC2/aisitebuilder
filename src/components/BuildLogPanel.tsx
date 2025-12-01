@@ -84,12 +84,13 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
     onLogAdded
   });
   
-  debugger
+  
   // 过滤日志，只显示任务生命周期事件和工具执行失败
   const logs = useMemo(() => {
     return allLogs.filter(isTaskLifecycleLog);
   }, [allLogs]);
-
+  console.log("logs:",logs)
+  
   useEffect(() => {
     if (isExpanded && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
