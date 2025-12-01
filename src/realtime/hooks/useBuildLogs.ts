@@ -78,6 +78,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       console.error('[useBuildLogs] 加载日志失败:', error);
     } else if (data) {
       console.log('[useBuildLogs] 加载到', data.length, '条日志');
+      console.log("data:",data)
       dispatch({ type: 'SET_LOGS', payload: data });
     }
 
