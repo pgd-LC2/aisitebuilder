@@ -11,6 +11,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { BuildLog } from '../../types/project';
 import { buildLogService } from '../../services/buildLogService';
 import { subscribeBuildLogs } from '../subscribeBuildLogs';
+import { useAuth } from '../../contexts/AuthContext';
 import type {
   BuildLogState,
   BuildLogAction,
@@ -51,6 +52,7 @@ function buildLogReducer(state: BuildLogState, action: BuildLogAction): BuildLog
  */
 export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   const { projectId, onLogAdded } = options;
+  const { authReady } = useAuth();
   
   const [state, dispatch] = useReducer(buildLogReducer, initialState);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,7 +129,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
     [projectId, refreshLogs]
   );
 
-  // 设置订阅 - 只依赖 projectId，避免订阅循环
+  // 设置订阅 - 依赖 projectId 和 authReady，确保认证完成后再创建订阅
   useEffect(() => {
     // 标记为已挂载
     isMountedRef.current = true;
@@ -138,7 +140,13 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       return;
     }
 
-    console.log('[useBuildLogs] 设置订阅, projectId:', projectId);
+    // 等待认证完成后再创建订阅，避免使用未认证的 token
+    if (!authReady) {
+      console.log('[useBuildLogs] 等待认证完成, authReady:', authReady);
+      return;
+    }
+
+    console.log('[useBuildLogs] 设置订阅, projectId:', projectId, 'authReady:', authReady);
 
     // 加载初始数据
     refreshLogs();
@@ -170,7 +178,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       unsubscribe();
       setIsConnected(false);
     };
-  }, [handleStatusChange, projectId, refreshLogs]);
+  }, [authReady, handleStatusChange, projectId, refreshLogs]);
 
   return {
     logs: state.logs,

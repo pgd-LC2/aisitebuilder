@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import RealtimeClient, { cleanupRealtime } from '../realtime/realtimeClient';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  authReady: boolean;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -25,8 +27,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       (async () => {
+        console.log('[AuthContext] onAuthStateChange:', event);
+        
+        // 当认证状态变化时，清理并重置 RealtimeClient
+        // 这确保了新的订阅会使用正确的认证 token
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+          console.log('[AuthContext] 认证状态变化，重置 RealtimeClient');
+          cleanupRealtime();
+          RealtimeClient.resetInstance();
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -64,10 +76,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const authReady = !loading && user !== null;
+
   const value = {
     user,
     session,
     loading,
+    authReady,
     signUp,
     signIn,
     signOut,
