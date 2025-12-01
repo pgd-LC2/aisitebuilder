@@ -79,7 +79,7 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // 使用新的 useBuildLogs hook，统一管理订阅
-  const { logs: allLogs, isLoading: loading } = useBuildLogs({
+  const { logsb: allLogs, isLoading: loading } = useBuildLogs({
     projectId,
     onLogAdded
   });
