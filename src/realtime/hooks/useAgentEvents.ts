@@ -187,6 +187,14 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
+        // catch-up: 确保订阅稳定后再做一次刷新，避免刚建立时的竞态
+        // 短延迟后刷新消息，补偿订阅建立瞬间可能丢失的事件
+        setTimeout(() => {
+          if (isMountedRef.current && projectId === currentProjectIdRef.current) {
+            console.log('[useAgentEvents] SUBSCRIBED catch-up: 延迟刷新消息');
+            refreshMessages();
+          }
+        }, 250);
         return;
       }
 
@@ -203,7 +211,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         }
       }
     },
-    [refreshMessages]
+    [projectId, refreshMessages]
   );
 
   // 处理任务更新的内部函数（用于订阅回调）

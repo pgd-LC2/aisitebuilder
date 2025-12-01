@@ -60,6 +60,11 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   const onLogAddedRef = useRef(onLogAdded);
   onLogAddedRef.current = onLogAdded;
 
+  // 追踪 hook 是否仍然挂载/激活，用于防止卸载后的操作
+  const isMountedRef = useRef(true);
+  const currentProjectIdRef = useRef(projectId);
+  currentProjectIdRef.current = projectId;
+
   // 加载日志列表
   const refreshLogs = useCallback(async () => {
     if (!projectId) return;
@@ -88,8 +93,21 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
 
   const handleStatusChange = useCallback(
     (status?: RealtimeSubscribeStatus, error?: Error | null) => {
+      // 如果组件已卸载，忽略状态变化
+      if (!isMountedRef.current) {
+        console.log(`[useBuildLogs] 组件已卸载，忽略状态变化: ${status}`);
+        return;
+      }
+
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
+        // catch-up: 确保订阅稳定后再做一次刷新，避免刚建立时的竞态
+        setTimeout(() => {
+          if (isMountedRef.current && projectId === currentProjectIdRef.current) {
+            console.log('[useBuildLogs] SUBSCRIBED catch-up: 延迟刷新日志');
+            refreshLogs();
+          }
+        }, 250);
         return;
       }
 
@@ -100,14 +118,19 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
 
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
         setIsConnected(false);
-        refreshLogs();
+        if (isMountedRef.current) {
+          refreshLogs();
+        }
       }
     },
-    [refreshLogs]
+    [projectId, refreshLogs]
   );
 
   // 设置订阅 - 只依赖 projectId，避免订阅循环
   useEffect(() => {
+    // 标记为已挂载
+    isMountedRef.current = true;
+
     if (!projectId) {
       dispatch({ type: 'CLEAR_LOGS' });
       setIsConnected(false);
@@ -123,11 +146,15 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
     const unsubscribe = subscribeBuildLogs({
       projectId,
       onLogCreated: (log: BuildLog) => {
+        // 检查是否仍然挂载
+        if (!isMountedRef.current) return;
         console.log('[useBuildLogs] 收到新日志事件:', log.id, log.log_type);
         dispatch({ type: 'APPEND_LOG', payload: log });
         onLogAddedRef.current?.(log);
       },
       onError: (error) => {
+        // 检查是否仍然挂载
+        if (!isMountedRef.current) return;
         console.error('[useBuildLogs] 订阅错误:', error);
         setIsConnected(false);
         refreshLogs();
@@ -137,6 +164,8 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
 
     return () => {
       console.log('[useBuildLogs] 清理订阅, projectId:', projectId);
+      // 标记为已卸载，阻止后续回调
+      isMountedRef.current = false;
       unsubscribe();
       setIsConnected(false);
     };

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ChatMessage, MessageRole } from '../types/project';
+import { subscribeToTable } from '../realtime/realtimeClient';
 
 export const messageService = {
   async addMessage(
@@ -42,24 +43,27 @@ export const messageService = {
     return { data, error };
   },
 
+  /**
+   * 订阅消息
+   * 
+   * 使用统一的 realtime 封装，避免直接调用 supabase.channel()
+   * 返回取消订阅函数（与旧接口不同，旧接口返回 channel 对象）
+   */
   subscribeToMessages(projectId: string, callback: (message: ChatMessage) => void) {
-    const channel = supabase
-      .channel(`chat-messages-${projectId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `project_id=eq.${projectId}`
-        },
-        (payload) => {
-          callback(payload.new as ChatMessage);
-        }
-      )
-      .subscribe();
+    // 调用统一封装并返回取消订阅函数
+    const unsubscribe = subscribeToTable<ChatMessage>(
+      `chat-messages-${projectId}`,
+      'chat_messages',
+      'INSERT',
+      `project_id=eq.${projectId}`,
+      (message) => {
+        callback(message);
+      }
+    );
 
-    return channel;
+    // 为兼容旧接口，返回包含 unsubscribe 的对象
+    // 注意：如果调用方期待的是 channel 对象，需要更新调用方
+    return { unsubscribe };
   },
 
   async clearMessages(projectId: string): Promise<{ error: any }> {
