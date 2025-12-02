@@ -153,7 +153,7 @@ class RealtimeClient {
     const baseChannelKey = filter ? `${channelName}::${filter}` : channelName;
 
     const setupSubscription = async () => {
-      await refreshRealtimeAuth();
+      await refreshRealtimeAuth({ ensureConnected: true });
 
       if (cancelled) {
         return;
