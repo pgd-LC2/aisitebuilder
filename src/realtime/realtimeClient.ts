@@ -6,7 +6,7 @@
  */
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, refreshRealtimeAuth } from '../lib/supabase';
 import type { ConnectionStatus, RealtimeClientConfig, RealtimeEvent } from './types';
 
 interface ChannelInfo {
@@ -136,6 +136,8 @@ class RealtimeClient {
 
     // 生成订阅 id
     const subscriptionId = this.generateSubscriptionId();
+    let cancelled = false;
+
     // 预注册（占位）
     this.subscriptions.set(subscriptionId, {
       channelName: '',
@@ -150,149 +152,164 @@ class RealtimeClient {
     // 使用表名 + filter 作为 channel 的 key，确保复用
     const baseChannelKey = filter ? `${channelName}::${filter}` : channelName;
 
-    // 如果还没创建 channel，则创建并 attach 一个通用的 on() 处理器
-    let channelInfo = this.channels.get(baseChannelKey);
-    if (!channelInfo) {
-      // 打印当前 Supabase 客户端的 channel 列表用于调试
-      const existingChannels = supabase.getChannels?.() || [];
-      console.log(`[RealtimeClient] 创建新频道: ${baseChannelKey}`);
-      console.log('[RealtimeClient] supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
+    const setupSubscription = async () => {
+      await refreshRealtimeAuth({ ensureConnected: true });
 
-      const channel = supabase.channel(baseChannelKey);
+      if (cancelled) {
+        return;
+      }
 
-      const channelConfig = filter
-        ? { event, schema: 'public', table, filter }
-        : { event, schema: 'public', table };
+      // 如果还没创建 channel，则创建并 attach 一个通用的 on() 处理器
+      let channelInfo = this.channels.get(baseChannelKey);
+      if (!channelInfo) {
+        // 打印当前 Supabase 客户端的 channel 列表用于调试
+        const existingChannels = supabase.getChannels?.() || [];
+        console.log(`[RealtimeClient] 创建新频道: ${baseChannelKey}`);
+        console.log('[RealtimeClient] supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
 
-      // 只 attach 一次：把收到的事件分发给该 channel 下所有订阅回调
-      (channel as unknown as { on: (type: string, config: object, callback: (payload: { new: unknown }) => void) => void }).on(
-        'postgres_changes',
-        channelConfig,
-        (payload: { new: unknown }) => {
-          console.log(`[RealtimeClient] 收到事件 ${event} on ${table}:`, payload);
-          const subs = this.channels.get(baseChannelKey)?.subscriptions;
-          if (subs) {
-            subs.forEach(subId => {
-              const sub = this.subscriptions.get(subId);
-              if (sub) {
-                try {
-                  (sub.callback as (p: unknown) => void)(payload.new);
-                } catch (e) {
-                  console.error(`[RealtimeClient] 分发到订阅 ${subId} 时出错:`, e);
+        const channel = supabase.channel(baseChannelKey);
+
+        const channelConfig = filter
+          ? { event, schema: 'public', table, filter }
+          : { event, schema: 'public', table };
+
+        // 只 attach 一次：把收到的事件分发给该 channel 下所有订阅回调
+        (channel as unknown as { on: (type: string, config: object, callback: (payload: { new: unknown }) => void) => void }).on(
+          'postgres_changes',
+          channelConfig,
+          (payload: { new: unknown }) => {
+            console.log(`[RealtimeClient] 收到事件 ${event} on ${table}:`, payload);
+            const subs = this.channels.get(baseChannelKey)?.subscriptions;
+            if (subs) {
+              subs.forEach(subId => {
+                const sub = this.subscriptions.get(subId);
+                if (sub) {
+                  try {
+                    (sub.callback as (p: unknown) => void)(payload.new);
+                  } catch (e) {
+                    console.error(`[RealtimeClient] 分发到订阅 ${subId} 时出错:`, e);
+                  }
                 }
-              }
-            });
+              });
+            }
           }
-        }
-      );
+        );
 
-      // subscribe 回调：负责把订阅状态广播给该 channel 下所有订阅者
-      channel.subscribe((statusOrObj: string | { status?: string; state?: string; error?: unknown; err?: unknown }) => {
-        console.log(`[RealtimeClient] 频道 ${baseChannelKey} subscribe 原始回调:`, statusOrObj);
+        // subscribe 回调：负责把订阅状态广播给该 channel 下所有订阅者
+        channel.subscribe((statusOrObj: string | { status?: string; state?: string; error?: unknown; err?: unknown }) => {
+          console.log(`[RealtimeClient] 频道 ${baseChannelKey} subscribe 原始回调:`, statusOrObj);
 
-        let status: string | undefined;
-        let err: unknown = null;
+          let status: string | undefined;
+          let err: unknown = null;
 
-        if (typeof statusOrObj === 'string') {
-          status = statusOrObj;
-        } else if (statusOrObj && typeof statusOrObj === 'object') {
-          status = statusOrObj.status ?? statusOrObj.state;
-          err = statusOrObj.error ?? statusOrObj.err ?? null;
-        }
-
-        console.log(`[RealtimeClient] 频道 ${baseChannelKey} 状态: ${status}`);
-
-        if (err) {
-          console.error(`[RealtimeClient] 频道 ${baseChannelKey} 错误:`, err);
-        }
-
-        // 获取当前 channelInfo 并更新 lastStatus/lastError
-        const currentChannelInfo = this.channels.get(baseChannelKey);
-        if (currentChannelInfo && status) {
-          currentChannelInfo.lastStatus = status;
-          currentChannelInfo.lastError = err instanceof Error ? err : err ? new Error(String(err)) : null;
-        }
-
-        if (status === 'SUBSCRIBED') {
-          this.connectionStatus = 'connected';
-          this.config.onConnectionChange?.(true);
-          // 广播给所有订阅此 channel 的订阅者
-          const subs = currentChannelInfo?.subscriptions;
-          if (subs) {
-            console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=SUBSCRIBED, subs=[${Array.from(subs).join(', ')}]`);
-            subs.forEach(subId => {
-              const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
-              try {
-                subInfo?.onStatusChange?.('SUBSCRIBED', null);
-              } catch (e) {
-                console.error(`[RealtimeClient] 广播 SUBSCRIBED 到订阅 ${subId} 时出错:`, e);
-              }
-            });
+          if (typeof statusOrObj === 'string') {
+            status = statusOrObj;
+          } else if (statusOrObj && typeof statusOrObj === 'object') {
+            status = statusOrObj.status ?? statusOrObj.state;
+            err = statusOrObj.error ?? statusOrObj.err ?? null;
           }
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
-          // 广播给所有订阅此 channel 的订阅者
-          const subs = currentChannelInfo?.subscriptions;
-          if (subs) {
-            console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=${status}, subs=[${Array.from(subs).join(', ')}]`);
-            subs.forEach(subId => {
-              const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
-              try {
-                subInfo?.onStatusChange?.(status, errorObj);
-              } catch (e) {
-                console.error(`[RealtimeClient] 广播 ${status} 到订阅 ${subId} 时出错:`, e);
-              }
-            });
+
+          console.log(`[RealtimeClient] 频道 ${baseChannelKey} 状态: ${status}`);
+
+          if (err) {
+            console.error(`[RealtimeClient] 频道 ${baseChannelKey} 错误:`, err);
           }
-        }
+
+          // 获取当前 channelInfo 并更新 lastStatus/lastError
+          const currentChannelInfo = this.channels.get(baseChannelKey);
+          if (currentChannelInfo && status) {
+            currentChannelInfo.lastStatus = status;
+            currentChannelInfo.lastError = err instanceof Error ? err : err ? new Error(String(err)) : null;
+          }
+
+          if (status === 'SUBSCRIBED') {
+            this.connectionStatus = 'connected';
+            this.config.onConnectionChange?.(true);
+            // 广播给所有订阅此 channel 的订阅者
+            const subs = currentChannelInfo?.subscriptions;
+            if (subs) {
+              console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=SUBSCRIBED, subs=[${Array.from(subs).join(', ')}]`);
+              subs.forEach(subId => {
+                const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
+                try {
+                  subInfo?.onStatusChange?.('SUBSCRIBED', null);
+                } catch (e) {
+                  console.error(`[RealtimeClient] 广播 SUBSCRIBED 到订阅 ${subId} 时出错:`, e);
+                }
+              });
+            }
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
+            // 广播给所有订阅此 channel 的订阅者
+            const subs = currentChannelInfo?.subscriptions;
+            if (subs) {
+              console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=${status}, subs=[${Array.from(subs).join(', ')}]`);
+              subs.forEach(subId => {
+                const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
+                try {
+                  subInfo?.onStatusChange?.(status, errorObj);
+                } catch (e) {
+                  console.error(`[RealtimeClient] 广播 ${status} 到订阅 ${subId} 时出错:`, e);
+                }
+              });
+            }
+          }
+        });
+
+        channelInfo = {
+          channel,
+          refCount: 0,
+          subscriptions: new Set()
+        };
+
+        this.channels.set(baseChannelKey, channelInfo);
+
+        console.log(`[RealtimeClient] 创建并订阅底层频道: ${baseChannelKey}`);
+      } else {
+        console.log(`[RealtimeClient] 复用已有频道: ${baseChannelKey}, refCount=${channelInfo.refCount}`);
+      }
+
+      if (!channelInfo) {
+        return;
+      }
+
+      // 注册一个订阅引用
+      channelInfo.refCount += 1;
+      channelInfo.subscriptions.add(subscriptionId);
+      this.subscriptions.set(subscriptionId, {
+        channelName: baseChannelKey,
+        callback: callback as (payload: unknown) => void,
+        subscriptionId,
+        onStatusChange
       });
 
-      channelInfo = {
-        channel,
-        refCount: 0,
-        subscriptions: new Set()
-      };
+      console.log(`[RealtimeClient] 订阅已创建: ${baseChannelKey}，表: ${table}，事件: ${event}，refCount: ${channelInfo.refCount}`);
 
-      this.channels.set(baseChannelKey, channelInfo);
-
-      console.log(`[RealtimeClient] 创建并订阅底层频道: ${baseChannelKey}`);
-    } else {
-      console.log(`[RealtimeClient] 复用已有频道: ${baseChannelKey}, refCount=${channelInfo.refCount}`);
-    }
-
-    // 注册一个订阅引用
-    channelInfo.refCount += 1;
-    channelInfo.subscriptions.add(subscriptionId);
-    this.subscriptions.set(subscriptionId, {
-      channelName: baseChannelKey,
-      callback: callback as (payload: unknown) => void,
-      subscriptionId,
-      onStatusChange
-    });
-
-    console.log(`[RealtimeClient] 订阅已创建: ${baseChannelKey}，表: ${table}，事件: ${event}，refCount: ${channelInfo.refCount}`);
-
-    // 如果复用已有 channel 且底层已经处于 SUBSCRIBED，立即通知新订阅者
-    // 这样可以确保新订阅者能触发 catch-up 刷新
-    if (channelInfo.lastStatus === 'SUBSCRIBED') {
-      console.log(`[RealtimeClient] 复用已 SUBSCRIBED 的频道，立即通知新订阅者: ${subscriptionId}`);
-      try {
-        onStatusChange?.('SUBSCRIBED', null);
-      } catch (e) {
-        console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} SUBSCRIBED 时出错:`, e);
+      // 如果复用已有 channel 且底层已经处于 SUBSCRIBED，立即通知新订阅者
+      // 这样可以确保新订阅者能触发 catch-up 刷新
+      if (channelInfo.lastStatus === 'SUBSCRIBED') {
+        console.log(`[RealtimeClient] 复用已 SUBSCRIBED 的频道，立即通知新订阅者: ${subscriptionId}`);
+        try {
+          onStatusChange?.('SUBSCRIBED', null);
+        } catch (e) {
+          console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} SUBSCRIBED 时出错:`, e);
+        }
+      } else if (channelInfo.lastStatus === 'CLOSED' || channelInfo.lastStatus === 'CHANNEL_ERROR' || channelInfo.lastStatus === 'TIMED_OUT') {
+        // 如果底层 channel 已经处于错误状态，也立即通知新订阅者
+        console.log(`[RealtimeClient] 复用已 ${channelInfo.lastStatus} 的频道，立即通知新订阅者: ${subscriptionId}`);
+        try {
+          onStatusChange?.(channelInfo.lastStatus, channelInfo.lastError);
+        } catch (e) {
+          console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} ${channelInfo.lastStatus} 时出错:`, e);
+        }
       }
-    } else if (channelInfo.lastStatus === 'CLOSED' || channelInfo.lastStatus === 'CHANNEL_ERROR' || channelInfo.lastStatus === 'TIMED_OUT') {
-      // 如果底层 channel 已经处于错误状态，也立即通知新订阅者
-      console.log(`[RealtimeClient] 复用已 ${channelInfo.lastStatus} 的频道，立即通知新订阅者: ${subscriptionId}`);
-      try {
-        onStatusChange?.(channelInfo.lastStatus, channelInfo.lastError);
-      } catch (e) {
-        console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} ${channelInfo.lastStatus} 时出错:`, e);
-      }
-    }
+    };
+
+    void setupSubscription();
 
     // 返回取消订阅函数
     return () => {
+      cancelled = true;
       this.unsubscribe(subscriptionId);
     };
   }
@@ -371,6 +388,15 @@ class RealtimeClient {
       console.log(`[RealtimeClient] cleanup: 关闭频道: ${channelName}，refCount: ${channelInfo.refCount}`);
       supabase.removeChannel(channelInfo.channel);
     });
+
+    // 防御性清理：确保 Supabase 客户端内部的 channel 也被移除，避免页面回到前台时残留的“幽灵频道”影响重连
+    const clientChannels = supabase.getChannels?.() || [];
+    clientChannels.forEach(channel => {
+      supabase.removeChannel(channel);
+    });
+
+    // 彻底断开 Realtime 连接，确保下次订阅使用全新 socket
+    void supabase.realtime.disconnect();
 
     this.channels.clear();
     this.subscriptions.clear();
