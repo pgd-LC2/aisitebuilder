@@ -253,6 +253,14 @@ class RealtimeClient {
                 }
               });
             }
+            
+            // 关键修复：当频道进入错误状态时，从缓存中移除该频道
+            // 这样下次订阅时会创建新的频道，而不是复用已经失效的频道
+            if (currentChannelInfo) {
+              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，从缓存中移除`);
+              supabase.removeChannel(currentChannelInfo.channel);
+              this.channels.delete(baseChannelKey);
+            }
           }
         });
 
