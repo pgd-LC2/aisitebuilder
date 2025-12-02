@@ -85,7 +85,7 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
  */
 export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsReturn {
   const { projectId, onTaskCompleted, onMessageReceived } = options;
-  const { authReady } = useAuth();
+  const { authReady, authVersion } = useAuth();
   
   const [state, dispatch] = useReducer(agentReducer, initialState);
   const [isConnected, setIsConnected] = useState(false);
@@ -338,7 +338,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       return;
     }
 
-    console.log('[useAgentEvents] 设置订阅, projectId:', projectId, 'authReady:', authReady);
+    console.log('[useAgentEvents] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion);
 
     // 加载初始数据
     refreshMessages();
@@ -375,7 +375,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       unsubscribe();
       setIsConnected(false);
     };
-  }, [authReady, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal]);
+  }, [authReady, authVersion, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal]);
 
   // 清理 blob URLs
   useEffect(() => {
