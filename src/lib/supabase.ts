@@ -8,3 +8,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export const refreshRealtimeAuth = async (): Promise<void> => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token ?? supabaseAnonKey;
+
+  supabase.realtime.setAuth(token);
+
+  await supabase.realtime.disconnect();
+  await supabase.realtime.connect();
+};

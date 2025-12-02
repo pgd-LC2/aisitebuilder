@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, refreshRealtimeAuth } from '../lib/supabase';
 import RealtimeClient, { cleanupRealtime } from '../realtime/realtimeClient';
 
 interface AuthContextType {
@@ -23,26 +23,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authVersion, setAuthVersion] = useState(0);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+      setUser(data.session?.user ?? null);
+      await refreshRealtimeAuth();
       setLoading(false);
-    });
+    })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       (async () => {
         console.log('[AuthContext] onAuthStateChange:', event);
-        
-        // 当认证状态变化时，清理并重置 RealtimeClient
-        // 这确保了新的订阅会使用正确的认证 token
+
+        // 当认证状态变化时，刷新 Realtime 鉴权并重置连接，确保使用最新的 token
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+          await refreshRealtimeAuth();
           console.log('[AuthContext] 认证状态变化，重置 RealtimeClient');
           cleanupRealtime();
           RealtimeClient.resetInstance();
           // 递增 authVersion，触发订阅 hooks 重新创建订阅
           setAuthVersion(v => v + 1);
         }
-        
+
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
