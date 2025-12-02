@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setUser(data.session?.user ?? null);
-      await refreshRealtimeAuth({ forceReconnect: true });
+      await refreshRealtimeAuth({ forceReconnect: true, ensureConnected: true });
       setLoading(false);
     })();
 
@@ -37,10 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 当认证状态变化时，刷新 Realtime 鉴权并重置连接，确保使用最新的 token
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-          await refreshRealtimeAuth({ forceReconnect: true });
-          console.log('[AuthContext] 认证状态变化，重置 RealtimeClient');
           cleanupRealtime();
           RealtimeClient.resetInstance();
+          await refreshRealtimeAuth({ forceReconnect: true, ensureConnected: true });
+          console.log('[AuthContext] 认证状态变化，重置 RealtimeClient');
           // 递增 authVersion，触发订阅 hooks 重新创建订阅
           setAuthVersion(v => v + 1);
         }

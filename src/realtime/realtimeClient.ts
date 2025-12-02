@@ -389,6 +389,15 @@ class RealtimeClient {
       supabase.removeChannel(channelInfo.channel);
     });
 
+    // 防御性清理：确保 Supabase 客户端内部的 channel 也被移除，避免页面回到前台时残留的“幽灵频道”影响重连
+    const clientChannels = supabase.getChannels?.() || [];
+    clientChannels.forEach(channel => {
+      supabase.removeChannel(channel);
+    });
+
+    // 彻底断开 Realtime 连接，确保下次订阅使用全新 socket
+    void supabase.realtime.disconnect();
+
     this.channels.clear();
     this.subscriptions.clear();
     this.connectionStatus = 'disconnected';
