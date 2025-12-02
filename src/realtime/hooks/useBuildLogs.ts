@@ -52,7 +52,7 @@ function buildLogReducer(state: BuildLogState, action: BuildLogAction): BuildLog
  */
 export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   const { projectId, onLogAdded } = options;
-  const { authReady } = useAuth();
+  const { authReady, authVersion } = useAuth();
   
   const [state, dispatch] = useReducer(buildLogReducer, initialState);
   const [isLoading, setIsLoading] = useState(false);
@@ -146,7 +146,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       return;
     }
 
-    console.log('[useBuildLogs] 设置订阅, projectId:', projectId, 'authReady:', authReady);
+    console.log('[useBuildLogs] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion);
 
     // 加载初始数据
     refreshLogs();
@@ -178,7 +178,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       unsubscribe();
       setIsConnected(false);
     };
-  }, [authReady, handleStatusChange, projectId, refreshLogs]);
+  }, [authReady, authVersion, handleStatusChange, projectId, refreshLogs]);
 
   return {
     logs: state.logs,

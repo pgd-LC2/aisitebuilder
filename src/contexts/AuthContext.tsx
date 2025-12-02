@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   authReady: boolean;
+  authVersion: number;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authVersion, setAuthVersion] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -37,6 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AuthContext] 认证状态变化，重置 RealtimeClient');
           cleanupRealtime();
           RealtimeClient.resetInstance();
+          // 递增 authVersion，触发订阅 hooks 重新创建订阅
+          setAuthVersion(v => v + 1);
         }
         
         setSession(session);
@@ -83,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     authReady,
+    authVersion,
     signUp,
     signIn,
     signOut,
