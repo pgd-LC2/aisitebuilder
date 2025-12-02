@@ -9,12 +9,35 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export const refreshRealtimeAuth = async (): Promise<void> => {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token ?? supabaseAnonKey;
+let currentRealtimeToken: string | null = null;
+let refreshPromise: Promise<void> | null = null;
 
-  supabase.realtime.setAuth(token);
+export const refreshRealtimeAuth = async (options?: { forceReconnect?: boolean }): Promise<void> => {
+  const forceReconnect = options?.forceReconnect ?? false;
 
-  await supabase.realtime.disconnect();
-  await supabase.realtime.connect();
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token ?? supabaseAnonKey;
+    const tokenChanged = currentRealtimeToken !== token;
+
+    if (tokenChanged) {
+      currentRealtimeToken = token;
+      supabase.realtime.setAuth(token);
+    }
+
+    if (tokenChanged || forceReconnect) {
+      await supabase.realtime.disconnect();
+      await supabase.realtime.connect();
+    }
+  })();
+
+  try {
+    await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
 };
