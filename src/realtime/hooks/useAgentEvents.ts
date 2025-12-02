@@ -13,6 +13,7 @@ import { messageService } from '../../services/messageService';
 import { aiTaskService } from '../../services/aiTaskService';
 import { imageProxyService } from '../../services/imageProxyService';
 import { subscribeAgentEvents } from '../subscribeAgentEvents';
+import { useAuth } from '../../contexts/AuthContext';
 import type {
   AgentState,
   AgentAction,
@@ -84,6 +85,7 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
  */
 export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsReturn {
   const { projectId, onTaskCompleted, onMessageReceived } = options;
+  const { authReady, authVersion } = useAuth();
   
   const [state, dispatch] = useReducer(agentReducer, initialState);
   const [isConnected, setIsConnected] = useState(false);
@@ -319,7 +321,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     }
   }, []);
 
-  // 设置订阅 - 只依赖 projectId，避免订阅循环
+  // 设置订阅 - 依赖 projectId 和 authReady，确保认证完成后再创建订阅
   useEffect(() => {
     // 标记为已挂载
     isMountedRef.current = true;
@@ -330,7 +332,13 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       return;
     }
 
-    console.log('[useAgentEvents] 设置订阅, projectId:', projectId);
+    // 等待认证完成后再创建订阅，避免使用未认证的 token
+    if (!authReady) {
+      console.log('[useAgentEvents] 等待认证完成, authReady:', authReady);
+      return;
+    }
+
+    console.log('[useAgentEvents] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion);
 
     // 加载初始数据
     refreshMessages();
@@ -367,7 +375,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       unsubscribe();
       setIsConnected(false);
     };
-  }, [handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal]);
+  }, [authReady, authVersion, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal]);
 
   // 清理 blob URLs
   useEffect(() => {

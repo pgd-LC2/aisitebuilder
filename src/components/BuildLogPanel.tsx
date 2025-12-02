@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Download, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { BuildLog } from '../types/project';
 import { useBuildLogs } from '../realtime';
@@ -35,7 +35,7 @@ const logTypeColors = {
  */
 function isTaskLifecycleLog(log: BuildLog): boolean {
   const message = log.message.toLowerCase();
-  console.log("message:",message)
+  
   // 任务生命周期事件
   if (message.includes('任务') && (
     message.includes('开始') || 
