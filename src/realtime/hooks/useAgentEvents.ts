@@ -101,6 +101,12 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   const currentProjectIdRef = useRef(projectId);
   currentProjectIdRef.current = projectId;
   
+  // 防止 refreshMessages 并发执行
+  const isRefreshingRef = useRef(false);
+  
+  // 追踪上一次的订阅状态，用于边缘检测（只在状态变化时触发刷新）
+  const lastStatusRef = useRef<RealtimeSubscribeStatus | undefined>(undefined);
+  
   // 使用 ref 存储回调，避免订阅循环
   const onTaskCompletedRef = useRef(onTaskCompleted);
   const onMessageReceivedRef = useRef(onMessageReceived);
@@ -108,7 +114,8 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   onMessageReceivedRef.current = onMessageReceived;
 
   // 加载消息列表
-  const refreshMessages = useCallback(async () => {
+  // opts.force: 强制刷新，忽略时间节流（用于 SUBSCRIBED catch-up）
+  const refreshMessages = useCallback(async (opts?: { force?: boolean }) => {
     // 检查是否仍然挂载且 projectId 有效
     if (!projectId || !isMountedRef.current) {
       return;
@@ -119,57 +126,75 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       console.log(`[useAgentEvents] projectId 已变更，跳过加载`);
       return;
     }
+    
+    // 防止并发刷新：如果已有刷新在进行中，跳过本次
+    if (isRefreshingRef.current) {
+      console.log('[useAgentEvents] 已有刷新进行中，跳过本次 refresh');
+      return;
+    }
+    
+    // 时间节流：非强制刷新时，1秒内不允许重复刷新
+    const now = Date.now();
+    if (!opts?.force && now - lastFetchAtRef.current < 1000) {
+      console.log('[useAgentEvents] 刷新过于频繁，跳过本次刷新');
+      return;
+    }
+    
+    isRefreshingRef.current = true;
+    lastFetchAtRef.current = now;
 
     loadVersionRef.current += 1;
     const currentVersion = loadVersionRef.current;
     console.log(`[useAgentEvents] 加载消息 (版本 ${currentVersion}), projectId:`, projectId);
 
-    const { data, error } = await messageService.getMessagesByProjectId(projectId);
+    try {
+      const { data, error } = await messageService.getMessagesByProjectId(projectId);
 
-    // 检查是否仍然挂载且版本是否过期
-    if (!isMountedRef.current || currentVersion < loadVersionRef.current) {
-      console.log(`[useAgentEvents] 版本 ${currentVersion} 已过期或组件已卸载，忽略结果`);
-      return;
-    }
+      // 检查是否仍然挂载且版本是否过期
+      if (!isMountedRef.current || currentVersion < loadVersionRef.current) {
+        console.log(`[useAgentEvents] 版本 ${currentVersion} 已过期或组件已卸载，忽略结果`);
+        return;
+      }
 
-    if (error) {
-      console.error('[useAgentEvents] 加载消息失败:', error);
-    } else if (data) {
-      console.log('[useAgentEvents] 加载到', data.length, '条消息');
-      dispatch({ type: 'SET_MESSAGES', payload: data });
+      if (error) {
+        console.error('[useAgentEvents] 加载消息失败:', error);
+      } else if (data) {
+        console.log('[useAgentEvents] 加载到', data.length, '条消息');
+        dispatch({ type: 'SET_MESSAGES', payload: data });
 
-      // 加载任务中的图片
-      const { data: tasks } = await aiTaskService.getTasksByProjectId(projectId);
-      if (tasks) {
-        const newMessageImages: Record<string, string[]> = {};
-        const newImageBlobUrls: Record<string, string> = {};
+        // 加载任务中的图片
+        const { data: tasks } = await aiTaskService.getTasksByProjectId(projectId);
+        if (tasks) {
+          const newMessageImages: Record<string, string[]> = {};
+          const newImageBlobUrls: Record<string, string> = {};
 
-        for (const task of tasks) {
-          if (task.status === 'completed' && task.result) {
-            const messageId = task.result.messageId as string | undefined;
-            const generatedImages = task.result.generated_images as string[] | undefined;
-            if (messageId && generatedImages && generatedImages.length > 0) {
-              newMessageImages[messageId] = generatedImages;
+          for (const task of tasks) {
+            if (task.status === 'completed' && task.result) {
+              const messageId = task.result.messageId as string | undefined;
+              const generatedImages = task.result.generated_images as string[] | undefined;
+              if (messageId && generatedImages && generatedImages.length > 0) {
+                newMessageImages[messageId] = generatedImages;
 
-              for (const imagePath of generatedImages) {
-                const { data: blob, error: imgError } = await imageProxyService.fetchImage(imagePath);
-                if (blob && !imgError) {
-                  const blobUrl = URL.createObjectURL(blob);
-                  newImageBlobUrls[imagePath] = blobUrl;
+                for (const imagePath of generatedImages) {
+                  const { data: blob, error: imgError } = await imageProxyService.fetchImage(imagePath);
+                  if (blob && !imgError) {
+                    const blobUrl = URL.createObjectURL(blob);
+                    newImageBlobUrls[imagePath] = blobUrl;
+                  }
                 }
               }
             }
           }
-        }
 
-        if (Object.keys(newMessageImages).length > 0) {
-          setMessageImages(newMessageImages);
-          setImageBlobUrls(newImageBlobUrls);
+          if (Object.keys(newMessageImages).length > 0) {
+            setMessageImages(newMessageImages);
+            setImageBlobUrls(newImageBlobUrls);
+          }
         }
       }
+    } finally {
+      isRefreshingRef.current = false;
     }
-
-    lastFetchAtRef.current = Date.now();
   }, [projectId]);
 
   // 添加消息（使用 ref 访问最新的 onMessageReceived）
@@ -186,6 +211,10 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         console.log(`[useAgentEvents] 组件已卸载，忽略状态变化: ${status}`);
         return;
       }
+      
+      // 记录上一次状态，用于边缘检测
+      const prevStatus = lastStatusRef.current;
+      lastStatusRef.current = status;
 
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
@@ -194,7 +223,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         setTimeout(() => {
           if (isMountedRef.current && projectId === currentProjectIdRef.current) {
             console.log('[useAgentEvents] SUBSCRIBED catch-up: 延迟刷新消息');
-            refreshMessages();
+            refreshMessages({ force: true });
           }
         }, 250);
         return;
@@ -205,11 +234,18 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         return;
       }
 
-      if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
+      const isErrorStatus = status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT';
+      if (isErrorStatus || error) {
         setIsConnected(false);
-        // 只有在组件仍然挂载时才刷新消息
-        if (isMountedRef.current) {
+        
+        // 边缘检测：只在从非错误状态变为错误状态时触发一次刷新
+        // 避免在持续错误状态下反复刷新导致死循环
+        const wasErrorBefore = prevStatus === 'CLOSED' || prevStatus === 'CHANNEL_ERROR' || prevStatus === 'TIMED_OUT';
+        if (!wasErrorBefore && isMountedRef.current) {
+          console.log('[useAgentEvents] 首次进入错误状态，做一次兜底刷新');
           refreshMessages();
+        } else {
+          console.log(`[useAgentEvents] 已处于错误状态 (prev=${prevStatus}, curr=${status})，跳过刷新`);
         }
       }
     },
@@ -363,6 +399,8 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         console.error('[useAgentEvents] 订阅错误:', error);
         dispatch({ type: 'SET_ERROR', payload: error.message });
         setIsConnected(false);
+        // 注意：这里不再无条件调用 refreshMessages
+        // refreshMessages 已有并发保护和时间节流，会自动防止过于频繁的刷新
         refreshMessages();
       },
       onStatusChange: handleStatusChange
