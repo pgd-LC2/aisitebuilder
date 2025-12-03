@@ -266,17 +266,13 @@ class RealtimeClient {
             
             // 关键修复：当频道进入错误状态时，从缓存中移除该频道
             // 这样下次订阅时会创建新的频道，而不是复用已经失效的频道
+            // 注意：不在这里清理 subscriptions Map，由 unsubscribe() 和 cleanup() 统一负责
+            // 避免与 cleanup() 的清理逻辑冲突
             if (currentChannelInfo) {
               // 标记为已处理，防止后续 CLOSED 回调重复处理
               currentChannelInfo.closed = true;
               
-              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，清理订阅并从缓存中移除`);
-              
-              // 清理所有相关订阅信息，避免订阅信息残留
-              currentChannelInfo.subscriptions.forEach(subId => {
-                this.subscriptions.delete(subId);
-                this.retryInfoMap.delete(subId);
-              });
+              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，从缓存中移除`);
               
               supabase.removeChannel(currentChannelInfo.channel);
               this.channels.delete(baseChannelKey);

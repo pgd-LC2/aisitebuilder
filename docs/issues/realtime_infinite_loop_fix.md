@@ -223,21 +223,25 @@ if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')
 }
 ```
 
-### 修复3：统一订阅清理机制
+### 修复3：订阅清理职责分离
 
-当频道进入 CLOSED 状态时，同时清理相关的订阅信息。
+**重要**：CLOSED 分支不应该清理 subscriptions Map，这个职责由 `unsubscribe()` 和 `cleanup()` 统一负责。
+
+**原因**：
+- `cleanup()` 会调用 `supabase.removeChannel()` 触发 CLOSED 回调
+- 如果 CLOSED 分支也清理 subscriptions，会与 `cleanup()` 的清理逻辑冲突
+- 导致后续的 `unsubscribe()` 找不到订阅，新订阅也无法正确建立
 
 **修改文件**: `src/realtime/realtimeClient.ts`
 
 ```typescript
-// 在 CLOSED 处理分支中，清理订阅信息
+// 在 CLOSED 处理分支中，只做防抖 + 频道移除，不清理 subscriptions
 if (currentChannelInfo) {
-  // 清理所有相关订阅
-  currentChannelInfo.subscriptions.forEach(subId => {
-    this.subscriptions.delete(subId);
-    this.retryInfoMap.delete(subId);
-  });
+  currentChannelInfo.closed = true;
   
+  console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，从缓存中移除`);
+  
+  // 注意：不在这里清理 subscriptions Map，由 unsubscribe() 和 cleanup() 统一负责
   supabase.removeChannel(currentChannelInfo.channel);
   this.channels.delete(baseChannelKey);
 }
