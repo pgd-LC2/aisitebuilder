@@ -66,6 +66,9 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   const isMountedRef = useRef(true);
   const currentProjectIdRef = useRef(projectId);
   currentProjectIdRef.current = projectId;
+  
+  // 追踪上一次的订阅状态，用于边缘检测（只在状态变化时触发刷新）
+  const lastStatusRef = useRef<RealtimeSubscribeStatus | undefined>(undefined);
 
   // 加载日志列表
   const refreshLogs = useCallback(async () => {
@@ -101,6 +104,10 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
         console.log(`[useBuildLogs] 组件已卸载，忽略状态变化: ${status}`);
         return;
       }
+      
+      // 记录上一次状态，用于边缘检测
+      const prevStatus = lastStatusRef.current;
+      lastStatusRef.current = status;
 
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
@@ -119,10 +126,18 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
         return;
       }
 
-      if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
+      const isErrorStatus = status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT';
+      if (isErrorStatus || error) {
         setIsConnected(false);
-        if (isMountedRef.current) {
+        
+        // 边缘检测：只在从非错误状态变为错误状态时触发一次刷新
+        // 避免在持续错误状态下反复刷新导致死循环
+        const wasErrorBefore = prevStatus === 'CLOSED' || prevStatus === 'CHANNEL_ERROR' || prevStatus === 'TIMED_OUT';
+        if (!wasErrorBefore && isMountedRef.current) {
+          console.log('[useBuildLogs] 首次进入错误状态，做一次兜底刷新');
           refreshLogs();
+        } else {
+          console.log(`[useBuildLogs] 已处于错误状态 (prev=${prevStatus}, curr=${status})，跳过刷新`);
         }
       }
     },
