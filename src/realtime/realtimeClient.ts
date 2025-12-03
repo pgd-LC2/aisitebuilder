@@ -151,8 +151,12 @@ class RealtimeClient {
     const retryInfo: RetryInfo = { timeoutId: null, cancelled: false };
     this.retryInfoMap.set(subscriptionId, retryInfo);
 
-    // 使用表名 + filter 作为 channel 的 key，确保复用
-    const baseChannelKey = filter ? `${channelName}::${filter}` : channelName;
+    // 每次订阅都创建新的频道，不复用旧频道
+    // 这样可以避免继承旧频道的错误状态，提高订阅的稳定性和可预测性
+    // 频道 key 包含 subscriptionId，确保每个订阅都有独立的频道
+    const baseChannelKey = filter 
+      ? `${channelName}-${subscriptionId}::${filter}` 
+      : `${channelName}-${subscriptionId}`;
 
     const setupSubscription = async () => {
       await refreshRealtimeAuth({ ensureConnected: true });
