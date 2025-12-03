@@ -16,6 +16,8 @@ interface ChannelInfo {
   /** 记录底层 channel 最后一次收到的状态，用于复用时立即通知新订阅者 */
   lastStatus?: string;
   lastError?: Error | null;
+  /** 标记频道是否已处理 CLOSED 状态，用于防抖避免重复处理 */
+  closed?: boolean;
 }
 
 interface RetryInfo {
@@ -239,7 +241,15 @@ class RealtimeClient {
               });
             }
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // 防抖：如果已经处理过 CLOSED，跳过重复处理
+            // 这是修复死循环的关键：Supabase SDK 可能多次触发 CLOSED 回调
+            if (currentChannelInfo?.closed) {
+              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 已处理过 ${status}，跳过重复处理`);
+              return;
+            }
+            
             const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
+            
             // 广播给所有订阅此 channel 的订阅者
             const subs = currentChannelInfo?.subscriptions;
             if (subs) {
@@ -257,7 +267,17 @@ class RealtimeClient {
             // 关键修复：当频道进入错误状态时，从缓存中移除该频道
             // 这样下次订阅时会创建新的频道，而不是复用已经失效的频道
             if (currentChannelInfo) {
-              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，从缓存中移除`);
+              // 标记为已处理，防止后续 CLOSED 回调重复处理
+              currentChannelInfo.closed = true;
+              
+              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，清理订阅并从缓存中移除`);
+              
+              // 清理所有相关订阅信息，避免订阅信息残留
+              currentChannelInfo.subscriptions.forEach(subId => {
+                this.subscriptions.delete(subId);
+                this.retryInfoMap.delete(subId);
+              });
+              
               supabase.removeChannel(currentChannelInfo.channel);
               this.channels.delete(baseChannelKey);
             }
