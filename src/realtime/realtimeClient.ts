@@ -7,7 +7,14 @@
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, refreshRealtimeAuth } from '../lib/supabase';
-import type { ConnectionStatus, RealtimeClientConfig, RealtimeEvent } from './types';
+import type { 
+  ConnectionStatus, 
+  RealtimeClientConfig, 
+  RealtimeEvent, 
+  CloseReason, 
+  StatusChangeMeta,
+  StatusChangeCallback 
+} from './types';
 
 interface ChannelInfo {
   channel: RealtimeChannel;
@@ -18,6 +25,10 @@ interface ChannelInfo {
   lastError?: Error | null;
   /** 标记频道是否已处理 CLOSED 状态，用于防抖避免重复处理 */
   closed?: boolean;
+  /** 频道创建时的会话世代 */
+  generation: number;
+  /** 关闭原因（仅在关闭时设置） */
+  closeReason?: CloseReason;
 }
 
 interface RetryInfo {
@@ -30,7 +41,9 @@ interface SubscriptionInfo<T> {
   callback: (payload: T) => void;
   subscriptionId: string;
   /** 状态变化回调，用于广播 SUBSCRIBED/CLOSED 等状态给所有订阅者 */
-  onStatusChange?: (status?: string | undefined, error?: Error | null) => void;
+  onStatusChange?: StatusChangeCallback;
+  /** 订阅创建时的会话世代 */
+  generation: number;
 }
 
 class RealtimeClient {
@@ -42,6 +55,13 @@ class RealtimeClient {
   private config: RealtimeClientConfig = {};
   private initialized = false;
   private subscriptionCounter = 0;
+  
+  /** 当前会话世代，每次 cleanup/reset 时递增 */
+  private sessionGeneration = 0;
+  /** 是否正在进行预期关闭（cleanup/auth change） */
+  private isExpectedClose = false;
+  /** 当前关闭原因 */
+  private currentCloseReason: CloseReason = 'UNKNOWN';
 
   private constructor() {
     // 私有构造函数，确保单例模式
@@ -97,6 +117,47 @@ class RealtimeClient {
   }
 
   /**
+   * 获取当前会话世代
+   */
+  getSessionGeneration(): number {
+    return this.sessionGeneration;
+  }
+
+  /**
+   * 检查给定的 generation 是否仍然有效
+   */
+  isGenerationValid(generation: number): boolean {
+    return generation === this.sessionGeneration;
+  }
+
+  /**
+   * 标记开始预期关闭
+   */
+  markExpectedClose(reason: CloseReason): void {
+    this.isExpectedClose = true;
+    this.currentCloseReason = reason;
+    console.log(`[RealtimeClient] 标记预期关闭: reason=${reason}, generation=${this.sessionGeneration}`);
+  }
+
+  /**
+   * 清除预期关闭标记
+   */
+  clearExpectedClose(): void {
+    this.isExpectedClose = false;
+    this.currentCloseReason = 'UNKNOWN';
+    console.log(`[RealtimeClient] 清除预期关闭标记, generation=${this.sessionGeneration}`);
+  }
+
+  /**
+   * 递增会话世代
+   */
+  incrementGeneration(): number {
+    this.sessionGeneration += 1;
+    console.log(`[RealtimeClient] 递增会话世代: ${this.sessionGeneration}`);
+    return this.sessionGeneration;
+  }
+
+  /**
    * 生成唯一的订阅 ID
    */
   private generateSubscriptionId(): string {
@@ -125,7 +186,7 @@ class RealtimeClient {
     event: RealtimeEvent,
     filter: string | undefined,
     callback: (payload: T) => void,
-    onStatusChange?: (status: string | undefined, error?: Error | null) => void
+    onStatusChange?: StatusChangeCallback
   ): () => void {
     if (typeof window === 'undefined') {
       console.warn('[RealtimeClient] 无法在服务端订阅');
@@ -136,15 +197,21 @@ class RealtimeClient {
       this.initialize();
     }
 
+    // 记录订阅创建时的 generation
+    const subscriptionGeneration = this.sessionGeneration;
+
     // 生成订阅 id
     const subscriptionId = this.generateSubscriptionId();
     let cancelled = false;
+
+    console.log(`[RealtimeClient] 创建订阅: ${subscriptionId}, generation=${subscriptionGeneration}`);
 
     // 预注册（占位）
     this.subscriptions.set(subscriptionId, {
       channelName: '',
       callback: callback as (payload: unknown) => void,
-      subscriptionId
+      subscriptionId,
+      generation: subscriptionGeneration
     });
 
     // 初始化 retry 信息占位（保留结构）
@@ -234,11 +301,21 @@ class RealtimeClient {
             // 广播给所有订阅此 channel 的订阅者
             const subs = currentChannelInfo?.subscriptions;
             if (subs) {
-              console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=SUBSCRIBED, subs=[${Array.from(subs).join(', ')}]`);
+              const channelGen = currentChannelInfo?.generation ?? subscriptionGeneration;
+              console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=SUBSCRIBED, generation=${channelGen}, subs=[${Array.from(subs).join(', ')}]`);
               subs.forEach(subId => {
                 const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
+                if (!subInfo) return;
+                
+                // 构建状态变化元数据
+                const meta: StatusChangeMeta = {
+                  generation: subInfo.generation,
+                  channelName: baseChannelKey,
+                  isExpectedClose: false
+                };
+                
                 try {
-                  subInfo?.onStatusChange?.('SUBSCRIBED', null);
+                  subInfo.onStatusChange?.('SUBSCRIBED', null, meta);
                 } catch (e) {
                   console.error(`[RealtimeClient] 广播 SUBSCRIBED 到订阅 ${subId} 时出错:`, e);
                 }
@@ -254,14 +331,32 @@ class RealtimeClient {
             
             const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
             
+            // 确定关闭原因
+            const closeReason: CloseReason = this.isExpectedClose 
+              ? this.currentCloseReason 
+              : (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'ERROR' : 'UNKNOWN');
+            
             // 广播给所有订阅此 channel 的订阅者
             const subs = currentChannelInfo?.subscriptions;
             if (subs) {
-              console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=${status}, subs=[${Array.from(subs).join(', ')}]`);
+              const channelGen = currentChannelInfo?.generation ?? subscriptionGeneration;
+              const isExpected = this.isExpectedClose;
+              console.log(`[RealtimeClient] 状态广播: baseChannelKey=${baseChannelKey}, status=${status}, generation=${channelGen}, closeReason=${closeReason}, isExpectedClose=${isExpected}, subs=[${Array.from(subs).join(', ')}]`);
+              
               subs.forEach(subId => {
                 const subInfo = this.subscriptions.get(subId) as SubscriptionInfo<unknown> | undefined;
+                if (!subInfo) return;
+                
+                // 构建状态变化元数据
+                const meta: StatusChangeMeta = {
+                  generation: subInfo.generation,
+                  closeReason,
+                  channelName: baseChannelKey,
+                  isExpectedClose: isExpected
+                };
+                
                 try {
-                  subInfo?.onStatusChange?.(status, errorObj);
+                  subInfo.onStatusChange?.(status, errorObj, meta);
                 } catch (e) {
                   console.error(`[RealtimeClient] 广播 ${status} 到订阅 ${subId} 时出错:`, e);
                 }
@@ -275,8 +370,9 @@ class RealtimeClient {
             if (currentChannelInfo) {
               // 标记为已处理，防止后续 CLOSED 回调重复处理
               currentChannelInfo.closed = true;
+              currentChannelInfo.closeReason = closeReason;
               
-              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，从缓存中移除`);
+              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 进入 ${status} 状态，closeReason=${closeReason}，从缓存中移除`);
               
               supabase.removeChannel(currentChannelInfo.channel);
               this.channels.delete(baseChannelKey);
@@ -287,12 +383,13 @@ class RealtimeClient {
         channelInfo = {
           channel,
           refCount: 0,
-          subscriptions: new Set()
+          subscriptions: new Set(),
+          generation: subscriptionGeneration
         };
 
         this.channels.set(baseChannelKey, channelInfo);
 
-        console.log(`[RealtimeClient] 创建并订阅底层频道: ${baseChannelKey}`);
+        console.log(`[RealtimeClient] 创建并订阅底层频道: ${baseChannelKey}, generation=${subscriptionGeneration}`);
       } else {
         console.log(`[RealtimeClient] 复用已有频道: ${baseChannelKey}, refCount=${channelInfo.refCount}`);
       }
@@ -308,25 +405,37 @@ class RealtimeClient {
         channelName: baseChannelKey,
         callback: callback as (payload: unknown) => void,
         subscriptionId,
-        onStatusChange
+        onStatusChange,
+        generation: subscriptionGeneration
       });
 
-      console.log(`[RealtimeClient] 订阅已创建: ${baseChannelKey}，表: ${table}，事件: ${event}，refCount: ${channelInfo.refCount}`);
+      console.log(`[RealtimeClient] 订阅已创建: ${baseChannelKey}，表: ${table}，事件: ${event}，refCount: ${channelInfo.refCount}，generation: ${subscriptionGeneration}`);
 
       // 如果复用已有 channel 且底层已经处于 SUBSCRIBED，立即通知新订阅者
       // 这样可以确保新订阅者能触发 catch-up 刷新
       if (channelInfo.lastStatus === 'SUBSCRIBED') {
         console.log(`[RealtimeClient] 复用已 SUBSCRIBED 的频道，立即通知新订阅者: ${subscriptionId}`);
+        const meta: StatusChangeMeta = {
+          generation: subscriptionGeneration,
+          channelName: baseChannelKey,
+          isExpectedClose: false
+        };
         try {
-          onStatusChange?.('SUBSCRIBED', null);
+          onStatusChange?.('SUBSCRIBED', null, meta);
         } catch (e) {
           console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} SUBSCRIBED 时出错:`, e);
         }
       } else if (channelInfo.lastStatus === 'CLOSED' || channelInfo.lastStatus === 'CHANNEL_ERROR' || channelInfo.lastStatus === 'TIMED_OUT') {
         // 如果底层 channel 已经处于错误状态，也立即通知新订阅者
         console.log(`[RealtimeClient] 复用已 ${channelInfo.lastStatus} 的频道，立即通知新订阅者: ${subscriptionId}`);
+        const meta: StatusChangeMeta = {
+          generation: subscriptionGeneration,
+          closeReason: channelInfo.closeReason ?? 'UNKNOWN',
+          channelName: baseChannelKey,
+          isExpectedClose: false
+        };
         try {
-          onStatusChange?.(channelInfo.lastStatus, channelInfo.lastError);
+          onStatusChange?.(channelInfo.lastStatus, channelInfo.lastError ?? null, meta);
         } catch (e) {
           console.error(`[RealtimeClient] 立即通知订阅 ${subscriptionId} ${channelInfo.lastStatus} 时出错:`, e);
         }
@@ -393,13 +502,19 @@ class RealtimeClient {
 
   /**
    * 清理所有订阅
+   * @param reason 关闭原因，默认为 CLEANUP
    */
-  cleanup(): void {
+  cleanup(reason: CloseReason = 'CLEANUP'): void {
     // 打印清理前的 channel 列表用于调试
     const existingChannels = supabase.getChannels?.() || [];
-    console.log('[RealtimeClient] cleanup: 清理所有订阅');
+    const oldGeneration = this.sessionGeneration;
+    
+    console.log(`[RealtimeClient] cleanup: 开始清理，reason=${reason}, generation=${oldGeneration}`);
     console.log('[RealtimeClient] cleanup: 清理前 supabase.getChannels()', existingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
     console.log(`[RealtimeClient] cleanup: 当前管理的频道数: ${this.channels.size}，订阅数: ${this.subscriptions.size}，待执行重试数: ${this.retryInfoMap.size}`);
+
+    // 关键：标记为预期关闭，这样后续的 CLOSED 回调会带上正确的 closeReason
+    this.markExpectedClose(reason);
 
     // 取消所有待执行的重试
     this.retryInfoMap.forEach((retryInfo, subscriptionId) => {
@@ -413,11 +528,13 @@ class RealtimeClient {
 
     // 关闭所有频道
     this.channels.forEach((channelInfo, channelName) => {
-      console.log(`[RealtimeClient] cleanup: 关闭频道: ${channelName}，refCount: ${channelInfo.refCount}`);
+      // 标记频道的关闭原因
+      channelInfo.closeReason = reason;
+      console.log(`[RealtimeClient] cleanup: 关闭频道: ${channelName}，refCount: ${channelInfo.refCount}，generation: ${channelInfo.generation}`);
       supabase.removeChannel(channelInfo.channel);
     });
 
-    // 防御性清理：确保 Supabase 客户端内部的 channel 也被移除，避免页面回到前台时残留的“幽灵频道”影响重连
+    // 防御性清理：确保 Supabase 客户端内部的 channel 也被移除，避免页面回到前台时残留的"幽灵频道"影响重连
     const clientChannels = supabase.getChannels?.() || [];
     clientChannels.forEach(channel => {
       supabase.removeChannel(channel);
@@ -431,8 +548,15 @@ class RealtimeClient {
     this.connectionStatus = 'disconnected';
     this.config.onConnectionChange?.(false);
 
+    // 递增 generation，使旧的回调失效
+    const newGeneration = this.incrementGeneration();
+
+    // 清除预期关闭标记
+    this.clearExpectedClose();
+
     // 打印清理后的 channel 列表用于调试
     const remainingChannels = supabase.getChannels?.() || [];
+    console.log(`[RealtimeClient] cleanup: 清理完成，generation: ${oldGeneration} -> ${newGeneration}`);
     console.log('[RealtimeClient] cleanup: 清理后 supabase.getChannels()', remainingChannels.map((c: RealtimeChannel) => ({ topic: c.topic, state: (c as unknown as { state?: string }).state })));
   }
 
@@ -459,16 +583,16 @@ export const subscribeToTable = <T>(
   event: RealtimeEvent,
   filter: string | undefined,
   callback: (payload: T) => void,
-  _onStatusChange?: (status: string | undefined, error?: Error | null) => void
+  onStatusChange?: StatusChangeCallback
 ): (() => void) => {
   const client = getRealtimeClient();
-  return client.subscribe<T>(channelName, table, event, filter, callback, _onStatusChange);
+  return client.subscribe<T>(channelName, table, event, filter, callback, onStatusChange);
 };
 
 // 导出清理函数
-export const cleanupRealtime = (): void => {
+export const cleanupRealtime = (reason: CloseReason = 'CLEANUP'): void => {
   const client = getRealtimeClient();
-  client.cleanup();
+  client.cleanup(reason);
 };
 
 // 导出连接状态检查函数

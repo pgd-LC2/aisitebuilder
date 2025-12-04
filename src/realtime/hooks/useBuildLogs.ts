@@ -4,7 +4,10 @@
  * 提供构建日志的实时订阅功能。
  * 组件通过此 hook 获取构建日志列表，无需直接操作 Supabase。
  * 
- * 修复：使用 ref 存储回调函数，避免因回调变化导致的订阅循环。
+ * 修复：
+ * 1. 使用 ref 存储回调函数，避免因回调变化导致的订阅循环
+ * 2. 引入 generation 检查，区分「预期关闭」和「异常关闭」
+ * 3. 使用 StatusChangeMeta 获取关闭原因，避免错误的兜底刷新
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
@@ -12,12 +15,14 @@ import type { BuildLog } from '../../types/project';
 import { buildLogService } from '../../services/buildLogService';
 import { subscribeBuildLogs } from '../subscribeBuildLogs';
 import { useAuth } from '../../contexts/AuthContext';
+import { getRealtimeClient } from '../realtimeClient';
 import type {
   BuildLogState,
   BuildLogAction,
   UseBuildLogsOptions,
   UseBuildLogsReturn,
-  RealtimeSubscribeStatus
+  RealtimeSubscribeStatus,
+  StatusChangeMeta
 } from '../types';
 
 // 初始状态
@@ -53,6 +58,7 @@ function buildLogReducer(state: BuildLogState, action: BuildLogAction): BuildLog
 export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   const { projectId, onLogAdded } = options;
   const { authReady, authVersion } = useAuth();
+  const client = getRealtimeClient();
   
   const [state, dispatch] = useReducer(buildLogReducer, initialState);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,6 +75,9 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   
   // 追踪上一次的订阅状态，用于边缘检测（只在状态变化时触发刷新）
   const lastStatusRef = useRef<RealtimeSubscribeStatus | undefined>(undefined);
+  
+  // 记录订阅创建时的 generation，用于忽略旧回调
+  const subscriptionGenerationRef = useRef<number>(0);
 
   // 加载日志列表
   const refreshLogs = useCallback(async () => {
@@ -83,7 +92,6 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       console.error('[useBuildLogs] 加载日志失败:', error);
     } else if (data) {
       console.log('[useBuildLogs] 加载到', data.length, '条日志');
-      console.log("data:",data)
       dispatch({ type: 'SET_LOGS', payload: data });
     }
 
@@ -98,16 +106,24 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
   }, []);
 
   const handleStatusChange = useCallback(
-    (status?: RealtimeSubscribeStatus, error?: Error | null) => {
+    (status?: RealtimeSubscribeStatus, error?: Error | null, meta?: StatusChangeMeta) => {
       // 如果组件已卸载，忽略状态变化
       if (!isMountedRef.current) {
         console.log(`[useBuildLogs] 组件已卸载，忽略状态变化: ${status}`);
         return;
       }
       
+      // 检查 generation 是否仍然有效，忽略旧 generation 的回调
+      if (meta?.generation !== undefined && !client.isGenerationValid(meta.generation)) {
+        console.log(`[useBuildLogs] 忽略旧 generation 的状态回调: gen=${meta.generation}, current=${client.getSessionGeneration()}`);
+        return;
+      }
+      
       // 记录上一次状态，用于边缘检测
       const prevStatus = lastStatusRef.current;
       lastStatusRef.current = status;
+      
+      console.log(`[useBuildLogs] 状态变化: ${prevStatus} -> ${status}, closeReason=${meta?.closeReason}, isExpectedClose=${meta?.isExpectedClose}`);
 
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
@@ -130,6 +146,13 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       if (isErrorStatus || error) {
         setIsConnected(false);
         
+        // 关键修复：检查是否是预期关闭
+        // 如果是预期关闭（CLEANUP、UNSUBSCRIBE、AUTH_CHANGE），不触发兜底刷新
+        if (meta?.isExpectedClose || meta?.closeReason === 'CLEANUP' || meta?.closeReason === 'UNSUBSCRIBE' || meta?.closeReason === 'AUTH_CHANGE') {
+          console.log(`[useBuildLogs] 预期关闭 (reason=${meta?.closeReason})，等待新订阅建立`);
+          return;
+        }
+        
         // 边缘检测：只在从非错误状态变为错误状态时触发一次刷新
         // 避免在持续错误状态下反复刷新导致死循环
         const wasErrorBefore = prevStatus === 'CLOSED' || prevStatus === 'CHANNEL_ERROR' || prevStatus === 'TIMED_OUT';
@@ -141,7 +164,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
         }
       }
     },
-    [projectId, refreshLogs]
+    [projectId, refreshLogs, client]
   );
 
   // 设置订阅 - 依赖 projectId 和 authReady，确保认证完成后再创建订阅
@@ -161,7 +184,9 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       return;
     }
 
-    console.log('[useBuildLogs] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion);
+    // 记录订阅创建时的 generation
+    subscriptionGenerationRef.current = client.getSessionGeneration();
+    console.log('[useBuildLogs] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion, 'generation:', subscriptionGenerationRef.current);
 
     // 加载初始数据
     refreshLogs();
@@ -193,7 +218,7 @@ export function useBuildLogs(options: UseBuildLogsOptions): UseBuildLogsReturn {
       unsubscribe();
       setIsConnected(false);
     };
-  }, [authReady, authVersion, handleStatusChange, projectId, refreshLogs]);
+  }, [authReady, authVersion, handleStatusChange, projectId, refreshLogs, client]);
 
   return {
     logs: state.logs,

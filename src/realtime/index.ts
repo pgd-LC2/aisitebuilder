@@ -48,7 +48,15 @@ export type {
   UseFileEventsOptions,
   UseFileEventsReturn,
   UseBuildLogsOptions,
-  UseBuildLogsReturn
+  UseBuildLogsReturn,
+  // Generation 和 CloseReason 相关类型
+  CloseReason,
+  StatusChangeMeta,
+  StatusChangeCallback,
+  RealtimeContextState,
+  RealtimeContextValue,
+  RealtimeResourceConfig,
+  RealtimeResourceReturn
 } from './types';
 
 // 客户端导出
@@ -69,3 +77,4 @@ export { useAgentEvents } from './hooks/useAgentEvents';
 export { useBuildLogs } from './hooks/useBuildLogs';
 export { useFileEvents } from './hooks/useFileEvents';
 export { useTimelineEvents } from './hooks/useTimelineEvents';
+export { useRealtimeResource } from './hooks/useRealtimeResource';
