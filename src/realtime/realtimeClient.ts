@@ -540,8 +540,9 @@ class RealtimeClient {
       supabase.removeChannel(channel);
     });
 
-    // 彻底断开 Realtime 连接，确保下次订阅使用全新 socket
-    void supabase.realtime.disconnect();
+    // 注意：不在这里调用 supabase.realtime.disconnect()
+    // Socket 的 disconnect/connect 统一由 refreshRealtimeAuth 管理，避免多处调用导致竞态条件
+    // 参见 docs/issues/realtime_alternating_subscription_failure.md
 
     this.channels.clear();
     this.subscriptions.clear();
