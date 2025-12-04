@@ -241,6 +241,41 @@ export type BuildLogAction =
 // Realtime 客户端类型
 // ============================================
 
+/**
+ * 关闭原因枚举
+ * 用于区分「预期关闭」和「异常关闭」
+ */
+export type CloseReason =
+  | 'CLEANUP'      // 由 cleanup() 主动触发的关闭
+  | 'UNSUBSCRIBE'  // 由 unsubscribe() 主动触发的关闭
+  | 'ERROR'        // 由网络错误、RLS 拒绝等异常触发的关闭
+  | 'AUTH_CHANGE'  // 由认证状态变化触发的关闭
+  | 'UNKNOWN';     // 未知原因
+
+/**
+ * 状态变化元数据
+ * 包含 generation 和 closeReason 信息
+ */
+export interface StatusChangeMeta {
+  /** 订阅创建时的会话世代 */
+  generation: number;
+  /** 关闭原因（仅在 CLOSED 状态时有值） */
+  closeReason?: CloseReason;
+  /** 频道名称 */
+  channelName?: string;
+  /** 是否是预期关闭 */
+  isExpectedClose?: boolean;
+}
+
+/**
+ * 扩展的状态变化回调类型
+ */
+export type StatusChangeCallback = (
+  status: RealtimeSubscribeStatus | undefined,
+  error: Error | null,
+  meta?: StatusChangeMeta
+) => void;
+
 export type RealtimeEvent = 'INSERT' | 'UPDATE' | 'DELETE';
 
 export interface RealtimeSubscription {
@@ -300,7 +335,7 @@ export interface SubscribeAgentEventsOptions {
   onMessageCreated?: (message: ChatMessage) => void;
   onAgentEvent?: (event: DbAgentEvent) => void;
   onError?: (error: Error) => void;
-  onStatusChange?: (status: RealtimeSubscribeStatus | undefined, error?: Error | null) => void;
+  onStatusChange?: StatusChangeCallback;
 }
 
 export interface SubscribeFileEventsOptions {
@@ -311,14 +346,14 @@ export interface SubscribeFileEventsOptions {
   onFileDeleted?: (fileId: string) => void;
   onFileEvent?: (event: DbFileEvent) => void;
   onError?: (error: Error) => void;
-  onStatusChange?: (status: RealtimeSubscribeStatus | undefined, error?: Error | null) => void;
+  onStatusChange?: StatusChangeCallback;
 }
 
 export interface SubscribeBuildLogsOptions {
   projectId: string;
   onLogCreated?: (log: BuildLog) => void;
   onError?: (error: Error) => void;
-  onStatusChange?: (status: RealtimeSubscribeStatus | undefined, error?: Error | null) => void;
+  onStatusChange?: StatusChangeCallback;
 }
 
 // ============================================
@@ -366,4 +401,103 @@ export interface UseBuildLogsReturn {
   isConnected: boolean;
   appendLog: (log: BuildLog) => void;
   refreshLogs: () => Promise<void>;
+}
+
+// ============================================
+// RealtimeContext 类型
+// ============================================
+
+/**
+ * Realtime 上下文状态
+ */
+export interface RealtimeContextState {
+  /** 当前会话世代，每次 cleanup/reset 时递增 */
+  sessionGeneration: number;
+  /** 全局连接状态 */
+  connectionStatus: ConnectionStatus;
+  /** 认证是否就绪 */
+  authReady: boolean;
+  /** 认证版本号 */
+  authVersion: number;
+  /** 是否正在进行预期关闭（cleanup/auth change） */
+  isExpectedClose: boolean;
+}
+
+/**
+ * Realtime 上下文值
+ */
+export interface RealtimeContextValue extends RealtimeContextState {
+  /** 递增会话世代 */
+  incrementGeneration: () => number;
+  /** 标记开始预期关闭 */
+  markExpectedClose: () => void;
+  /** 清除预期关闭标记 */
+  clearExpectedClose: () => void;
+  /** 检查给定 generation 是否仍然有效 */
+  isGenerationValid: (generation: number) => boolean;
+  /** 获取当前 generation */
+  getCurrentGeneration: () => number;
+}
+
+// ============================================
+// useRealtimeResource 通用 Hook 类型
+// ============================================
+
+/**
+ * Realtime 资源配置
+ */
+export interface RealtimeResourceConfig<T> {
+  /** 资源唯一标识，用于日志和调试 */
+  resourceKey: string;
+  /** 项目 ID */
+  projectId: string | undefined;
+  /** 获取初始快照 */
+  fetchSnapshot: () => Promise<T[]>;
+  /** 建立增量订阅，返回取消订阅函数 */
+  subscribeIncrements: (handlers: {
+    onInsert?: (item: T) => void;
+    onUpdate?: (item: T) => void;
+    onDelete?: (id: string) => void;
+    onStatusChange?: StatusChangeCallback;
+  }) => () => void;
+  /** 获取项目的唯一标识 */
+  getItemId: (item: T) => string;
+  /** 是否启用（默认 true） */
+  enabled?: boolean;
+  /** 刷新节流时间（毫秒，默认 1000） */
+  refreshThrottleMs?: number;
+  /** 依赖项，变化时重新订阅 */
+  deps?: unknown[];
+}
+
+/**
+ * Realtime 资源状态
+ */
+export interface RealtimeResourceState<T> {
+  /** 数据列表 */
+  data: T[];
+  /** 是否正在加载 */
+  isLoading: boolean;
+  /** 是否已连接 */
+  isConnected: boolean;
+  /** 错误信息 */
+  error: string | null;
+  /** 当前订阅的 generation */
+  generation: number;
+}
+
+/**
+ * Realtime 资源返回值
+ */
+export interface RealtimeResourceReturn<T> extends RealtimeResourceState<T> {
+  /** 刷新数据 */
+  refresh: (options?: { priority?: 'normal' | 'high' }) => Promise<void>;
+  /** 追加单个项目 */
+  appendItem: (item: T) => void;
+  /** 更新单个项目 */
+  updateItem: (item: T) => void;
+  /** 删除单个项目 */
+  removeItem: (id: string) => void;
+  /** 设置完整数据 */
+  setData: (data: T[]) => void;
 }

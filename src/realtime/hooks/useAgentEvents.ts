@@ -4,7 +4,10 @@
  * 提供 AI 任务和聊天消息的实时订阅功能。
  * 组件通过此 hook 获取消息列表和任务状态，无需直接操作 Supabase。
  * 
- * 修复：使用 ref 存储回调函数，避免因回调变化导致的订阅循环。
+ * 修复：
+ * 1. 使用 ref 存储回调函数，避免因回调变化导致的订阅循环
+ * 2. 引入 generation 检查，区分「预期关闭」和「异常关闭」
+ * 3. 使用 StatusChangeMeta 获取关闭原因，避免错误的兜底刷新
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
@@ -14,12 +17,14 @@ import { aiTaskService } from '../../services/aiTaskService';
 import { imageProxyService } from '../../services/imageProxyService';
 import { subscribeAgentEvents } from '../subscribeAgentEvents';
 import { useAuth } from '../../contexts/AuthContext';
+import { getRealtimeClient } from '../realtimeClient';
 import type {
   AgentState,
   AgentAction,
   UseAgentEventsOptions,
   UseAgentEventsReturn,
-  RealtimeSubscribeStatus
+  RealtimeSubscribeStatus,
+  StatusChangeMeta
 } from '../types';
 
 // 初始状态
@@ -86,6 +91,7 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
 export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsReturn {
   const { projectId, onTaskCompleted, onMessageReceived } = options;
   const { authReady, authVersion } = useAuth();
+  const client = getRealtimeClient();
   
   const [state, dispatch] = useReducer(agentReducer, initialState);
   const [isConnected, setIsConnected] = useState(false);
@@ -106,6 +112,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   
   // 追踪上一次的订阅状态，用于边缘检测（只在状态变化时触发刷新）
   const lastStatusRef = useRef<RealtimeSubscribeStatus | undefined>(undefined);
+  
+  // 记录订阅创建时的 generation，用于忽略旧回调
+  const subscriptionGenerationRef = useRef<number>(0);
   
   // 使用 ref 存储回调，避免订阅循环
   const onTaskCompletedRef = useRef(onTaskCompleted);
@@ -205,16 +214,24 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   }, []);
 
   const handleStatusChange = useCallback(
-    (status?: RealtimeSubscribeStatus, error?: Error | null) => {
+    (status?: RealtimeSubscribeStatus, error?: Error | null, meta?: StatusChangeMeta) => {
       // 如果组件已卸载，忽略状态变化
       if (!isMountedRef.current) {
         console.log(`[useAgentEvents] 组件已卸载，忽略状态变化: ${status}`);
         return;
       }
       
+      // 检查 generation 是否仍然有效，忽略旧 generation 的回调
+      if (meta?.generation !== undefined && !client.isGenerationValid(meta.generation)) {
+        console.log(`[useAgentEvents] 忽略旧 generation 的状态回调: gen=${meta.generation}, current=${client.getSessionGeneration()}`);
+        return;
+      }
+      
       // 记录上一次状态，用于边缘检测
       const prevStatus = lastStatusRef.current;
       lastStatusRef.current = status;
+      
+      console.log(`[useAgentEvents] 状态变化: ${prevStatus} -> ${status}, closeReason=${meta?.closeReason}, isExpectedClose=${meta?.isExpectedClose}`);
 
       if (status === 'SUBSCRIBED') {
         setIsConnected(true);
@@ -238,6 +255,13 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       if (isErrorStatus || error) {
         setIsConnected(false);
         
+        // 关键修复：检查是否是预期关闭
+        // 如果是预期关闭（CLEANUP、UNSUBSCRIBE、AUTH_CHANGE），不触发兜底刷新
+        if (meta?.isExpectedClose || meta?.closeReason === 'CLEANUP' || meta?.closeReason === 'UNSUBSCRIBE' || meta?.closeReason === 'AUTH_CHANGE') {
+          console.log(`[useAgentEvents] 预期关闭 (reason=${meta?.closeReason})，等待新订阅建立`);
+          return;
+        }
+        
         // 边缘检测：只在从非错误状态变为错误状态时触发一次刷新
         // 避免在持续错误状态下反复刷新导致死循环
         const wasErrorBefore = prevStatus === 'CLOSED' || prevStatus === 'CHANNEL_ERROR' || prevStatus === 'TIMED_OUT';
@@ -249,7 +273,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         }
       }
     },
-    [projectId, refreshMessages]
+    [projectId, refreshMessages, client]
   );
 
   // 处理任务更新的内部函数（用于订阅回调）
@@ -374,7 +398,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       return;
     }
 
-    console.log('[useAgentEvents] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion);
+    // 记录订阅创建时的 generation
+    subscriptionGenerationRef.current = client.getSessionGeneration();
+    console.log('[useAgentEvents] 设置订阅, projectId:', projectId, 'authReady:', authReady, 'authVersion:', authVersion, 'generation:', subscriptionGenerationRef.current);
 
     // 加载初始数据
     refreshMessages();
@@ -413,7 +439,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       unsubscribe();
       setIsConnected(false);
     };
-  }, [authReady, authVersion, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal]);
+  }, [authReady, authVersion, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal, client]);
 
   // 清理 blob URLs
   useEffect(() => {

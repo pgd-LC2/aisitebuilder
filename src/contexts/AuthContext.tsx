@@ -36,13 +36,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[AuthContext] onAuthStateChange:', event);
 
         // 当认证状态变化时，刷新 Realtime 鉴权并重置连接，确保使用最新的 token
+        // 优化处理顺序：先递增 authVersion，让 Hook 知道即将重建订阅，然后清理旧连接
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-          cleanupRealtime();
-          RealtimeClient.resetInstance();
-          await refreshRealtimeAuth({ forceReconnect: true, ensureConnected: true });
-          console.log('[AuthContext] 认证状态变化，重置 RealtimeClient');
-          // 递增 authVersion，触发订阅 hooks 重新创建订阅
+          // 1. 先递增 authVersion，让 Hook 知道即将重建订阅（旧回调会被忽略）
           setAuthVersion(v => v + 1);
+          
+          // 2. 清理旧连接，传递 AUTH_CHANGE 作为关闭原因
+          // 这样 Hook 可以区分「认证变化导致的预期关闭」和「异常关闭」
+          cleanupRealtime('AUTH_CHANGE');
+          RealtimeClient.resetInstance();
+          
+          // 3. 最后刷新认证，建立新连接
+          await refreshRealtimeAuth({ forceReconnect: true, ensureConnected: true });
+          console.log('[AuthContext] 认证状态变化，重置 RealtimeClient，authVersion 已递增');
         }
 
         setSession(session);

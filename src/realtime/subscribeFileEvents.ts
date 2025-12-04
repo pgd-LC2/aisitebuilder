@@ -16,7 +16,7 @@ import type { SubscribeFileEventsOptions, DbFileEvent } from './types';
  * @returns 取消订阅函数
  */
 export function subscribeFileEvents(options: SubscribeFileEventsOptions): () => void {
-  const { projectId, versionId, onFileCreated, onFileUpdated, onFileDeleted, onFileEvent, onError } = options;
+  const { projectId, versionId, onFileCreated, onFileUpdated, onFileDeleted, onFileEvent, onError, onStatusChange } = options;
 
   if (!projectId) {
     console.warn('[subscribeFileEvents] projectId 为空，跳过订阅');
@@ -31,7 +31,7 @@ export function subscribeFileEvents(options: SubscribeFileEventsOptions): () => 
     const filter = versionId ? `${baseFilter},version_id=eq.${versionId}` : baseFilter;
     const channelSuffix = versionId ? `-${versionId}` : '';
 
-    // 订阅文件创建
+    // 订阅文件创建（主订阅，传递 onStatusChange）
     if (onFileCreated) {
       const unsubscribeCreate = subscribeToTable<ProjectFile>(
         `file-events-create-${projectId}${channelSuffix}`,
@@ -41,7 +41,8 @@ export function subscribeFileEvents(options: SubscribeFileEventsOptions): () => 
         (file) => {
           console.log('[subscribeFileEvents] 收到文件创建:', file.file_name);
           onFileCreated(file);
-        }
+        },
+        onStatusChange // 传递状态变化回调
       );
       unsubscribers.push(unsubscribeCreate);
     }
