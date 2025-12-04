@@ -90,7 +90,6 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
   //  return allLogs.filter(isTaskLifecycleLog);
   //}, [allLogs]);
   const logs = allLogs.filter(isTaskLifecycleLog);
-  console.log("logs:",logs)
   
   useEffect(() => {
     if (isExpanded && logsEndRef.current) {
