@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, refreshRealtimeAuth } from '../lib/supabase';
 import RealtimeClient, { cleanupRealtime } from '../realtime/realtimeClient';
@@ -21,12 +21,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [authVersion, setAuthVersion] = useState(0);
+  
+  // 保存上一个用户 ID，用于检测账号切换
+  const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setUser(data.session?.user ?? null);
+      // 初始化时记录用户 ID
+      prevUserIdRef.current = data.session?.user?.id ?? null;
       await refreshRealtimeAuth({ forceReconnect: true, ensureConnected: true });
       setLoading(false);
     })();
@@ -35,20 +40,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (async () => {
         console.log('[AuthContext] onAuthStateChange:', event);
 
-        // 当认证状态变化时，刷新 Realtime 鉴权并重置连接，确保使用最新的 token
-        // 优化处理顺序：先递增 authVersion，让 Hook 知道即将重建订阅，然后清理旧连接
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-          // 1. 先递增 authVersion，让 Hook 知道即将重建订阅（旧回调会被忽略）
+        // 根据不同的认证事件采用不同的处理策略
+        // 核心原则：只在真正需要时（登出、切换账号）才做彻底重置
+        if (event === 'SIGNED_OUT') {
+          // 登出：需要彻底清理所有连接和订阅
+          console.log('[AuthContext] 用户登出，执行彻底清理');
           setAuthVersion(v => v + 1);
-          
-          // 2. 清理旧连接，传递 AUTH_CHANGE 作为关闭原因
-          // 这样 Hook 可以区分「认证变化导致的预期关闭」和「异常关闭」
           cleanupRealtime('AUTH_CHANGE');
           RealtimeClient.resetInstance();
+          prevUserIdRef.current = null;
+          // 登出后不需要重新连接，等待下次登录
+        } else if (event === 'SIGNED_IN') {
+          // 登录：需要区分是「首次登录/切换账号」还是「session 恢复」
+          const newUserId = session?.user?.id ?? null;
+          const isUserSwitch = prevUserIdRef.current !== null && prevUserIdRef.current !== newUserId;
           
-          // 3. 最后刷新认证，建立新连接
-          await refreshRealtimeAuth({ forceReconnect: true, ensureConnected: true });
-          console.log('[AuthContext] 认证状态变化，重置 RealtimeClient，authVersion 已递增');
+          if (isUserSwitch) {
+            // 切换账号：需要彻底清理旧用户的连接和订阅
+            console.log('[AuthContext] 检测到账号切换，执行彻底清理', {
+              prevUserId: prevUserIdRef.current,
+              newUserId
+            });
+            setAuthVersion(v => v + 1);
+            cleanupRealtime('AUTH_CHANGE');
+            RealtimeClient.resetInstance();
+          } else {
+            // session 恢复（如标签页切换返回）：不需要重建连接
+            console.log('[AuthContext] session 恢复，保持现有连接');
+          }
+          
+          prevUserIdRef.current = newUserId;
+          // 只在切换账号时 forceReconnect，session 恢复时只确保连接
+          await refreshRealtimeAuth({ forceReconnect: isUserSwitch, ensureConnected: true });
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Token 刷新：这是正常的后台行为，只需要更新 token，不需要重建连接
+          // refreshRealtimeAuth 会自动处理 token 更新（通过 setAuth）
+          console.log('[AuthContext] Token 刷新，仅更新认证信息');
+          await refreshRealtimeAuth({ forceReconnect: false, ensureConnected: true });
         }
 
         setSession(session);
