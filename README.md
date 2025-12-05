@@ -25,8 +25,12 @@
 
 ## AI 任务编排
 
-- ChatPanel、VersionManager、FileManager 等前端功能会把“聊天回复”“构建/重构请求”等长任务写入 Supabase 的 `ai_tasks` 表，由 Edge Function 或 Worker 根据 `type`、`payload` 协调模型调用或代码生成，再把执行结果写回 `result`/`status`。
+- ChatPanel、VersionManager、FileManager 等前端功能会把"聊天回复""构建/重构请求"等长任务写入 Supabase 的 `ai_tasks` 表，由 Edge Function 或 Worker 根据 `type`、`payload` 协调模型调用或代码生成，再把执行结果写回 `result`/`status`。
 - `ai_tasks` 持久化 `project_id`、`user_id`、`payload`、`model`、`status` 和时间戳，并开启 RLS，保障只有任务所属用户能读写数据，可与 `build_logs`、`project_versions` 一起让前端订阅进度并在任务完成后生成快照。
+
+### Edge Functions 架构
+
+当前 `process-ai-tasks` 边缘函数承担了 AI 任务处理的核心逻辑，包括 Prompt 路由、LLM 调用、文件操作和自我修复循环。详细的重构方案请参阅 `docs/specs/process-ai-tasks-refactor.md`。
 
 ## 部署提示
 
