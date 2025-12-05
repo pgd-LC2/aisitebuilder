@@ -1,4 +1,3 @@
-import { generateViteReactTemplate } from '../templates/viteReactTemplate';
 import { supabase } from '../lib/supabase';
 
 interface InitializeProjectResponse {
@@ -62,34 +61,5 @@ export const templateService = {
       console.error('初始化项目模板出错:', err);
       return { success: false, error: err };
     }
-  },
-
-  async getTemplateFileTree(projectTitle: string, projectDescription: string) {
-    const template = generateViteReactTemplate(projectTitle, projectDescription);
-
-    const tree: Record<string, any> = {};
-
-    template.files.forEach(file => {
-      const parts = file.path.split('/');
-      let current = tree;
-
-      parts.forEach((part, index) => {
-        if (index === parts.length - 1) {
-          current[part] = {
-            type: 'file',
-            content: file.content,
-            mimeType: file.mimeType,
-            category: file.category
-          };
-        } else {
-          if (!current[part]) {
-            current[part] = { type: 'folder', children: {} };
-          }
-          current = current[part].children;
-        }
-      });
-    });
-
-    return tree;
   }
 };
