@@ -158,73 +158,84 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* 消息列表区域：使用 flex-col justify-start 确保消息从顶部开始显示（吸顶） */}
+      {/* 消息列表区域：使用 flex-col 确保消息从顶部开始显示（吸顶）
+          关键布局：
+          1. 外层容器 overflow-y-auto 负责滚动
+          2. 内层使用 min-h-full 确保内容至少占满容器高度
+          3. 底部 spacer (flex-grow) 在消息少时撑满空白，在消息多时提供额外滚动空间
+          4. 这样才能让最后一条消息有足够的空间滚动到视口顶部（吸顶效果）
+      */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 flex flex-col justify-start overflow-y-auto px-4 py-4"
+        className="flex-1 overflow-y-auto px-4 py-4"
       >
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <p className="text-gray-500 text-sm">加载中...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-2">
               <p className="text-gray-500 text-sm">暂无对话</p>
               <p className="text-gray-400 text-xs">输入你的指令开始编辑</p>
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {messages.map(message => (
-              <div
-                key={message.id}
-                data-message-id={message.id}
-                className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
-              >
+          <div className="flex flex-col min-h-full">
+            <div className="space-y-3">
+              {messages.map(message => (
                 <div
-                  className={`max-w-[85%] rounded-xl px-3 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white text-gray-900 border border-gray-200'
-                  }`}
+                  key={message.id}
+                  data-message-id={message.id}
+                  className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                    {message.content}
-                  </p>
-                  <span className="text-[10px] opacity-60 mt-1 block">
-                    {new Date(message.created_at).toLocaleTimeString('zh-CN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-                {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
-                    {messageImages[message.id].map((imagePath, index) => (
-                      <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
-                        {imageBlobUrls[imagePath] ? (
-                          <img
-                            src={imageBlobUrls[imagePath]}
-                            alt={`生成的图片 ${index + 1}`}
-                            className="max-w-full h-auto max-h-64 object-contain"
-                            loading="lazy"
-                            onError={(e) => {
-                              console.error('图片加载失败:', imagePath);
-                              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
-                            <p className="text-xs text-gray-500">加载中...</p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div
+                    className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                      message.role === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white text-gray-900 border border-gray-200'
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                    <span className="text-[10px] opacity-60 mt-1 block">
+                      {new Date(message.created_at).toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))}
+                  {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
+                      {messageImages[message.id].map((imagePath, index) => (
+                        <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
+                          {imageBlobUrls[imagePath] ? (
+                            <img
+                              src={imageBlobUrls[imagePath]}
+                              alt={`生成的图片 ${index + 1}`}
+                              className="max-w-full h-auto max-h-64 object-contain"
+                              loading="lazy"
+                              onError={(e) => {
+                                console.error('图片加载失败:', imagePath);
+                                e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
+                              <p className="text-xs text-gray-500">加载中...</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* 底部 spacer：提供额外的滚动空间，让最后一条消息可以滚动到视口顶部
+                使用 flex-grow 在消息少时自然撑满空白区域，在消息多时提供至少一屏的额外空间 */}
+            <div className="flex-grow min-h-[calc(100%-4rem)]" />
           </div>
         )}
       </div>
