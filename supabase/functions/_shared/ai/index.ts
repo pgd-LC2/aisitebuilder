@@ -80,3 +80,23 @@ export {
   runVerificationCommands,
   processTaskWithSelfRepair
 } from './selfRepair/loop.ts';
+
+// Subagent 系统
+export type {
+  SubagentType,
+  SubagentConfig,
+  SubagentContext,
+  SubagentTaskParams,
+  SubagentResult
+} from './subagent/index.ts';
+
+export {
+  MAX_NESTING_LEVEL,
+  executeSubagent,
+  canSpawnSubagent,
+  getAvailableSubagentTypes,
+  initializeBuiltinSubagents,
+  registerSubagent,
+  hasSubagent,
+  getRegisteredSubagentTypes
+} from './subagent/index.ts';
