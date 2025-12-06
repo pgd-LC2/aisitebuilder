@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
@@ -20,6 +20,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const projectId = currentProject?.id;
   
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // 标记是否已完成初始滚动（打开网页时滚动到底部）
+  const hasInitialScrollRef = useRef(false);
 
   // 使用新的 useAgentEvents hook，统一管理消息和任务订阅
   const {
@@ -61,6 +63,51 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     const offset = targetRect.top - containerRect.top + container.scrollTop;
     container.scrollTop = offset;
   }, []);
+
+  // 滚动到底部：将指定消息滚动到视口底部（用于打开网页时显示最新消息）
+  const scrollToMessageBottom = useCallback((messageId: string) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollHeight, clientHeight } = container;
+    // 如果内容不够一屏，保持从顶部开始
+    if (scrollHeight <= clientHeight) {
+      container.scrollTop = 0;
+      return;
+    }
+
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+
+    // 目标消息底部相对于容器顶部的偏移 + 当前 scrollTop
+    const targetBottomOffset = targetRect.bottom - containerRect.top + container.scrollTop;
+
+    // 让消息"贴在容器底部"：bottomOffset - clientHeight
+    const desiredScrollTop = targetBottomOffset - clientHeight;
+
+    const maxScrollTop = scrollHeight - clientHeight;
+    container.scrollTop = Math.min(desiredScrollTop, maxScrollTop);
+  }, []);
+
+  // 初始滚动：打开网页时自动滚动到最下方（显示最新消息）
+  useEffect(() => {
+    if (hasInitialScrollRef.current) return;
+    if (!isConnected) return;
+    if (!messagesContainerRef.current) return;
+    if (messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+
+    // 在下一帧执行，确保 DOM 已经渲染
+    requestAnimationFrame(() => {
+      scrollToMessageBottom(lastMessage.id);
+      hasInitialScrollRef.current = true;
+    });
+  }, [isConnected, messages.length, scrollToMessageBottom]);
 
   const handleSend = async () => {
     if (!input.trim() || !projectId) return;
