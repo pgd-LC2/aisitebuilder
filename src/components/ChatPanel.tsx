@@ -139,20 +139,21 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* 消息列表区域：使用 flex-col justify-start 确保消息从顶部开始显示（吸顶） */}
+      <div className="flex-1 flex flex-col justify-start overflow-y-auto px-4 py-4">
         {loading ? (
-          <div className="h-full flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center">
             <p className="text-gray-500 text-sm">加载中...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-2">
               <p className="text-gray-500 text-sm">暂无对话</p>
               <p className="text-gray-400 text-xs">输入你的指令开始编辑</p>
             </div>
           </div>
         ) : (
-          <>
+          <div className="space-y-3">
             {messages.map(message => (
               <div
                 key={message.id}
@@ -202,7 +203,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
               </div>
             ))}
             <div ref={messagesEndRef} />
-          </>
+          </div>
         )}
       </div>
 
