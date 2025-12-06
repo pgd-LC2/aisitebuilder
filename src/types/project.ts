@@ -121,3 +121,31 @@ export interface Prompt {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * 工作流模式类型
+ * - default: 默认/只读模式，只能执行读取类操作
+ * - planning: 规划模式，纯对话模式，用于需求澄清和方案制定
+ * - build: 构建模式，全权限模式，允许写文件和执行命令
+ */
+export type WorkflowMode = 'default' | 'planning' | 'build';
+
+/**
+ * 规划摘要接口
+ * 用于在规划模式完成后锁定上下文
+ */
+export interface PlanSummary {
+  requirement: string;
+  technicalPlan: string;
+  implementationSteps: string[];
+  confirmedAt: string;
+}
+
+/**
+ * 工作流状态接口
+ */
+export interface WorkflowState {
+  mode: WorkflowMode;
+  planSummary: PlanSummary | null;
+  isImplementReady: boolean;
+}
