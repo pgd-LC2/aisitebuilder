@@ -88,14 +88,14 @@ HTTP 响应
 
 ### 3.1 设计原则
 
-1. **共享模块优先**：优先使用 `_shared` 目录的模块化拆分，而非创建多个 HTTP 端点
+1. **共享模块优先**：使用 `_shared` 目录的模块化拆分，而非创建多个 HTTP 端点
 2. **最小化 HTTP 边界**：避免不必要的网络往返和状态序列化开销
 3. **保持闭环逻辑**：自我修复循环等有状态逻辑保持在单个请求内完成
-4. **渐进式演进**：分阶段实施，Phase 1 模块化，Phase 2 可选的多 Edge Function
+4. **数据库驱动**：Prompt 内容从 `prompts` 表动态读取，不使用硬编码备选
 
 ### 3.2 目标架构
 
-#### Phase 1：共享模块化（推荐首选）
+#### 目标架构：共享模块化
 
 ```
 supabase/functions/
@@ -104,8 +104,7 @@ supabase/functions/
 │       ├── config.ts                 # 配置与常量
 │       ├── types.ts                  # 类型定义
 │       ├── prompts/                  # Prompt 相关
-│       │   ├── templates.ts          # 五层 Prompt 模板
-│       │   └── router.ts             # Prompt Router
+│       │   └── router.ts             # Prompt Router（从 prompts 表读取）
 │       ├── llm/                      # LLM 客户端
 │       │   ├── client.ts             # OpenRouter API 调用
 │       │   └── imageGenerator.ts     # 图片生成
@@ -130,28 +129,6 @@ supabase/functions/
 ├── initialize-project/               # 现有：项目初始化
 ├── create-version/                   # 现有：版本创建
 └── copy-version-files/               # 现有：版本文件复制
-```
-
-#### Phase 2：可选的多 Edge Function 演进
-
-如果未来需要独立伸缩或复用，可将部分模块升级为独立 Edge Function：
-
-```
-supabase/functions/
-├── _shared/                          # 保留共享模块
-│   └── ai/
-│       ├── config.ts
-│       ├── types.ts
-│       └── ...
-│
-├── process-ai-tasks/                 # 编排器
-│   └── index.ts                      # 任务调度 + 调用其他函数
-│
-├── ai-task-runner/                   # 任务执行器（新增）
-│   └── index.ts                      # processTask + 自我修复
-│
-└── ai-image-generator/               # 图片生成器（可选新增）
-    └── index.ts                      # 独立的图片生成服务
 ```
 
 ### 3.3 模块职责划分
@@ -181,19 +158,7 @@ export interface ParsedChatCompletionOutput { ... }
 // ...
 ```
 
-#### 3.3.3 `_shared/ai/prompts/templates.ts`
-
-```typescript
-// 五层 Prompt 架构
-export const PROMPT_CORE_SYSTEM = `...`;
-export const PROMPT_PLANNER = `...`;
-export const PROMPT_CODER = `...`;
-export const PROMPT_REVIEWER = `...`;
-export const PROMPT_DEBUGGER = `...`;
-export const DEFAULT_PROMPTS: Record<string, string> = { ... };
-```
-
-#### 3.3.4 `_shared/ai/prompts/router.ts`
+#### 3.3.3 `_shared/ai/prompts/router.ts`
 
 ```typescript
 // Prompt Router
@@ -204,7 +169,7 @@ export async function assembleSystemPrompt(...): Promise<string>;
 export async function getMultiplePrompts(...): Promise<Record<string, string>>;
 ```
 
-#### 3.3.5 `_shared/ai/llm/client.ts`
+#### 3.3.4 `_shared/ai/llm/client.ts`
 
 ```typescript
 // OpenRouter API 客户端
@@ -212,7 +177,7 @@ export function parseChatCompletionOutput(data): ParsedChatCompletionOutput;
 export async function callOpenRouterChatCompletionsApi(...): Promise<ParsedChatCompletionOutput>;
 ```
 
-#### 3.3.6 `_shared/ai/llm/imageGenerator.ts`
+#### 3.3.5 `_shared/ai/llm/imageGenerator.ts`
 
 ```typescript
 // 图片生成
@@ -220,14 +185,14 @@ export async function generateImage(prompt, apiKey, aspectRatio): Promise<string
 export async function saveImageToStorage(...): Promise<string>;
 ```
 
-#### 3.3.7 `_shared/ai/tools/definitions.ts`
+#### 3.3.6 `_shared/ai/tools/definitions.ts`
 
 ```typescript
 // 工具 schema 定义
 export const TOOLS = [ ... ];
 ```
 
-#### 3.3.8 `_shared/ai/tools/fileOperations.ts`
+#### 3.3.7 `_shared/ai/tools/fileOperations.ts`
 
 ```typescript
 // 文件操作实现
@@ -242,14 +207,14 @@ export async function handleSearchFiles(ctx, args): Promise<...>;
 export async function handleGetProjectStructure(ctx): Promise<...>;
 ```
 
-#### 3.3.9 `_shared/ai/tools/executor.ts`
+#### 3.3.8 `_shared/ai/tools/executor.ts`
 
 ```typescript
 // 工具执行器
 export async function executeToolCall(toolName, args, ctx): Promise<...>;
 ```
 
-#### 3.3.10 `_shared/ai/selfRepair/debugger.ts`
+#### 3.3.9 `_shared/ai/selfRepair/debugger.ts`
 
 ```typescript
 // Debugger 调用
@@ -259,7 +224,7 @@ export async function invokeDebugger(...): Promise<DebuggerSuggestion | null>;
 export function parseDebuggerOutput(content): DebuggerSuggestion | null;
 ```
 
-#### 3.3.11 `_shared/ai/selfRepair/loop.ts`
+#### 3.3.10 `_shared/ai/selfRepair/loop.ts`
 
 ```typescript
 // 修复循环控制
@@ -268,7 +233,7 @@ export async function runVerificationCommands(...): Promise<VerificationResult>;
 export async function processTaskWithSelfRepair(...): Promise<SelfRepairLoopResult>;
 ```
 
-#### 3.3.12 `_shared/ai/logging/buildLog.ts`
+#### 3.3.11 `_shared/ai/logging/buildLog.ts`
 
 ```typescript
 // 构建日志
@@ -277,7 +242,7 @@ export async function writeAssistantMessage(...): Promise<string | null>;
 export async function updateTaskStatus(...): Promise<void>;
 ```
 
-#### 3.3.13 `_shared/ai/logging/agentEvents.ts`
+#### 3.3.12 `_shared/ai/logging/agentEvents.ts`
 
 ```typescript
 // Agent 事件
@@ -373,7 +338,7 @@ Deno.serve(async (req) => {
 
 ## 4. 模块间交互
 
-### 4.1 Phase 1 交互方式（进程内调用）
+### 4.1 模块间交互方式（进程内调用）
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -398,56 +363,20 @@ Deno.serve(async (req) => {
         │ import              │ import              │ import
         ▼                     ▼                     ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│ prompts/      │   │ llm/          │   │ tools/        │
-│ templates.ts  │   │ imageGen.ts   │   │ fileOps.ts    │
+│ prompts 表    │   │ llm/          │   │ tools/        │
+│ (数据库)      │   │ imageGen.ts   │   │ fileOps.ts    │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
-### 4.2 Phase 2 交互方式（HTTP 调用）
-
-如果采用多 Edge Function 方案，交互方式如下：
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    process-ai-tasks (编排器)                     │
-│  - 任务抢占                                                      │
-│  - 调用 ai-task-runner                                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTP POST (内部调用)
-                              │ Authorization: Bearer <service_role_key>
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    ai-task-runner (任务执行器)                   │
-│  - 接收任务上下文                                                │
-│  - 执行 processTaskWithSelfRepair                               │
-│  - 返回执行结果                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ 进程内调用（使用 _shared 模块）
-                              ▼
-                    ┌─────────────────┐
-                    │   _shared/ai/   │
-                    └─────────────────┘
-```
-
-#### Phase 2 安全考虑
-
-如果采用多 Edge Function 方案，需要注意：
-
-1. **内部函数保护**：`ai-task-runner` 等内部函数应验证调用来源
-2. **认证方式**：使用 service role key 或自定义内部 secret header
-3. **不暴露敏感端点**：避免前端直接访问内部函数
-
 ## 5. 实施计划
 
-### 5.1 Phase 1 实施步骤
+### 5.1 实施步骤
 
 | 步骤 | 任务 | 预计工时 | 风险等级 |
 |------|------|----------|----------|
 | 1 | 创建 `_shared/ai/` 目录结构 | 0.5h | 低 |
 | 2 | 提取 `config.ts` 和 `types.ts` | 1h | 低 |
-| 3 | 提取 `prompts/templates.ts` 和 `prompts/router.ts` | 2h | 中 |
+| 3 | 提取 `prompts/router.ts`（从 prompts 表读取） | 1.5h | 中 |
 | 4 | 提取 `llm/client.ts` 和 `llm/imageGenerator.ts` | 1.5h | 中 |
 | 5 | 提取 `tools/definitions.ts`、`tools/fileOperations.ts`、`tools/executor.ts` | 2h | 中 |
 | 6 | 提取 `selfRepair/debugger.ts` 和 `selfRepair/loop.ts` | 2h | 高 |
@@ -456,20 +385,7 @@ Deno.serve(async (req) => {
 | 9 | 集成测试 | 2h | 高 |
 | 10 | 文档更新 | 1h | 低 |
 
-**总计**：约 15 小时
-
-### 5.2 Phase 2 实施步骤（可选）
-
-| 步骤 | 任务 | 预计工时 | 风险等级 |
-|------|------|----------|----------|
-| 1 | 创建 `ai-task-runner` Edge Function | 2h | 中 |
-| 2 | 实现内部调用认证机制 | 1h | 中 |
-| 3 | 修改 `process-ai-tasks` 为编排器模式 | 2h | 高 |
-| 4 | 创建 `ai-image-generator` Edge Function（可选） | 1.5h | 低 |
-| 5 | 集成测试 | 2h | 高 |
-| 6 | 性能测试与优化 | 2h | 中 |
-
-**总计**：约 10.5 小时
+**总计**：约 14.5 小时
 
 ## 6. 预期收益
 
@@ -489,7 +405,6 @@ Deno.serve(async (req) => {
 
 - **功能扩展**：新增工具或 Prompt 层只需修改对应模块
 - **性能优化**：可针对性优化热点模块
-- **独立伸缩**：Phase 2 可实现关键功能独立伸缩
 
 ## 7. 风险与缓解
 
