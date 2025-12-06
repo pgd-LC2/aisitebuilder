@@ -1,6 +1,8 @@
-import { Send } from 'lucide-react';
+import { Send, Lightbulb, X } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useProject } from '../contexts/ProjectContext';
+import { useWorkflow } from '../contexts/WorkflowContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
 import { aiTaskService } from '../services/aiTaskService';
@@ -8,6 +10,7 @@ import { ProjectFilesContext, BuildLog } from '../types/project';
 import { useAgentEvents } from '../realtime';
 import BuildLogPanel from './BuildLogPanel';
 import ActivityTimeline from './ActivityTimeline';
+import ImplementationTrigger, { parseImplementReadyMarker } from './ImplementationTrigger';
 
 interface ChatPanelProps {
   projectFilesContext?: ProjectFilesContext;
@@ -15,8 +18,14 @@ interface ChatPanelProps {
 
 export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const [input, setInput] = useState('');
-  const [taskType, setTaskType] = useState<'chat_reply' | 'build_site' | 'refactor_code'>('chat_reply');
   const { currentProject } = useProject();
+  const { 
+    mode, 
+    isPlanningMode, 
+    isBuildMode, 
+    enterPlanningMode, 
+    exitToDefaultMode
+  } = useWorkflow();
   const projectId = currentProject?.id;
   
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -126,13 +135,21 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     });
   }, [isConnected, messages, scrollToMessageBottom]);
 
+  const getTaskTypeFromMode = useCallback((): 'chat_reply' | 'build_site' | 'refactor_code' => {
+    if (isBuildMode) {
+      return 'build_site';
+    }
+    return 'chat_reply';
+  }, [isBuildMode]);
+
   const handleSend = async () => {
     if (!input.trim() || !projectId) return;
 
     const messageContent = input;
     setInput('');
 
-    console.log('发送消息:', messageContent, '时间:', new Date().toISOString());
+    const taskType = getTaskTypeFromMode();
+    console.log('发送消息:', messageContent, '模式:', mode, '任务类型:', taskType, '时间:', new Date().toISOString());
     
     const { data: userMsg, error } = await messageService.addMessage(
       projectId,
@@ -144,8 +161,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
     if (userMsg) {
       appendMessage(userMsg);
-      // 使用 requestAnimationFrame 确保在下一帧（DOM 渲染后）执行滚动
-      // 这比依赖 useLayoutEffect 监听 messages 变化更可靠，因为直接绑定到发送动作
       requestAnimationFrame(() => {
         scrollToMessageTop(userMsg.id);
       });
@@ -167,7 +182,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         taskType,
         {
           messageId: userMsg.id,
-          content: messageContent
+          content: messageContent,
+          workflowMode: mode
         }
       );
 
@@ -176,7 +192,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       } else {
         console.log('AI 任务已创建:', task);
         
-        // 在触发 Edge Function 之前记录开始处理日志
         console.log('开始触发 Edge Function 处理任务...');
         
         const { error: triggerError } = await aiTaskService.triggerProcessor(
@@ -184,7 +199,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           projectFilesContext
         );
         
-        // 根据结果记录完成或失败日志
         if (triggerError) {
           console.error('Edge Function 处理失败:', triggerError);
           await buildLogService.addBuildLog(
@@ -194,8 +208,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           );
         } else {
           console.log('Edge Function 处理完成');
-          // Edge Function 完成后，延迟刷新消息列表作为 realtime 的备用方案
-          // 这不是轮询，而是一次性的刷新，确保 AI 回复能够显示
           setTimeout(() => {
             console.log('Edge Function 完成后刷新消息列表');
             refreshMessages();
@@ -247,55 +259,72 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         ) : (
           <div className="flex flex-col min-h-full">
             <div className="space-y-3">
-              {messages.map(message => (
-                <div
-                  key={message.id}
-                  data-message-id={message.id}
-                  className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
-                >
+              {messages.map(message => {
+                const planSummary = message.role === 'assistant' && isPlanningMode 
+                  ? parseImplementReadyMarker(message.content) 
+                  : null;
+                const displayContent = planSummary 
+                  ? message.content.replace(/\[IMPLEMENT_READY\][\s\S]*?\[\/IMPLEMENT_READY\]/g, '').replace(/\[IMPLEMENT_READY\]/g, '').trim()
+                  : message.content;
+                
+                return (
                   <div
-                    className={`max-w-[85%] rounded-xl px-3 py-2 ${
-                      message.role === 'user'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white text-gray-900 border border-gray-200'
-                    }`}
+                    key={message.id}
+                    data-message-id={message.id}
+                    className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {message.content}
-                    </p>
-                    <span className="text-[10px] opacity-60 mt-1 block">
-                      {new Date(message.created_at).toLocaleTimeString('zh-CN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                  {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
-                      {messageImages[message.id].map((imagePath, index) => (
-                        <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
-                          {imageBlobUrls[imagePath] ? (
-                            <img
-                              src={imageBlobUrls[imagePath]}
-                              alt={`生成的图片 ${index + 1}`}
-                              className="max-w-full h-auto max-h-64 object-contain"
-                              loading="lazy"
-                              onError={(e) => {
-                                console.error('图片加载失败:', imagePath);
-                                e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
-                              <p className="text-xs text-gray-500">加载中...</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    <div
+                      className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                        message.role === 'user'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-white text-gray-900 border border-gray-200'
+                      }`}
+                    >
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                        {displayContent}
+                      </p>
+                      <span className="text-[10px] opacity-60 mt-1 block">
+                        {new Date(message.created_at).toLocaleTimeString('zh-CN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
+                    {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
+                        {messageImages[message.id].map((imagePath, index) => (
+                          <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
+                            {imageBlobUrls[imagePath] ? (
+                              <img
+                                src={imageBlobUrls[imagePath]}
+                                alt={`生成的图片 ${index + 1}`}
+                                className="max-w-full h-auto max-h-64 object-contain"
+                                loading="lazy"
+                                onError={(e) => {
+                                  console.error('图片加载失败:', imagePath);
+                                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
+                                <p className="text-xs text-gray-500">加载中...</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {planSummary && (
+                      <ImplementationTrigger
+                        planSummary={planSummary}
+                        onImplement={() => {
+                          console.log('[ChatPanel] 用户点击开始实现，规划摘要:', planSummary);
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {/* 底部 spacer：提供额外的滚动空间，让最后一条消息可以滚动到视口顶部
                 使用 flex-grow 在消息少时自然撑满空白区域
@@ -318,42 +347,98 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         </>
       )}
 
-      <div className="px-4 py-2 bg-gray-50">
+      <div className="px-4 py-3 bg-gray-50">
         {!isConnected && projectId && (
           <div className="mb-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-xs text-yellow-700">连接中，请稍候...</p>
           </div>
         )}
-        <div className="mb-2">
-          <label className="text-xs text-gray-600 mb-1 block">AI 任务类型</label>
-          <select
-            value={taskType}
-            onChange={(e) => setTaskType(e.target.value as 'chat_reply' | 'build_site' | 'refactor_code')}
-            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
-          >
-            <option value="chat_reply">💬 聊天回复 (Chat Reply)</option>
-            <option value="build_site">🏗️ 构建网站 (Build Site)</option>
-            <option value="refactor_code">🔧 重构代码 (Refactor Code)</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-1 bg-white rounded-full pl-3 py-1 pr-1 border border-gray-300 focus-within:border-blue-500 transition-colors">
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder={isConnected ? "输入指令..." : "连接中..."}
-            disabled={!isConnected}
-            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 text-sm outline-none resize-none leading-tight py-1.5 overflow-hidden disabled:cursor-not-allowed"
-            rows={1}
-            style={{ height: '28px', maxHeight: '120px' }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || !isConnected}
-            className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors flex-shrink-0"
-          >
-            <Send className="w-3.5 h-3.5 text-white" />
-          </button>
+        <AnimatePresence>
+          {isPlanningMode && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-amber-600" />
+                <span className="text-xs text-amber-700 font-medium">规划模式</span>
+                <span className="text-xs text-amber-600">AI 将帮助你澄清需求和制定方案</span>
+              </div>
+              <button
+                onClick={exitToDefaultMode}
+                className="p-1 hover:bg-amber-100 rounded transition-colors"
+                title="退出规划模式"
+              >
+                <X className="w-3.5 h-3.5 text-amber-600" />
+              </button>
+            </motion.div>
+          )}
+          {isBuildMode && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-green-600" />
+                <span className="text-xs text-green-700 font-medium">构建模式</span>
+                <span className="text-xs text-green-600">AI 正在按计划执行代码修改</span>
+              </div>
+              <button
+                onClick={exitToDefaultMode}
+                className="p-1 hover:bg-green-100 rounded transition-colors"
+                title="退出构建模式"
+              >
+                <X className="w-3.5 h-3.5 text-green-600" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 bg-white rounded-2xl pl-4 py-2 pr-2 border border-gray-300 focus-within:border-blue-500 transition-colors shadow-sm">
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder={
+                isPlanningMode 
+                  ? "描述你的需求，AI 将帮助你制定方案..." 
+                  : isBuildMode 
+                    ? "输入指令，AI 将执行代码修改..." 
+                    : isConnected 
+                      ? "输入指令..." 
+                      : "连接中..."
+              }
+              disabled={!isConnected}
+              className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 text-sm outline-none resize-none leading-tight py-1 overflow-hidden disabled:cursor-not-allowed"
+              rows={1}
+              style={{ height: '32px', maxHeight: '120px' }}
+            />
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {!isPlanningMode && !isBuildMode && (
+                <motion.button
+                  onClick={enterPlanningMode}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs font-medium rounded-full transition-colors"
+                  title="进入规划模式"
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  Plan
+                </motion.button>
+              )}
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || !isConnected}
+                className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+              >
+                <Send className="w-3.5 h-3.5 text-white" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

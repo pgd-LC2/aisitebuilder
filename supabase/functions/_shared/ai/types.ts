@@ -102,12 +102,14 @@ export interface ParsedChatCompletionOutput {
 
 export type TaskType = 'chat_reply' | 'build_site' | 'refactor_code' | 'debug';
 export type PromptLayer = 'core' | 'planner' | 'coder' | 'reviewer' | 'debugger';
+export type WorkflowMode = 'default' | 'planning' | 'build';
 
 export interface PromptRouterContext {
   taskType: TaskType;
   hasError?: boolean;
   errorInfo?: string;
   isNewProject?: boolean;
+  workflowMode?: WorkflowMode;
 }
 
 // --- 工具定义类型 ---

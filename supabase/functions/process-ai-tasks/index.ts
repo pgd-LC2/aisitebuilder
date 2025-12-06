@@ -18,6 +18,7 @@ import {
   ToolContext,
   PromptRouterContext,
   TaskType,
+  WorkflowMode,
   assembleSystemPrompt,
   callOpenRouterChatCompletionsApi,
   generateImage,
@@ -123,12 +124,19 @@ async function processTask(
     
     const toolContext: ToolContext = { supabase, projectId: task.project_id, versionId, bucket, basePath };
     
+    const workflowMode = task.payload?.workflowMode as WorkflowMode | undefined;
     const routerContext: PromptRouterContext = {
       taskType: task.type as TaskType,
       hasError: !!task.payload?.errorInfo,
       errorInfo: task.payload?.errorInfo as string | undefined,
-      isNewProject: !fileContextStr || fileContextStr.length < 100
+      isNewProject: !fileContextStr || fileContextStr.length < 100,
+      workflowMode
     };
+    
+    if (workflowMode) {
+      console.log(`[ProcessAITasks] 工作流模式: ${workflowMode}`);
+      await writeBuildLog(supabase, task.project_id, 'info', `工作流模式: ${workflowMode}`);
+    }
     
     await writeBuildLog(supabase, task.project_id, 'info', `正在加载提示词 (PromptRouter)...`);
     const fileContextSection = fileContextStr ? `\n\n## 当前项目文件参考\n${fileContextStr}` : '';

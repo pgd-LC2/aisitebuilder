@@ -6,7 +6,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { CACHE_TTL } from '../config.ts';
-import type { TaskType, PromptLayer, PromptRouterContext, PromptFetchErrorType } from '../types.ts';
+import type { TaskType, PromptLayer, PromptRouterContext, PromptFetchErrorType, WorkflowMode } from '../types.ts';
 
 // --- 五层 Prompt 架构默认值 ---
 
@@ -304,6 +304,54 @@ npm install && npm run lint && npm run typecheck && npm run build
 - 迭代统计：[次数、最终状态]
 \`\`\``;
 
+// --- 工作流模式提示词默认值 ---
+const PROMPT_WORKFLOW_DEFAULT = `## 默认/只读模式
+
+你现在是一个**代码库分析专家**。你可以回答关于代码结构的问题，解释代码，但**严禁进行任何代码修改或文件写入**。
+
+### 允许的操作
+- 使用 \`read_file\` 读取文件内容
+- 使用 \`list_files\` 列出目录结构
+- 使用 \`search_files\` 搜索代码
+- 使用 \`get_project_structure\` 获取项目结构
+
+### 禁止的操作
+- **禁止**使用 \`write_file\` 写入或修改文件
+- **禁止**使用 \`delete_file\` 删除文件
+- **禁止**使用 \`move_file\` 移动文件
+
+### 用户引导
+如果用户要求修改代码，请引导他们点击 **Plan** 按钮先制定计划。`;
+
+const PROMPT_WORKFLOW_PLANNING = `## 规划模式 - 高级软件架构师
+
+你是一个**高级软件架构师**。你的任务是与用户讨论需求，分析可行性，并制定详细的实施步骤。
+
+### 核心原则
+**不要写任何代码**。通过多轮对话完全理解用户需求，然后制定清晰的技术方案。
+
+### 准备实施
+当需求明确、方案制定完成时，在回复末尾生成：
+\`\`\`
+[IMPLEMENT_READY]
+{
+  "requirement": "用户需求简述",
+  "technicalPlan": "技术方案概述",
+  "steps": ["步骤1", "步骤2", "步骤3"]
+}
+[/IMPLEMENT_READY]
+\`\`\``;
+
+const PROMPT_WORKFLOW_BUILD = `## 构建模式 - 资深全栈工程师
+
+你是一个**资深全栈工程师**。你已经获得了一份经过用户批准的详细计划。现在请严格按照计划执行文件修改。
+
+### 核心原则
+- 严格按照已批准的计划执行
+- 每一步修改完成后，简要汇报进度
+- 修改现有文件前，**必须先**使用 \`read_file\` 读取当前内容
+- 使用 \`write_file\` 时，**必须输出完整文件内容**，禁止省略`;
+
 // --- 默认提示词（Fallback）---
 export const DEFAULT_PROMPTS: Record<string, string> = {
   'core.system.base.v1': PROMPT_CORE_SYSTEM,
@@ -313,7 +361,17 @@ export const DEFAULT_PROMPTS: Record<string, string> = {
   'debugger.error.diagnosis.v1': PROMPT_DEBUGGER,
   'agent.system.base': PROMPT_CORE_SYSTEM,
   'agent.task.build_site': PROMPT_PLANNER + '\n\n' + PROMPT_CODER,
-  'agent.task.refactor_code': PROMPT_CODER + '\n\n' + PROMPT_REVIEWER
+  'agent.task.refactor_code': PROMPT_CODER + '\n\n' + PROMPT_REVIEWER,
+  'workflow.default.v1': PROMPT_WORKFLOW_DEFAULT,
+  'workflow.planning.v1': PROMPT_WORKFLOW_PLANNING,
+  'workflow.build.v1': PROMPT_WORKFLOW_BUILD
+};
+
+// --- 工作流模式到提示词 key 的映射 ---
+export const WORKFLOW_MODE_TO_PROMPT_KEY: Record<WorkflowMode, string> = {
+  'default': 'workflow.default.v1',
+  'planning': 'workflow.planning.v1',
+  'build': 'workflow.build.v1'
 };
 
 // --- 路由配置 ---
@@ -453,8 +511,19 @@ export async function assembleSystemPrompt(
   context: PromptRouterContext,
   fileContext?: string
 ): Promise<string> {
-  const promptKeys = routePrompts(context);
-  console.log(`[PromptRouter] 任务类型: ${context.taskType}, 组装层: ${promptKeys.join(' → ')}`);
+  const basePromptKeys = routePrompts(context);
+  
+  // 根据工作流模式动态添加工作流提示词
+  const workflowKey = context.workflowMode 
+    ? WORKFLOW_MODE_TO_PROMPT_KEY[context.workflowMode] 
+    : undefined;
+  
+  // 工作流提示词放在最前面，作为全局行为约束
+  const promptKeys = workflowKey 
+    ? [workflowKey, ...basePromptKeys] 
+    : basePromptKeys;
+  
+  console.log(`[PromptRouter] 任务类型: ${context.taskType}, 工作流模式: ${context.workflowMode || 'none'}, 组装层: ${promptKeys.join(' → ')}`);
   
   const prompts = await getMultiplePrompts(supabase, promptKeys);
   
