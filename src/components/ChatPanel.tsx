@@ -234,8 +234,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
               ))}
             </div>
             {/* 底部 spacer：提供额外的滚动空间，让最后一条消息可以滚动到视口顶部
-                使用 flex-grow 在消息少时自然撑满空白区域，在消息多时提供至少一屏的额外空间 */}
-            <div className="flex-grow min-h-[calc(100%-4rem)]" />
+                使用 flex-grow 在消息少时自然撑满空白区域
+                min-h-[100vh] 确保在消息多时提供至少一个视口高度的额外空间 */}
+            <div className="flex-grow min-h-[100vh]" />
           </div>
         )}
       </div>
