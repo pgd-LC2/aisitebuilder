@@ -46,7 +46,7 @@ async function claimTask(pgClient: Client, projectId?: string) {
     query += ` AND project_id = $1`;
   }
   query += `
-      ORDER BY priority DESC, created_at ASC
+      ORDER BY created_at ASC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
