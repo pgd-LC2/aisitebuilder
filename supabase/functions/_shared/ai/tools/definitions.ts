@@ -158,5 +158,31 @@ export const TOOLS: ToolDefinition[] = [
         required: ['fromPath', 'toPath']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'spawn_subagent',
+      description: '创建一个子代理来执行特定任务。子代理可以执行代码重构等专门任务。注意：最多只能嵌套 1 层，子代理不能再创建子代理。',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            description: '子代理类型。可用类型: refactor_code (代码重构)',
+            enum: ['refactor_code']
+          },
+          instruction: {
+            type: 'string',
+            description: '给子代理的具体指令，描述需要执行的任务'
+          },
+          target_files: {
+            type: 'string',
+            description: '目标文件路径列表，用逗号分隔（可选）。例如: "src/App.tsx,src/utils/helper.ts"'
+          }
+        },
+        required: ['type', 'instruction']
+      }
+    }
   }
 ];

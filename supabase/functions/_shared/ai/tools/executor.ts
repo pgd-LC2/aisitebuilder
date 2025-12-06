@@ -37,6 +37,9 @@ export async function executeToolCall(
       return { success: true, result: await handleGetProjectStructure(ctx) };
     case 'generate_image':
       return { success: false, result: { error: 'generate_image handled separately' } };
+    case 'spawn_subagent':
+      // spawn_subagent 需要额外的上下文（apiKey、nestingLevel 等），在主任务处理循环中单独处理
+      return { success: false, result: { error: 'spawn_subagent handled separately in task processor' } };
     default:
       return { success: false, result: { error: `未知工具: ${toolName}` } };
   }

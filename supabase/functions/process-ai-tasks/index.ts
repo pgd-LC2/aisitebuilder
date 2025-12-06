@@ -28,8 +28,18 @@ import {
   writeAssistantMessage,
   updateTaskStatus,
   logAgentEvent,
-  processTaskWithSelfRepair
+  processTaskWithSelfRepair,
+  // Subagent 系统
+  initializeBuiltinSubagents,
+  executeSubagent,
+  canSpawnSubagent,
+  SubagentContext,
+  SubagentTaskParams,
+  SubagentType
 } from '../_shared/ai/index.ts';
+
+// 初始化内置 subagent
+initializeBuiltinSubagents();
 
 // --- 数据库操作函数 ---
 
@@ -203,6 +213,59 @@ async function processTask(
               console.error('图片生成失败:', error);
               await writeBuildLog(supabase, task.project_id, 'error', `图片生成失败: ${errorMessage}`);
               toolOutput = JSON.stringify({ success: false, error: errorMessage });
+            }
+          } else if (toolName === 'spawn_subagent') {
+            // 处理 spawn_subagent 工具调用
+            const nestingLevel = (task.payload?.nestingLevel as number) || 0;
+            
+            if (!canSpawnSubagent(nestingLevel)) {
+              toolOutput = JSON.stringify({ 
+                success: false, 
+                error: `已达到最大嵌套层级 (1)，无法创建更多子代理` 
+              });
+            } else {
+              try {
+                const subagentType = args.type as SubagentType;
+                const instruction = args.instruction as string;
+                const targetFilesStr = args.target_files as string | undefined;
+                const targetFiles = targetFilesStr ? targetFilesStr.split(',').map((f: string) => f.trim()) : undefined;
+                
+                const subagentContext: SubagentContext = {
+                  supabase,
+                  apiKey,
+                  projectId: task.project_id,
+                  toolContext,
+                  projectFilesContext: projectFilesContext ? { bucket, path: basePath, versionId } : undefined,
+                  parentTaskId: task.id,
+                  nestingLevel
+                };
+                
+                const subagentParams: SubagentTaskParams = {
+                  type: subagentType,
+                  instruction,
+                  targetFiles
+                };
+                
+                await writeBuildLog(supabase, task.project_id, 'info', `正在创建子代理: ${subagentType}`);
+                const subagentResult = await executeSubagent(subagentContext, subagentParams);
+                
+                // 将子代理修改的文件添加到主任务的修改文件列表
+                modifiedFiles.push(...subagentResult.modifiedFiles);
+                
+                toolOutput = JSON.stringify({
+                  success: subagentResult.success,
+                  type: subagentResult.type,
+                  output: subagentResult.output,
+                  modified_files: subagentResult.modifiedFiles,
+                  execution_time_ms: subagentResult.executionTime,
+                  error: subagentResult.error
+                });
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('子代理执行失败:', error);
+                await writeBuildLog(supabase, task.project_id, 'error', `子代理执行失败: ${errorMessage}`);
+                toolOutput = JSON.stringify({ success: false, error: errorMessage });
+              }
             }
           } else {
             const { result } = await executeToolCall(toolName, args, toolContext);
