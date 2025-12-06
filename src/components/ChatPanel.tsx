@@ -19,9 +19,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
+  // 记录需要吸顶的消息 ID（用户发送消息后，该消息应该滚动到视口顶部）
+  const scrollToMessageIdRef = useRef<string | null>(null);
 
   // 使用新的 useAgentEvents hook，统一管理消息和任务订阅
   const {
@@ -38,24 +38,30 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   // 判断是否正在加载（首次加载时消息为空且已连接）
   const loading = !isConnected && messages.length === 0;
 
-  // 智能滚动：根据内容是否溢出和用户是否在底部来决定是否滚动
-  const smartScroll = useCallback(() => {
+  // 吸顶滚动：将指定消息滚动到视口顶部
+  const scrollToMessageTop = useCallback((messageId: string) => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const { scrollHeight, clientHeight } = container;
-    const noOverflow = scrollHeight <= clientHeight;
-
-    if (noOverflow) {
-      // 内容没有溢出（不需要滚动条）：保持第一条消息吸顶，不滚动
+    // 如果内容还不够一屏，保持从顶部开始，不用动 scrollTop
+    if (scrollHeight <= clientHeight) {
       container.scrollTop = 0;
       return;
     }
 
-    // 内容已溢出：只有当用户本来就在底部附近时，才自动滚到最新消息
-    if (isAtBottomRef.current) {
-      container.scrollTop = scrollHeight;
-    }
+    // 找到目标消息元素，将其滚动到容器顶部
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!target) return;
+
+    // 使用 getBoundingClientRect 计算目标消息相对于容器的偏移量
+    // 这种方法不依赖 offsetParent，更加可靠
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    
+    // target 到容器顶部的"视觉距离" + 当前 scrollTop = 目标 scrollTop
+    const offset = targetRect.top - containerRect.top + container.scrollTop;
+    container.scrollTop = offset;
   }, []);
 
   const handleSend = async () => {
@@ -76,11 +82,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
     if (userMsg) {
       appendMessage(userMsg);
-      // 发送消息后，标记用户在底部，然后触发智能滚动
-      isAtBottomRef.current = true;
-      setTimeout(() => {
-        smartScroll();
-      }, 100);
+      // 记录需要吸顶的消息 ID，等 DOM 渲染后在 useEffect 中处理滚动
+      scrollToMessageIdRef.current = userMsg.id;
     }
 
     const logResult = await buildLogService.addBuildLog(
@@ -144,30 +147,17 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
   };
 
-  // 监听滚动事件，跟踪用户是否在底部附近
+  // 消息变化时处理吸顶滚动
   useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
+    const targetId = scrollToMessageIdRef.current;
+    if (!targetId) return;
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceToBottom = scrollHeight - clientHeight - scrollTop;
-      // 允许16px的误差，认为用户在底部附近
-      isAtBottomRef.current = distanceToBottom < 16;
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    handleScroll(); // 初始化一次
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
-  // 消息变化时智能滚动
-  useEffect(() => {
-    smartScroll();
-  }, [messages, smartScroll]);
+    // 使用 setTimeout 确保 DOM 已经渲染完成
+    setTimeout(() => {
+      scrollToMessageTop(targetId);
+      scrollToMessageIdRef.current = null;
+    }, 50);
+  }, [messages, scrollToMessageTop]);
 
   // 处理构建日志添加事件，当 AI 任务完成时刷新消息
   const handleBuildLogAdded = useCallback((log: BuildLog) => {
@@ -200,6 +190,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
             {messages.map(message => (
               <div
                 key={message.id}
+                data-message-id={message.id}
                 className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
@@ -245,7 +236,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                 )}
               </div>
             ))}
-            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
