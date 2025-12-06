@@ -19,9 +19,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
+  // 标记是否已完成初始滚动（打开网页时滚动到底部）
+  const hasInitialScrollRef = useRef(false);
 
   // 使用新的 useAgentEvents hook，统一管理消息和任务订阅
   const {
@@ -38,25 +38,93 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   // 判断是否正在加载（首次加载时消息为空且已连接）
   const loading = !isConnected && messages.length === 0;
 
-  // 智能滚动：根据内容是否溢出和用户是否在底部来决定是否滚动
-  const smartScroll = useCallback(() => {
+  // 吸顶滚动：将指定消息滚动到视口顶部
+  const scrollToMessageTop = useCallback((messageId: string) => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const { scrollHeight, clientHeight } = container;
-    const noOverflow = scrollHeight <= clientHeight;
-
-    if (noOverflow) {
-      // 内容没有溢出（不需要滚动条）：保持第一条消息吸顶，不滚动
+    // 如果内容还不够一屏，保持从顶部开始，不用动 scrollTop
+    if (scrollHeight <= clientHeight) {
       container.scrollTop = 0;
       return;
     }
 
-    // 内容已溢出：只有当用户本来就在底部附近时，才自动滚到最新消息
-    if (isAtBottomRef.current) {
-      container.scrollTop = scrollHeight;
-    }
+    // 找到目标消息元素，将其滚动到容器顶部
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!target) return;
+
+    // 使用 getBoundingClientRect 计算目标消息相对于容器的偏移量
+    // 这种方法不依赖 offsetParent，更加可靠
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    
+    // target 到容器顶部的"视觉距离" + 当前 scrollTop = 目标 scrollTop
+    const offset = targetRect.top - containerRect.top + container.scrollTop;
+    container.scrollTop = offset;
   }, []);
+
+  // 滚动到底部：将指定消息滚动到视口底部（用于打开网页时显示最新消息）
+  const scrollToMessageBottom = useCallback((messageId: string) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollHeight, clientHeight } = container;
+    // 如果内容不够一屏，保持从顶部开始
+    if (scrollHeight <= clientHeight) {
+      container.scrollTop = 0;
+      return;
+    }
+
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+
+    // 目标消息底部相对于容器顶部的偏移 + 当前 scrollTop
+    const targetBottomOffset = targetRect.bottom - containerRect.top + container.scrollTop;
+
+    // 让消息"贴在容器底部"：bottomOffset - clientHeight
+    const desiredScrollTop = targetBottomOffset - clientHeight;
+
+    const maxScrollTop = scrollHeight - clientHeight;
+    container.scrollTop = Math.min(desiredScrollTop, maxScrollTop);
+  }, []);
+
+  // 初始滚动：打开网页时自动滚动到最下方（显示最新消息）
+  // 使用 messages 数组作为依赖，确保在消息完全加载后执行
+  useEffect(() => {
+    if (hasInitialScrollRef.current) return;
+    if (!isConnected) return;
+    if (!messagesContainerRef.current) return;
+    if (messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+
+    // 使用双重 requestAnimationFrame 确保 DOM 完全渲染后再执行滚动
+    // 第一个 rAF 等待 React 提交 DOM 更新，第二个 rAF 等待浏览器完成布局
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        // 再次检查条件，防止在等待期间状态发生变化
+        if (hasInitialScrollRef.current) return;
+        if (!messagesContainerRef.current) return;
+        
+        // 获取当前最新的消息（可能在等待期间有新消息加载）
+        const container = messagesContainerRef.current;
+        const allMessageElements = container.querySelectorAll('[data-message-id]');
+        if (allMessageElements.length === 0) return;
+        
+        const lastMessageElement = allMessageElements[allMessageElements.length - 1];
+        const lastMessageId = lastMessageElement.getAttribute('data-message-id');
+        if (!lastMessageId) return;
+        
+        scrollToMessageBottom(lastMessageId);
+        hasInitialScrollRef.current = true;
+      });
+    });
+  }, [isConnected, messages, scrollToMessageBottom]);
 
   const handleSend = async () => {
     if (!input.trim() || !projectId) return;
@@ -76,11 +144,11 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
     if (userMsg) {
       appendMessage(userMsg);
-      // 发送消息后，标记用户在底部，然后触发智能滚动
-      isAtBottomRef.current = true;
-      setTimeout(() => {
-        smartScroll();
-      }, 100);
+      // 使用 requestAnimationFrame 确保在下一帧（DOM 渲染后）执行滚动
+      // 这比依赖 useLayoutEffect 监听 messages 变化更可靠，因为直接绑定到发送动作
+      requestAnimationFrame(() => {
+        scrollToMessageTop(userMsg.id);
+      });
     }
 
     const logResult = await buildLogService.addBuildLog(
@@ -144,31 +212,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
   };
 
-  // 监听滚动事件，跟踪用户是否在底部附近
-  useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceToBottom = scrollHeight - clientHeight - scrollTop;
-      // 允许16px的误差，认为用户在底部附近
-      isAtBottomRef.current = distanceToBottom < 16;
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    handleScroll(); // 初始化一次
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
-  // 消息变化时智能滚动
-  useEffect(() => {
-    smartScroll();
-  }, [messages, smartScroll]);
-
   // 处理构建日志添加事件，当 AI 任务完成时刷新消息
   const handleBuildLogAdded = useCallback((log: BuildLog) => {
     if (log.message === 'AI 任务处理完成' || log.message.includes('AI 任务处理完成')) {
@@ -179,73 +222,85 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* 消息列表区域：使用 flex-col justify-start 确保消息从顶部开始显示（吸顶） */}
+      {/* 消息列表区域：使用 flex-col 确保消息从顶部开始显示（吸顶）
+          关键布局：
+          1. 外层容器 overflow-y-auto 负责滚动
+          2. 内层使用 min-h-full 确保内容至少占满容器高度
+          3. 底部 spacer (flex-grow) 在消息少时撑满空白，在消息多时提供额外滚动空间
+          4. 这样才能让最后一条消息有足够的空间滚动到视口顶部（吸顶效果）
+      */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 flex flex-col justify-start overflow-y-auto px-4 py-4"
+        className="flex-1 overflow-y-auto px-4 py-4"
       >
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <p className="text-gray-500 text-sm">加载中...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-2">
               <p className="text-gray-500 text-sm">暂无对话</p>
               <p className="text-gray-400 text-xs">输入你的指令开始编辑</p>
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {messages.map(message => (
-              <div
-                key={message.id}
-                className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
-              >
+          <div className="flex flex-col min-h-full">
+            <div className="space-y-3">
+              {messages.map(message => (
                 <div
-                  className={`max-w-[85%] rounded-xl px-3 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white text-gray-900 border border-gray-200'
-                  }`}
+                  key={message.id}
+                  data-message-id={message.id}
+                  className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                    {message.content}
-                  </p>
-                  <span className="text-[10px] opacity-60 mt-1 block">
-                    {new Date(message.created_at).toLocaleTimeString('zh-CN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-                {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
-                    {messageImages[message.id].map((imagePath, index) => (
-                      <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
-                        {imageBlobUrls[imagePath] ? (
-                          <img
-                            src={imageBlobUrls[imagePath]}
-                            alt={`生成的图片 ${index + 1}`}
-                            className="max-w-full h-auto max-h-64 object-contain"
-                            loading="lazy"
-                            onError={(e) => {
-                              console.error('图片加载失败:', imagePath);
-                              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
-                            <p className="text-xs text-gray-500">加载中...</p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div
+                    className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                      message.role === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white text-gray-900 border border-gray-200'
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                    <span className="text-[10px] opacity-60 mt-1 block">
+                      {new Date(message.created_at).toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
+                  {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
+                      {messageImages[message.id].map((imagePath, index) => (
+                        <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
+                          {imageBlobUrls[imagePath] ? (
+                            <img
+                              src={imageBlobUrls[imagePath]}
+                              alt={`生成的图片 ${index + 1}`}
+                              className="max-w-full h-auto max-h-64 object-contain"
+                              loading="lazy"
+                              onError={(e) => {
+                                console.error('图片加载失败:', imagePath);
+                                e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f0f0f0" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
+                              <p className="text-xs text-gray-500">加载中...</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* 底部 spacer：提供额外的滚动空间，让最后一条消息可以滚动到视口顶部
+                使用 flex-grow 在消息少时自然撑满空白区域
+                min-h-[100vh] 确保在消息多时提供至少一个视口高度的额外空间 */}
+            <div className="flex-grow min-h-[100vh]" />
           </div>
         )}
       </div>
