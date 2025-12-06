@@ -158,10 +158,60 @@ async function processTask(
       const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 10);
       messages = [{ role: 'system', content: systemPrompt }, ...chatHistory.map(msg => ({ role: msg.role, content: msg.content }))];
     } else if (task.type === 'build_site') {
-      const requirement = (task.payload?.requirement as string) || "创建基础着陆页";
-      messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: `请帮我构建网站，需求如下：${requirement}` }];
+      // 方案A: 兼容修复 - 优先使用 requirement，fallback 到 content
+      const requirement = (task.payload?.requirement as string) 
+        || (task.payload?.content as string) 
+        || "创建基础着陆页";
+      
+      // 方案C: 如果有 planSummary，构建更丰富的上下文
+      const planSummary = task.payload?.planSummary as { 
+        requirement?: string; 
+        technicalPlan?: string; 
+        implementationSteps?: string[] 
+      } | undefined;
+      
+      let userMessage: string;
+      if (planSummary && planSummary.technicalPlan) {
+        // 有完整的规划摘要，使用结构化上下文
+        const stepsText = planSummary.implementationSteps?.length 
+          ? `\n\n实施步骤：\n${planSummary.implementationSteps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+          : '';
+        userMessage = `请帮我构建网站。
+
+## 需求
+${planSummary.requirement || requirement}
+
+## 技术方案
+${planSummary.technicalPlan}${stepsText}
+
+请严格按照上述计划执行。`;
+      } else {
+        // 没有规划摘要，获取聊天历史作为上下文
+        const chatHistory = await fetchRecentChatMessages(supabase, task.project_id, 5);
+        if (chatHistory.length > 0) {
+          // 有聊天历史，将其作为上下文
+          const historyContext = chatHistory
+            .map(msg => `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`)
+            .join('\n\n');
+          userMessage = `请帮我构建网站。
+
+## 对话上下文
+${historyContext}
+
+## 当前需求
+${requirement}
+
+请根据上述对话上下文和当前需求进行构建。`;
+        } else {
+          // 没有聊天历史，使用简单格式
+          userMessage = `请帮我构建网站，需求如下：${requirement}`;
+        }
+      }
+      
+      messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }];
     } else if (task.type === 'refactor_code') {
-      const code = (task.payload?.code as string) || "";
+      // 方案A: 兼容修复 - 优先使用 code/filePath，fallback 到 content
+      const code = (task.payload?.code as string) || (task.payload?.content as string) || "";
       const filePath = (task.payload?.filePath as string) || "";
       messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: filePath ? `请重构文件 ${filePath} 中的代码` : `请重构以下代码：\n\`\`\`\n${code}\n\`\`\`` }];
     } else {
