@@ -24,7 +24,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     isPlanningMode, 
     isBuildMode, 
     enterPlanningMode, 
-    exitToDefaultMode
+    exitToDefaultMode,
+    planSummary
   } = useWorkflow();
   const projectId = currentProject?.id;
   
@@ -177,14 +178,28 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
 
     if (userMsg) {
+      // 方案B: 构建任务 payload，在 build_site 模式下传递 planSummary
+      const taskPayload: Record<string, unknown> = {
+        messageId: userMsg.id,
+        content: messageContent,
+        workflowMode: mode
+      };
+      
+      // 如果是 build_site 模式且有 planSummary，添加到 payload
+      if (taskType === 'build_site' && planSummary) {
+        taskPayload.requirement = planSummary.requirement;
+        taskPayload.planSummary = {
+          requirement: planSummary.requirement,
+          technicalPlan: planSummary.technicalPlan,
+          implementationSteps: planSummary.implementationSteps
+        };
+        console.log('构建模式: 传递规划摘要到任务', taskPayload.planSummary);
+      }
+      
       const { data: task, error: taskError } = await aiTaskService.addTask(
         projectId,
         taskType,
-        {
-          messageId: userMsg.id,
-          content: messageContent,
-          workflowMode: mode
-        }
+        taskPayload
       );
 
       if (taskError) {
