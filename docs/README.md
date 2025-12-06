@@ -6,6 +6,7 @@
 
 | 文件 | 描述 |
 |------|------|
+| **task-workflow-architecture.md** | **任务与工作流架构（新人必读）** |
 | agent_events_spec.md | Agent 事件流规范 |
 | file_events_spec.md | 文件事件规范 |
 | process-ai-tasks-refactor.md | process-ai-tasks 边缘函数重构方案 |
