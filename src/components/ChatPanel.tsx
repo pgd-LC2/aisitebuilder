@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useLayoutEffect, useCallback, useRef } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
@@ -148,15 +148,15 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   };
 
   // 消息变化时处理吸顶滚动
-  useEffect(() => {
+  // 使用 useLayoutEffect 确保在 DOM 渲染完成后、浏览器绘制前执行滚动
+  // 这比 useEffect + setTimeout 更可靠，避免了时序问题
+  useLayoutEffect(() => {
     const targetId = scrollToMessageIdRef.current;
     if (!targetId) return;
 
-    // 使用 setTimeout 确保 DOM 已经渲染完成
-    setTimeout(() => {
-      scrollToMessageTop(targetId);
-      scrollToMessageIdRef.current = null;
-    }, 50);
+    // 直接执行滚动，无需 setTimeout，因为 useLayoutEffect 在 DOM 更新后同步执行
+    scrollToMessageTop(targetId);
+    scrollToMessageIdRef.current = null;
   }, [messages, scrollToMessageTop]);
 
   // 处理构建日志添加事件，当 AI 任务完成时刷新消息
