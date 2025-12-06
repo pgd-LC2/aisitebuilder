@@ -93,6 +93,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   }, []);
 
   // 初始滚动：打开网页时自动滚动到最下方（显示最新消息）
+  // 使用 messages 数组作为依赖，确保在消息完全加载后执行
   useEffect(() => {
     if (hasInitialScrollRef.current) return;
     if (!isConnected) return;
@@ -102,12 +103,28 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return;
 
-    // 在下一帧执行，确保 DOM 已经渲染
+    // 使用双重 requestAnimationFrame 确保 DOM 完全渲染后再执行滚动
+    // 第一个 rAF 等待 React 提交 DOM 更新，第二个 rAF 等待浏览器完成布局
     requestAnimationFrame(() => {
-      scrollToMessageBottom(lastMessage.id);
-      hasInitialScrollRef.current = true;
+      requestAnimationFrame(() => {
+        // 再次检查条件，防止在等待期间状态发生变化
+        if (hasInitialScrollRef.current) return;
+        if (!messagesContainerRef.current) return;
+        
+        // 获取当前最新的消息（可能在等待期间有新消息加载）
+        const container = messagesContainerRef.current;
+        const allMessageElements = container.querySelectorAll('[data-message-id]');
+        if (allMessageElements.length === 0) return;
+        
+        const lastMessageElement = allMessageElements[allMessageElements.length - 1];
+        const lastMessageId = lastMessageElement.getAttribute('data-message-id');
+        if (!lastMessageId) return;
+        
+        scrollToMessageBottom(lastMessageId);
+        hasInitialScrollRef.current = true;
+      });
     });
-  }, [isConnected, messages.length, scrollToMessageBottom]);
+  }, [isConnected, messages, scrollToMessageBottom]);
 
   const handleSend = async () => {
     if (!input.trim() || !projectId) return;
