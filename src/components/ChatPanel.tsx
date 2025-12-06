@@ -247,6 +247,89 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
   }, [refreshMessages]);
 
+  // 处理"开始实现"按钮点击，发送消息并触发 AI 任务
+  const handleImplementClick = useCallback(async (clickedPlanSummary: typeof planSummary) => {
+    if (!projectId) return;
+    
+    const implementMessage = "Great, let's implement this plan together!";
+    console.log('[ChatPanel] 用户点击开始实现，发送消息:', implementMessage, '规划摘要:', clickedPlanSummary);
+    
+    // 保存用户消息到数据库
+    const { data: userMsg, error } = await messageService.addMessage(
+      projectId,
+      'user',
+      implementMessage
+    );
+
+    if (error) {
+      console.error('发送实现消息失败:', error);
+      return;
+    }
+
+    if (userMsg) {
+      appendMessage(userMsg);
+      requestAnimationFrame(() => {
+        scrollToMessageTop(userMsg.id);
+      });
+    }
+
+    // 添加构建日志
+    await buildLogService.addBuildLog(
+      projectId,
+      'info',
+      `用户输入: ${implementMessage}`
+    );
+
+    // 创建 build_site 任务
+    if (userMsg && clickedPlanSummary) {
+      const taskPayload: Record<string, unknown> = {
+        messageId: userMsg.id,
+        content: implementMessage,
+        workflowMode: 'build',
+        requirement: clickedPlanSummary.requirement,
+        planSummary: {
+          requirement: clickedPlanSummary.requirement,
+          technicalPlan: clickedPlanSummary.technicalPlan,
+          implementationSteps: clickedPlanSummary.implementationSteps
+        }
+      };
+      
+      console.log('构建模式: 传递规划摘要到任务', taskPayload.planSummary);
+      
+      const { data: task, error: taskError } = await aiTaskService.addTask(
+        projectId,
+        'build_site',
+        taskPayload
+      );
+
+      if (taskError) {
+        console.error('创建 AI 任务失败:', taskError);
+      } else {
+        console.log('AI 任务已创建:', task);
+        
+        const { error: triggerError } = await aiTaskService.triggerProcessor(
+          projectId,
+          projectFilesContext
+        );
+        
+        if (triggerError) {
+          console.error('Edge Function 处理失败:', triggerError);
+          await buildLogService.addBuildLog(
+            projectId,
+            'error',
+            '触发 AI 任务处理失败，请稍后重试'
+          );
+        } else {
+          console.log('Edge Function 处理完成');
+          setTimeout(() => {
+            console.log('Edge Function 完成后刷新消息列表');
+            refreshMessages();
+          }, 1000);
+        }
+      }
+    }
+  }, [projectId, appendMessage, scrollToMessageTop, refreshMessages, projectFilesContext]);
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* 消息列表区域：使用 flex-col 确保消息从顶部开始显示（吸顶）
@@ -274,13 +357,18 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         ) : (
           <div className="flex flex-col min-h-full">
             <div className="space-y-3">
-              {messages.map(message => {
-                const planSummary = message.role === 'assistant' && isPlanningMode 
+              {messages.map((message, index) => {
+                // 始终检测 [IMPLEMENT_READY] 标记，不管是否在 planning 模式
+                const planSummary = message.role === 'assistant'
                   ? parseImplementReadyMarker(message.content) 
                   : null;
-                const displayContent = planSummary 
-                  ? message.content.replace(/\[IMPLEMENT_READY\][\s\S]*?\[\/IMPLEMENT_READY\]/g, '').replace(/\[IMPLEMENT_READY\]/g, '').trim()
-                  : message.content;
+                // 始终隐藏 [IMPLEMENT_READY] 标记，不让用户看到
+                const displayContent = message.content
+                  .replace(/\[IMPLEMENT_READY\][\s\S]*?\[\/IMPLEMENT_READY\]/g, '')
+                  .replace(/\[IMPLEMENT_READY\]/g, '')
+                  .trim();
+                // 判断是否是最新消息
+                const isLatestMessage = index === messages.length - 1;
                 
                 return (
                   <div
@@ -332,8 +420,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                     {planSummary && (
                       <ImplementationTrigger
                         planSummary={planSummary}
+                        disabled={!isLatestMessage}
                         onImplement={() => {
-                          console.log('[ChatPanel] 用户点击开始实现，规划摘要:', planSummary);
+                          handleImplementClick(planSummary);
                         }}
                       />
                     )}

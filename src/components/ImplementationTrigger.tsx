@@ -6,12 +6,14 @@ import { PlanSummary } from '../types/project';
 interface ImplementationTriggerProps {
   planSummary: PlanSummary;
   onImplement: () => void;
+  disabled?: boolean;
 }
 
-export default function ImplementationTrigger({ planSummary, onImplement }: ImplementationTriggerProps) {
+export default function ImplementationTrigger({ planSummary, onImplement, disabled = false }: ImplementationTriggerProps) {
   const { enterBuildMode } = useWorkflow();
 
   const handleImplementClick = () => {
+    if (disabled) return;
     enterBuildMode(planSummary);
     onImplement();
   };
@@ -55,9 +57,14 @@ export default function ImplementationTrigger({ planSummary, onImplement }: Impl
             )}
             <motion.button
               onClick={handleImplementClick}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-all duration-200"
+              whileHover={disabled ? {} : { scale: 1.02 }}
+              whileTap={disabled ? {} : { scale: 0.98 }}
+              disabled={disabled}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg shadow-sm transition-all duration-200 ${
+                disabled
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'
+              }`}
             >
               <Rocket className="w-4 h-4" />
               开始实现
