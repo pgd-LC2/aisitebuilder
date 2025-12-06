@@ -8,8 +8,10 @@
 |------|------|
 | agent_events_spec.md | Agent 事件流规范 |
 | file_events_spec.md | 文件事件规范 |
+| process-ai-tasks-refactor.md | process-ai-tasks 边缘函数重构方案 |
 | prompt_spec.md | Prompt 系统规范 |
 | realtime_architecture.md | Realtime 订阅架构 |
+| realtime_architecture_v2.md | Realtime 订阅架构 v2 |
 
 ## legacy/ - 历史文档
 
