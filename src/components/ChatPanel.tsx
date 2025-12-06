@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useState, useLayoutEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import { buildLogService } from '../services/buildLogService';
 import { messageService } from '../services/messageService';
@@ -20,8 +20,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const projectId = currentProject?.id;
   
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  // 记录需要吸顶的消息 ID（用户发送消息后，该消息应该滚动到视口顶部）
-  const scrollToMessageIdRef = useRef<string | null>(null);
 
   // 使用新的 useAgentEvents hook，统一管理消息和任务订阅
   const {
@@ -82,8 +80,11 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
     if (userMsg) {
       appendMessage(userMsg);
-      // 记录需要吸顶的消息 ID，等 DOM 渲染后在 useEffect 中处理滚动
-      scrollToMessageIdRef.current = userMsg.id;
+      // 使用 requestAnimationFrame 确保在下一帧（DOM 渲染后）执行滚动
+      // 这比依赖 useLayoutEffect 监听 messages 变化更可靠，因为直接绑定到发送动作
+      requestAnimationFrame(() => {
+        scrollToMessageTop(userMsg.id);
+      });
     }
 
     const logResult = await buildLogService.addBuildLog(
@@ -146,18 +147,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       handleSend();
     }
   };
-
-  // 消息变化时处理吸顶滚动
-  // 使用 useLayoutEffect 确保在 DOM 渲染完成后、浏览器绘制前执行滚动
-  // 这比 useEffect + setTimeout 更可靠，避免了时序问题
-  useLayoutEffect(() => {
-    const targetId = scrollToMessageIdRef.current;
-    if (!targetId) return;
-
-    // 直接执行滚动，无需 setTimeout，因为 useLayoutEffect 在 DOM 更新后同步执行
-    scrollToMessageTop(targetId);
-    scrollToMessageIdRef.current = null;
-  }, [messages, scrollToMessageTop]);
 
   // 处理构建日志添加事件，当 AI 任务完成时刷新消息
   const handleBuildLogAdded = useCallback((log: BuildLog) => {
