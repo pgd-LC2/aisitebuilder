@@ -20,6 +20,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const projectId = currentProject?.id;
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
 
   // 使用新的 useAgentEvents hook，统一管理消息和任务订阅
   const {
@@ -36,8 +38,24 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   // 判断是否正在加载（首次加载时消息为空且已连接）
   const loading = !isConnected && messages.length === 0;
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // 智能滚动：根据内容是否溢出和用户是否在底部来决定是否滚动
+  const smartScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollHeight, clientHeight } = container;
+    const noOverflow = scrollHeight <= clientHeight;
+
+    if (noOverflow) {
+      // 内容没有溢出（不需要滚动条）：保持第一条消息吸顶，不滚动
+      container.scrollTop = 0;
+      return;
+    }
+
+    // 内容已溢出：只有当用户本来就在底部附近时，才自动滚到最新消息
+    if (isAtBottomRef.current) {
+      container.scrollTop = scrollHeight;
+    }
   }, []);
 
   const handleSend = async () => {
@@ -58,8 +76,10 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
     if (userMsg) {
       appendMessage(userMsg);
+      // 发送消息后，标记用户在底部，然后触发智能滚动
+      isAtBottomRef.current = true;
       setTimeout(() => {
-        scrollToBottom();
+        smartScroll();
       }, 100);
     }
 
@@ -124,10 +144,30 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
   };
 
-  // 消息变化时自动滚动到底部
+  // 监听滚动事件，跟踪用户是否在底部附近
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceToBottom = scrollHeight - clientHeight - scrollTop;
+      // 允许16px的误差，认为用户在底部附近
+      isAtBottomRef.current = distanceToBottom < 16;
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    handleScroll(); // 初始化一次
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // 消息变化时智能滚动
+  useEffect(() => {
+    smartScroll();
+  }, [messages, smartScroll]);
 
   // 处理构建日志添加事件，当 AI 任务完成时刷新消息
   const handleBuildLogAdded = useCallback((log: BuildLog) => {
@@ -139,20 +179,24 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* 消息列表区域：使用 flex-col justify-start 确保消息从顶部开始显示（吸顶） */}
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 flex flex-col justify-start overflow-y-auto px-4 py-4"
+      >
         {loading ? (
-          <div className="h-full flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center">
             <p className="text-gray-500 text-sm">加载中...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-2">
               <p className="text-gray-500 text-sm">暂无对话</p>
               <p className="text-gray-400 text-xs">输入你的指令开始编辑</p>
             </div>
           </div>
         ) : (
-          <>
+          <div className="space-y-3">
             {messages.map(message => (
               <div
                 key={message.id}
@@ -202,7 +246,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
               </div>
             ))}
             <div ref={messagesEndRef} />
-          </>
+          </div>
         )}
       </div>
 
