@@ -1,42 +1,73 @@
 # AI Site Builder
 
-一个使用 React、TypeScript、Tailwind CSS 和 Supabase 搭建的 AI 驱动建站工作台。用户可以登录、创建项目、查看版本历史并在浏览器中管理文件。
+一个使用 React、TypeScript、Tailwind CSS 和 Supabase 搭建的 AI 驱动建站工作台。用户可以通过自然语言对话创建网站，实时预览生成的代码，并在浏览器中管理文件。
 
-## 可用脚本
+## 项目结构
 
-| 命令                  | 说明                                 |
-| --------------------- | ------------------------------------ |
-| `npm run dev`       | 启动开发服务器                       |
-| `npm run build`     | 产出生产环境构建结果                 |
-| `npm run preview`   | 本地预览打包产物                     |
-| `npm run lint`      | 运行 ESLint 保持代码风格一致         |
-| `npm run typecheck` | 使用 TypeScript 进行静态类型检查     |
-| `npm run test`      | 编译并执行自定义 TypeScript 单元测试 |
-
-> `npm run test` 会先根据 `tsconfig.test.json` 将 `src/utils` 与 `tests` 目录编译到 `test-dist/`，然后运行 `tests/titleGenerator.test.ts` 中的断言，最后自动清理临时目录。
+```
+aisitebuilder/
+├── src/                    # 前端 React 应用
+│   ├── components/         # UI 组件（ChatPanel、PreviewPanel、FileManager 等）
+│   ├── contexts/           # React Context（Auth、Project、Settings）
+│   ├── services/           # 后端 API 服务封装
+│   ├── lib/                # 工具库（Supabase 客户端、WebContainer 管理）
+│   ├── types/              # TypeScript 类型定义
+│   ├── realtime/           # Realtime 订阅相关
+│   ├── utils/              # 通用工具函数
+│   └── App.tsx             # 应用入口
+│
+├── supabase/               # Supabase 后端
+│   ├── functions/          # Edge Functions（Deno 运行时）
+│   │   ├── process-ai-tasks/   # AI 任务处理（核心）
+│   │   ├── proxy-image/        # 图片安全代理
+│   │   ├── initialize-project/ # 项目初始化
+│   │   ├── create-version/     # 版本创建
+│   │   └── copy-version-files/ # 版本文件复制
+│   └── migrations/         # 数据库迁移脚本
+│
+├── prompts/                # AI Prompt 模板（五层架构）
+│   ├── core.system.base.v1.md      # 系统核心
+│   ├── planner.web.structure.v1.md # 规划层
+│   ├── coder.web.implement.v1.md   # 编码层
+│   ├── reviewer.quality.check.v1.md # 审查层
+│   └── debugger.error.diagnosis.v1.md # 调试层
+│
+├── docs/                   # 技术文档
+│   ├── specs/              # 技术规范（当前使用）
+│   └── legacy/             # 历史文档（供参考）
+│
+├── public/                 # 静态资源
+├── scripts/                # 构建脚本
+└── tests/                  # 单元测试
+```
 
 ## 技术栈
 
-- React 18 + Vite
-- TypeScript
-- Tailwind CSS
-- Lucide 图标集
-- Supabase（认证、数据库、对象存储、Realtime、Edge Functions）
+前端使用 React 18 + Vite + TypeScript + Tailwind CSS，后端使用 Supabase（认证、PostgreSQL 数据库、对象存储、Realtime、Edge Functions），AI 能力通过 OpenRouter API 接入。
+
+## 可用脚本
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 启动开发服务器 |
+| `npm run build` | 构建生产版本 |
+| `npm run preview` | 预览构建产物 |
+| `npm run lint` | 运行 ESLint |
+| `npm run typecheck` | TypeScript 类型检查 |
+| `npm run test` | 运行单元测试 |
 
 ## AI 任务编排
 
-- ChatPanel、VersionManager、FileManager 等前端功能会把"聊天回复""构建/重构请求"等长任务写入 Supabase 的 `ai_tasks` 表，由 Edge Function 或 Worker 根据 `type`、`payload` 协调模型调用或代码生成，再把执行结果写回 `result`/`status`。
-- `ai_tasks` 持久化 `project_id`、`user_id`、`payload`、`model`、`status` 和时间戳，并开启 RLS，保障只有任务所属用户能读写数据，可与 `build_logs`、`project_versions` 一起让前端订阅进度并在任务完成后生成快照。
+系统通过 `ai_tasks` 表管理 AI 任务队列。前端组件（ChatPanel、VersionManager 等）将任务写入队列，`process-ai-tasks` Edge Function 负责处理任务、调用 LLM、执行文件操作，并将结果写回 `chat_messages` 表。
 
-### Edge Functions 架构
+核心特性包括五层 Prompt 架构（Core → Planner → Coder → Reviewer → Debugger）、自我修复循环（最多 3 次自动错误修复）、以及基于 WebContainer 的浏览器内实时预览。
 
-当前 `process-ai-tasks` 边缘函数承担了 AI 任务处理的核心逻辑，包括 Prompt 路由、LLM 调用、文件操作和自我修复循环。详细的重构方案请参阅 `docs/specs/process-ai-tasks-refactor.md`。
+详细的重构方案请参阅 `docs/specs/process-ai-tasks-refactor.md`。
 
-## 部署提示
+## 部署
 
-- 默认包含 `public/_redirects`，可直接部署到 Netlify 以支持 SPA 路由。
-- 部署前请配置 Supabase 的 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_ANON_KEY` 环境变量。
+默认包含 `public/_redirects`，可直接部署到 Netlify。部署前需配置环境变量：`VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`。
 
 ## 贡献指南
 
-贡献代码或文档前，请先阅读 `AGENTS.md` 中的《Repository Guidelines》，其中包含目录结构、脚本说明、编码规范与安全要求。根据文件指引，所有协作者需使用中文沟通，并在提交前运行必要的检查。
+贡献代码或文档前，请先阅读 `AGENTS.md` 中的《Repository Guidelines》。所有协作者需使用中文沟通，并在提交前运行 lint 和 typecheck。
