@@ -71,3 +71,15 @@ aisitebuilder/
 ## 贡献指南
 
 贡献代码或文档前，请先阅读 `AGENTS.md` 中的《Repository Guidelines》。所有协作者需使用中文沟通，并在提交前运行 lint 和 typecheck。
+
+## 新人必读
+
+如果你是新加入的工程师，请务必阅读以下文档以快速了解系统架构：
+
+1. **[任务与工作流架构](docs/specs/task-workflow-architecture.md)**：详细说明任务类型（Task Type）和工作流模式（Workflow Mode）的设计，这是理解系统核心概念的关键文档。
+
+2. **[Prompt 系统规范](docs/specs/prompt_spec.md)**：五层 Prompt 架构的详细说明。
+
+3. **[process-ai-tasks 重构方案](docs/specs/process-ai-tasks-refactor.md)**：AI 任务处理 Edge Function 的设计文档。
+
+更多技术文档请查看 [docs/README.md](docs/README.md)。
