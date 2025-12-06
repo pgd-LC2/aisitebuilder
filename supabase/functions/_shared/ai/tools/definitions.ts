@@ -1,0 +1,162 @@
+/**
+ * AI Agent 工具定义模块
+ * 定义所有可用工具的 schema
+ */
+
+import type { ToolDefinition } from '../types.ts';
+
+// Chat Completions API 工具定义格式
+export const TOOLS: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: '生成图片。当用户要求创建、生成或绘制图片时使用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: '图片生成的详细描述,用英文描述'
+          },
+          aspect_ratio: {
+            type: 'string',
+            description: '图片的宽高比',
+            enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+          }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_files',
+      description: '列出项目目录下的文件和子目录。用于了解项目结构。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要列出的目录路径，相对于项目根目录。留空表示根目录。'
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description: '读取项目中指定文件的内容。用于查看现有代码或配置。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要读取的文件路径，相对于项目根目录'
+          }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_file',
+      description: '写入或创建文件。用于生成新代码或修改现有文件。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要写入的文件路径，相对于项目根目录'
+          },
+          content: {
+            type: 'string',
+            description: '要写入的文件内容'
+          }
+        },
+        required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_file',
+      description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要删除的文件路径，相对于项目根目录'
+          }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_files',
+      description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
+      parameters: {
+        type: 'object',
+        properties: {
+          keyword: {
+            type: 'string',
+            description: '要搜索的关键词'
+          },
+          file_extension: {
+            type: 'string',
+            description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
+          }
+        },
+        required: ['keyword']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_project_structure',
+      description: '获取完整的项目文件树结构。用于全局了解项目组成。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'move_file',
+      description: '移动或重命名文件。将文件从一个路径移动到另一个路径。',
+      parameters: {
+        type: 'object',
+        properties: {
+          fromPath: {
+            type: 'string',
+            description: '源文件路径，相对于项目根目录'
+          },
+          toPath: {
+            type: 'string',
+            description: '目标文件路径，相对于项目根目录'
+          },
+          overwrite: {
+            type: 'boolean',
+            description: '目标文件已存在时是否覆盖（默认 false）'
+          }
+        },
+        required: ['fromPath', 'toPath']
+      }
+    }
+  }
+];
