@@ -383,7 +383,7 @@ export const DEFAULT_PROMPTS: Record<string, string> = {
 };
 
 // --- 层级到提示词前缀的映射（用于动态版本检测）---
-const LAYER_TO_PROMPT_PREFIX: Record<PromptLayer, string> = {
+export const LAYER_TO_PROMPT_PREFIX: Record<PromptLayer, string> = {
   'core': 'core.system.base',
   'planner': 'planner.web.structure',
   'coder': 'coder.web.implement',
