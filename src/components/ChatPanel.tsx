@@ -32,6 +32,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // 标记是否已完成初始滚动（打开网页时滚动到底部）
   const hasInitialScrollRef = useRef(false);
+  // 动态计算的 spacer 高度，用于让最后一条用户消息贴顶
+  const [spacerHeight, setSpacerHeight] = useState(0);
 
   // 使用新的 useAgentEvents hook，统一管理消息和任务订阅
   const {
@@ -48,31 +50,49 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   // 判断是否正在加载（首次加载时消息为空且已连接）
   const loading = !isConnected && messages.length === 0;
 
-  // 吸顶滚动：将指定消息滚动到视口顶部
+  // 计算 spacer 高度：让指定消息贴顶时需要的底部空间
+  // spacerHeight = 容器高度 - 消息高度
+  const calculateSpacerHeight = useCallback((messageId: string) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!target) return;
+
+    const containerHeight = container.clientHeight;
+    const messageHeight = target.offsetHeight;
+    
+    // spacer 高度 = 容器高度 - 消息高度，确保消息贴顶时刚好在顶部
+    const newSpacerHeight = Math.max(0, containerHeight - messageHeight);
+    setSpacerHeight(newSpacerHeight);
+  }, []);
+
+  // 带动画滚动到底部
+  const scrollToBottomWithAnimation = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: 'smooth'
+    });
+  }, []);
+
+  // 吸顶滚动：计算 spacer 高度并滚动到底部（带动画）
   const scrollToMessageTop = useCallback((messageId: string) => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    const { scrollHeight, clientHeight } = container;
-    // 如果内容还不够一屏，保持从顶部开始，不用动 scrollTop
-    if (scrollHeight <= clientHeight) {
-      container.scrollTop = 0;
-      return;
-    }
-
-    // 找到目标消息元素，将其滚动到容器顶部
-    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
-    if (!target) return;
-
-    // 使用 getBoundingClientRect 计算目标消息相对于容器的偏移量
-    // 这种方法不依赖 offsetParent，更加可靠
-    const containerRect = container.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
+    // 先计算 spacer 高度
+    calculateSpacerHeight(messageId);
     
-    // target 到容器顶部的"视觉距离" + 当前 scrollTop = 目标 scrollTop
-    const offset = targetRect.top - containerRect.top + container.scrollTop;
-    container.scrollTop = offset;
-  }, []);
+    // 使用 requestAnimationFrame 等待 spacer 高度更新后再滚动
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToBottomWithAnimation();
+      });
+    });
+  }, [calculateSpacerHeight, scrollToBottomWithAnimation]);
 
   // 滚动到底部：将指定消息滚动到视口底部（用于打开网页时显示最新消息）
   const scrollToMessageBottom = useCallback((messageId: string) => {
@@ -430,10 +450,13 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                 );
               })}
             </div>
-            {/* 底部 spacer：提供额外的滚动空间，让最后一条消息可以滚动到视口顶部
-                使用 flex-grow 在消息少时自然撑满空白区域
-                min-h-[100vh] 确保在消息多时提供至少一个视口高度的额外空间 */}
-            <div className="flex-grow min-h-[100vh]" />
+            {/* 底部 spacer：提供动态计算的滚动空间，让最后一条消息可以滚动到视口顶部
+                高度由 spacerHeight 状态控制，根据最后一条用户消息的高度动态计算
+                当 spacerHeight 为 0 时，使用 flex-grow 自然撑满空白区域 */}
+            <div 
+              className="flex-grow"
+              style={{ minHeight: spacerHeight > 0 ? `${spacerHeight}px` : undefined }}
+            />
           </div>
         )}
       </div>
