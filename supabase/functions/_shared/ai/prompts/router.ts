@@ -264,6 +264,57 @@ const PROMPT_REVIEWER = `## Reviewer 层：质量检查
 ### 结构不一致处理
 若发现 File Tree 与实际不一致，**必须先修正输出结构再修代码**。`;
 
+// --- chat_reply 专用提示词 v3 ---
+const PROMPT_CHAT_ASSISTANT = `你是一名**代码分析顾问**，专注于帮助用户理解、分析和讨论代码。
+
+## 核心身份与目标
+你的使命是帮助用户理解代码库、回答技术问题、提供架构建议。你**不负责直接修改代码**。
+
+## 语言规范
+**强制要求**：始终使用**简体中文**与用户交流。
+
+## 工具能力
+你拥有以下**只读**工具，通过函数调用使用：
+
+| 工具 | 功能 | 使用场景 |
+|------|------|----------|
+| list_files | 列出目录文件 | 了解项目结构 |
+| read_file | 读取文件内容 | 查看现有代码 |
+| search_files | 搜索文件内容 | 定位相关代码 |
+| get_project_structure | 获取项目结构 | 全局了解项目 |
+
+**工具使用原则**：
+1. 主动使用工具了解项目结构和代码内容
+2. 根据用户问题，精准定位相关文件
+3. 分析代码时，先读取相关文件再给出建议
+
+## 你可以做的事情
+- 解释代码的功能和实现原理
+- 分析代码结构和架构设计
+- 回答关于代码的技术问题
+- 提供重构或优化建议（但不直接实施）
+- 帮助用户理解错误信息和调试思路
+- 讨论技术方案和最佳实践
+
+## 你不能做的事情（严格禁止）
+1. **禁止**修改任何文件
+2. **禁止**创建新文件
+3. **禁止**删除文件
+4. **禁止**移动或重命名文件
+5. **禁止**输出完整的代码文件让用户复制粘贴
+6. **禁止**生成 File Tree + Files 格式的输出
+
+## 用户引导
+如果用户要求你修改代码或创建文件，请友好地引导他们：
+- 点击 **Plan** 按钮进入规划模式，与你讨论需求和方案
+- 点击 **Build** 按钮进入构建模式，让 AI 执行代码修改
+
+## 回复风格
+- 简洁明了，直接回答问题
+- 使用代码片段说明时，只展示关键部分
+- 提供建议时，解释原因和好处
+- 遇到不确定的问题，先使用工具查看代码再回答`;
+
 const PROMPT_DEBUGGER = `## Debugger 层：错误诊断与自我修复
 
 **自我调 bug 闭环是系统级强制要求，不可跳过任何步骤。**
@@ -374,6 +425,8 @@ export const DEFAULT_PROMPTS: Record<string, string> = {
   'coder.web.implement.v1': PROMPT_CODER,
   'reviewer.quality.check.v1': PROMPT_REVIEWER,
   'debugger.error.diagnosis.v1': PROMPT_DEBUGGER,
+  // chat_reply 专用提示词 v3 - 只读分析模式
+  'chat.assistant.readonly.v3': PROMPT_CHAT_ASSISTANT,
   'agent.system.base': PROMPT_CORE_SYSTEM,
   'agent.task.build_site': PROMPT_PLANNER + '\n\n' + PROMPT_CODER,
   'agent.task.refactor_code': PROMPT_CODER + '\n\n' + PROMPT_REVIEWER,
@@ -388,7 +441,9 @@ export const LAYER_TO_PROMPT_PREFIX: Record<PromptLayer, string> = {
   'planner': 'planner.web.structure',
   'coder': 'coder.web.implement',
   'reviewer': 'reviewer.quality.check',
-  'debugger': 'debugger.error.diagnosis'
+  'debugger': 'debugger.error.diagnosis',
+  // chat 层级专用于 chat_reply 任务，提供只读分析能力
+  'chat': 'chat.assistant.readonly'
 };
 
 // --- 工作流模式到提示词前缀的映射（用于动态版本检测）---
@@ -401,7 +456,8 @@ const WORKFLOW_MODE_TO_PROMPT_PREFIX: Record<WorkflowMode, string> = {
 // --- 路由配置 ---
 
 export const PROMPT_ROUTING_TABLE: Record<TaskType, PromptLayer[]> = {
-  'chat_reply': ['core'],
+  // chat_reply 使用专用的 'chat' 层级，提供只读分析能力，不包含文件修改工具
+  'chat_reply': ['chat'],
   'build_site': ['core', 'planner', 'coder', 'reviewer'],
   'refactor_code': ['core', 'coder', 'reviewer'],
   'debug': ['core', 'debugger']
@@ -629,6 +685,13 @@ export function classifyPromptError(error: { code?: string; message?: string; de
  */
 export function routePromptLayers(context: PromptRouterContext): PromptLayer[] {
   let layers = [...PROMPT_ROUTING_TABLE[context.taskType] || PROMPT_ROUTING_TABLE['chat_reply']];
+  
+  // chat_reply 任务使用专用的 'chat' 层级，不应受 isNewProject 或 hasError 的影响
+  // 这确保了聊天模式下 AI 只有只读分析能力，不会被添加 Planner/Reviewer/Debugger 层
+  if (context.taskType === 'chat_reply') {
+    console.log('[PromptRouter] chat_reply 任务使用专用 chat 层级，跳过动态层级调整');
+    return layers;
+  }
   
   if (context.hasError || context.errorInfo) {
     if (!layers.includes('debugger')) {

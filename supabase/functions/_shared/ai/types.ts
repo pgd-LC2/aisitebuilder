@@ -101,7 +101,8 @@ export interface ParsedChatCompletionOutput {
 // --- Prompt Router 类型 ---
 
 export type TaskType = 'chat_reply' | 'build_site' | 'refactor_code' | 'debug';
-export type PromptLayer = 'core' | 'planner' | 'coder' | 'reviewer' | 'debugger';
+// 'chat' 层级专用于 chat_reply 任务，提供只读分析能力，不包含文件修改工具
+export type PromptLayer = 'core' | 'planner' | 'coder' | 'reviewer' | 'debugger' | 'chat';
 export type WorkflowMode = 'default' | 'planning' | 'build';
 
 export interface PromptRouterContext {
