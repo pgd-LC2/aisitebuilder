@@ -31,8 +31,8 @@ export {
   saveImageToStorage 
 } from './llm/imageGenerator.ts';
 
-// 工具定义
-export { TOOLS } from './tools/definitions.ts';
+// 工具定义和能力矩阵
+export { TOOLS, getFilteredTools, getAllowedToolNames } from './tools/definitions.ts';
 
 // 文件操作
 export {
