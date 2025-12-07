@@ -231,7 +231,11 @@ ${requirement}
       console.log(`Agent 迭代 ${iteration}`);
       await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
       
-      const assistantResponse = await callOpenRouterChatCompletionsApi(chatMessages, apiKey, model, { tools: TOOLS, toolChoice: 'auto' });
+      // 根据任务类型动态设置 toolChoice
+      // - chat_reply: 使用 'auto'，允许模型选择是否调用工具
+      // - build_site, refactor_code: 使用 'required'，强制模型调用工具
+      const toolChoice = task.type === 'chat_reply' ? 'auto' : 'required';
+      const assistantResponse = await callOpenRouterChatCompletionsApi(chatMessages, apiKey, model, { tools: TOOLS, toolChoice });
       
       if (assistantResponse.tool_calls && assistantResponse.tool_calls.length > 0) {
         chatMessages.push(assistantResponse.rawMessage);

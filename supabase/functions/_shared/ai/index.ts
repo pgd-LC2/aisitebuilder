@@ -16,7 +16,7 @@ export {
   getMultiplePrompts,
   DEFAULT_PROMPTS,
   PROMPT_ROUTING_TABLE,
-  LAYER_TO_PROMPT_KEY
+  LAYER_TO_PROMPT_PREFIX
 } from './prompts/router.ts';
 
 // LLM 客户端
