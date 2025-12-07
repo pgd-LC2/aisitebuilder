@@ -1,12 +1,27 @@
 /**
- * Prompt Router 模块
+ * Prompt Router 模块 v2
  * 负责根据任务类型和上下文组装 prompts
  * Prompt 内容从 prompts 数据库表动态读取
+ * 
+ * v2 改进：
+ * - 智能版本检测：自动检测并使用最新版本的提示词
+ * - 动态路由：不再硬编码提示词 key，而是从数据库动态获取
+ * - 自动清理：检测到新版本时自动删除旧版本
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { CACHE_TTL } from '../config.ts';
 import type { TaskType, PromptLayer, PromptRouterContext, PromptFetchErrorType, WorkflowMode } from '../types.ts';
+
+// --- 版本检测缓存 ---
+interface VersionCache {
+  layerVersions: Map<string, string>;  // layer -> latest version key
+  workflowVersions: Map<string, string>;  // workflow mode -> latest version key
+  timestamp: number;
+}
+
+let versionCache: VersionCache | null = null;
+const VERSION_CACHE_TTL = 60000; // 1 分钟缓存
 
 // --- 五层 Prompt 架构默认值 ---
 
@@ -367,11 +382,20 @@ export const DEFAULT_PROMPTS: Record<string, string> = {
   'workflow.build.v1': PROMPT_WORKFLOW_BUILD
 };
 
-// --- 工作流模式到提示词 key 的映射 ---
-export const WORKFLOW_MODE_TO_PROMPT_KEY: Record<WorkflowMode, string> = {
-  'default': 'workflow.default.v1',
-  'planning': 'workflow.planning.v1',
-  'build': 'workflow.build.v1'
+// --- 层级到提示词前缀的映射（用于动态版本检测）---
+const LAYER_TO_PROMPT_PREFIX: Record<PromptLayer, string> = {
+  'core': 'core.system.base',
+  'planner': 'planner.web.structure',
+  'coder': 'coder.web.implement',
+  'reviewer': 'reviewer.quality.check',
+  'debugger': 'debugger.error.diagnosis'
+};
+
+// --- 工作流模式到提示词前缀的映射（用于动态版本检测）---
+const WORKFLOW_MODE_TO_PROMPT_PREFIX: Record<WorkflowMode, string> = {
+  'default': 'workflow.default',
+  'planning': 'workflow.planning',
+  'build': 'workflow.build'
 };
 
 // --- 路由配置 ---
@@ -383,13 +407,203 @@ export const PROMPT_ROUTING_TABLE: Record<TaskType, PromptLayer[]> = {
   'debug': ['core', 'debugger']
 };
 
-export const LAYER_TO_PROMPT_KEY: Record<PromptLayer, string> = {
-  'core': 'core.system.base.v1',
-  'planner': 'planner.web.structure.v1',
-  'coder': 'coder.web.implement.v1',
-  'reviewer': 'reviewer.quality.check.v1',
-  'debugger': 'debugger.error.diagnosis.v1'
-};
+// --- 动态版本检测函数 ---
+
+/**
+ * 从提示词 key 中提取版本号
+ * 例如: 'core.system.base.v2' -> 2, 'workflow.build.v1' -> 1
+ */
+function extractVersion(key: string): number {
+  const match = key.match(/\.v(\d+)$/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+/**
+ * 从数据库获取所有活跃的提示词 key，并检测每个前缀的最新版本
+ */
+async function detectLatestVersions(
+  supabase: ReturnType<typeof createClient>
+): Promise<VersionCache> {
+  const layerVersions = new Map<string, string>();
+  const workflowVersions = new Map<string, string>();
+
+  try {
+    console.log('[PromptRouter] 开始检测最新提示词版本...');
+    
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('key')
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[PromptRouter] 版本检测失败:', error);
+      // 返回空缓存，后续会使用默认值
+      return { layerVersions, workflowVersions, timestamp: Date.now() };
+    }
+
+    const keys = (data || []).map(item => item.key);
+    console.log(`[PromptRouter] 数据库中找到 ${keys.length} 个活跃提示词`);
+
+    // 检测层级提示词的最新版本
+    for (const [layer, prefix] of Object.entries(LAYER_TO_PROMPT_PREFIX)) {
+      const matchingKeys = keys.filter(k => k.startsWith(prefix + '.v'));
+      if (matchingKeys.length > 0) {
+        // 找到版本号最大的 key
+        const latestKey = matchingKeys.reduce((latest, current) => {
+          return extractVersion(current) > extractVersion(latest) ? current : latest;
+        });
+        layerVersions.set(layer, latestKey);
+        console.log(`[PromptRouter] 层级 ${layer}: 最新版本 ${latestKey}`);
+      }
+    }
+
+    // 检测工作流提示词的最新版本
+    for (const [mode, prefix] of Object.entries(WORKFLOW_MODE_TO_PROMPT_PREFIX)) {
+      const matchingKeys = keys.filter(k => k.startsWith(prefix + '.v'));
+      if (matchingKeys.length > 0) {
+        const latestKey = matchingKeys.reduce((latest, current) => {
+          return extractVersion(current) > extractVersion(latest) ? current : latest;
+        });
+        workflowVersions.set(mode, latestKey);
+        console.log(`[PromptRouter] 工作流 ${mode}: 最新版本 ${latestKey}`);
+      }
+    }
+
+  } catch (e) {
+    console.error('[PromptRouter] 版本检测异常:', e);
+  }
+
+  return { layerVersions, workflowVersions, timestamp: Date.now() };
+}
+
+/**
+ * 获取或刷新版本缓存
+ */
+async function getVersionCache(
+  supabase: ReturnType<typeof createClient>
+): Promise<VersionCache> {
+  if (versionCache && Date.now() - versionCache.timestamp < VERSION_CACHE_TTL) {
+    return versionCache;
+  }
+  
+  versionCache = await detectLatestVersions(supabase);
+  return versionCache;
+}
+
+/**
+ * 获取层级的最新提示词 key
+ */
+async function getLatestLayerKey(
+  supabase: ReturnType<typeof createClient>,
+  layer: PromptLayer
+): Promise<string> {
+  const cache = await getVersionCache(supabase);
+  const latestKey = cache.layerVersions.get(layer);
+  
+  if (latestKey) {
+    return latestKey;
+  }
+  
+  // 如果没有找到，返回 v1 作为默认值
+  const defaultKey = `${LAYER_TO_PROMPT_PREFIX[layer]}.v1`;
+  console.log(`[PromptRouter] 层级 ${layer} 未找到最新版本，使用默认值: ${defaultKey}`);
+  return defaultKey;
+}
+
+/**
+ * 获取工作流模式的最新提示词 key
+ */
+async function getLatestWorkflowKey(
+  supabase: ReturnType<typeof createClient>,
+  mode: WorkflowMode
+): Promise<string> {
+  const cache = await getVersionCache(supabase);
+  const latestKey = cache.workflowVersions.get(mode);
+  
+  if (latestKey) {
+    return latestKey;
+  }
+  
+  // 如果没有找到，返回 v1 作为默认值
+  const defaultKey = `${WORKFLOW_MODE_TO_PROMPT_PREFIX[mode]}.v1`;
+  console.log(`[PromptRouter] 工作流 ${mode} 未找到最新版本，使用默认值: ${defaultKey}`);
+  return defaultKey;
+}
+
+/**
+ * 删除旧版本提示词（保留最新版本）
+ */
+export async function cleanupOldPromptVersions(
+  supabase: ReturnType<typeof createClient>
+): Promise<{ deleted: string[]; errors: string[] }> {
+  const deleted: string[] = [];
+  const errors: string[] = [];
+
+  try {
+    console.log('[PromptRouter] 开始清理旧版本提示词...');
+    
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('key')
+      .eq('is_active', true);
+
+    if (error) {
+      errors.push(`查询失败: ${error.message}`);
+      return { deleted, errors };
+    }
+
+    const keys = (data || []).map(item => item.key);
+    
+    // 按前缀分组
+    const prefixGroups = new Map<string, string[]>();
+    for (const key of keys) {
+      const match = key.match(/^(.+)\.v\d+$/);
+      if (match) {
+        const prefix = match[1];
+        if (!prefixGroups.has(prefix)) {
+          prefixGroups.set(prefix, []);
+        }
+        prefixGroups.get(prefix)!.push(key);
+      }
+    }
+
+    // 对每个前缀，删除非最新版本
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for (const [_prefix, groupKeys] of prefixGroups) {
+      if (groupKeys.length <= 1) continue;
+      
+      // 找到最新版本
+      const latestKey = groupKeys.reduce((latest, current) => {
+        return extractVersion(current) > extractVersion(latest) ? current : latest;
+      });
+      
+      // 删除其他版本
+      for (const key of groupKeys) {
+        if (key !== latestKey) {
+          const { error: deleteError } = await supabase
+            .from('prompts')
+            .delete()
+            .eq('key', key);
+          
+          if (deleteError) {
+            errors.push(`删除 ${key} 失败: ${deleteError.message}`);
+          } else {
+            deleted.push(key);
+            console.log(`[PromptRouter] 已删除旧版本: ${key}`);
+          }
+        }
+      }
+    }
+
+    console.log(`[PromptRouter] 清理完成: 删除 ${deleted.length} 个旧版本`);
+    
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    errors.push(`清理异常: ${errorMessage}`);
+  }
+
+  return { deleted, errors };
+}
 
 // --- 提示词缓存 ---
 const promptCache: Map<string, { content: string; timestamp: number }> = new Map();
@@ -409,7 +623,11 @@ export function classifyPromptError(error: { code?: string; message?: string; de
 }
 
 // --- Prompt Router 函数 ---
-export function routePrompts(context: PromptRouterContext): string[] {
+
+/**
+ * 根据上下文确定需要的提示词层级（返回层级名称数组）
+ */
+export function routePromptLayers(context: PromptRouterContext): PromptLayer[] {
   let layers = [...PROMPT_ROUTING_TABLE[context.taskType] || PROMPT_ROUTING_TABLE['chat_reply']];
   
   if (context.hasError || context.errorInfo) {
@@ -430,7 +648,33 @@ export function routePrompts(context: PromptRouterContext): string[] {
     }
   }
   
-  return layers.map(layer => LAYER_TO_PROMPT_KEY[layer]);
+  return layers;
+}
+
+/**
+ * 根据上下文动态获取最新版本的提示词 key 列表
+ */
+export async function routePromptsAsync(
+  supabase: ReturnType<typeof createClient>,
+  context: PromptRouterContext
+): Promise<string[]> {
+  const layers = routePromptLayers(context);
+  const keys: string[] = [];
+  
+  for (const layer of layers) {
+    const key = await getLatestLayerKey(supabase, layer);
+    keys.push(key);
+  }
+  
+  return keys;
+}
+
+/**
+ * @deprecated 使用 routePromptsAsync 代替，此函数使用 v1 作为默认版本
+ */
+export function routePrompts(context: PromptRouterContext): string[] {
+  const layers = routePromptLayers(context);
+  return layers.map(layer => `${LAYER_TO_PROMPT_PREFIX[layer]}.v1`);
 }
 
 // --- 批量获取提示词 ---
@@ -511,11 +755,12 @@ export async function assembleSystemPrompt(
   context: PromptRouterContext,
   fileContext?: string
 ): Promise<string> {
-  const basePromptKeys = routePrompts(context);
+  // 使用动态版本检测获取最新的提示词 key
+  const basePromptKeys = await routePromptsAsync(supabase, context);
   
-  // 根据工作流模式动态添加工作流提示词
+  // 根据工作流模式动态获取最新版本的工作流提示词
   const workflowKey = context.workflowMode 
-    ? WORKFLOW_MODE_TO_PROMPT_KEY[context.workflowMode] 
+    ? await getLatestWorkflowKey(supabase, context.workflowMode)
     : undefined;
   
   // 工作流提示词放在最前面，作为全局行为约束
