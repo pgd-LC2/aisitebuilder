@@ -1,0 +1,46 @@
+{
+  "$schema": "./generator.schema.json",
+  "version": "1.0",
+  "description": "AI 自动测试生成器配置文件",
+  
+  "source": {
+    "directory": "src",
+    "include": ["**/*.ts", "**/*.tsx"],
+    "exclude": [
+      "**/*.d.ts",
+      "**/main.tsx",
+      "**/vite-env.d.ts",
+      "**/index.ts",
+      "**/index.tsx"
+    ]
+  },
+  
+  "output": {
+    "directory": "tests/generated",
+    "metaFile": "tests/.generated-tests-meta.json"
+  },
+  
+  "openRouter": {
+    "model": "google/gemini-2.5-pro-preview-06-05",
+    "temperature": 0.3,
+    "maxTokens": 4096
+  },
+  
+  "generation": {
+    "priorityDirs": ["utils", "lib"],
+    "componentDirs": ["components"],
+    "serviceDirs": ["services", "realtime"],
+    "contextDirs": ["contexts"],
+    "delayBetweenRequests": 1000
+  },
+  
+  "skipFiles": [
+    "src/App.tsx"
+  ],
+  
+  "notes": {
+    "手动测试": "手写的测试文件应放在 tests/ 根目录或 tests/manual/ 下，不会被生成器覆盖",
+    "跳过文件": "在源文件顶部添加 // @no-auto-tests 注释可跳过该文件的测试生成",
+    "强制重新生成": "使用 npm run test:gen:force 强制重新生成所有测试"
+  }
+}
