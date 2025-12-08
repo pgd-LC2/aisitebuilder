@@ -7,7 +7,7 @@
 AI 自动测试生成器是一个基于 OpenRouter API 的工具，它能够：
 
 1. **自动扫描**：扫描 `src/` 目录下的所有 TypeScript 文件
-2. **智能生成**：使用 AI 模型 (google/gemini-2.5-pro-preview-06-05) 为每个文件生成对应的 Vitest 测试代码
+2. **智能生成**：使用 AI 模型 (inception/mercury-coder) 为每个文件生成对应的 Vitest 测试代码
 3. **增量更新**：通过哈希缓存机制，只更新发生变化的文件的测试
 4. **自动同步**：当源文件被删除时，自动清理对应的测试文件
 
@@ -85,9 +85,9 @@ npm run test:gen -- src/utils/titleGenerator.ts
     "metaFile": "tests/.generated-tests-meta.json"
   },
   "openRouter": {
-    "model": "google/gemini-2.5-pro-preview-06-05",
+    "model": "inception/mercury-coder",
     "temperature": 0.3,
-    "maxTokens": 4096
+    "maxTokens": 128000
   },
   "skipFiles": ["src/App.tsx"]
 }
@@ -196,7 +196,7 @@ A: 不会。监听模式只负责生成测试文件，你需要在另一个终�
 ### API 配置
 
 - 端点: `https://openrouter.ai/api/v1/chat/completions`
-- 模型: `google/gemini-2.5-pro-preview-06-05`
+- 模型: `inception/mercury-coder`
 - Temperature: 0.3（较低以保证一致性）
 
 ### 限流
