@@ -277,11 +277,11 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden my-2">
-      {/* Bolt 风格的 Actions Taken 头部 */}
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden my-2 flex flex-col max-h-[400px]">
+      {/* Bolt 风格的 Actions Taken 头部 - 使用 sticky 定位保持在顶部 */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors sticky top-0 bg-white z-10 flex-shrink-0"
       >
         <div className="flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-gray-500" />
@@ -305,7 +305,7 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
       </button>
 
       {isExpanded && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+        <div className="border-t border-gray-100 px-4 py-3 space-y-3 overflow-y-auto flex-1">
           {/* 计划列表（带状态指示器） */}
           {planItems.length > 0 && (
             <div className="space-y-1">
