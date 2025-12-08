@@ -326,7 +326,7 @@ function App() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-[400px] border-r border-gray-200 flex-shrink-0 bg-gray-50">
+        <div className="w-[28%] min-w-[320px] max-w-[480px] border-r border-gray-200 flex-shrink-0 bg-gray-50">
           <ChatPanel projectFilesContext={projectFilesContext} />
         </div>
 
