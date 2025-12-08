@@ -24,7 +24,7 @@ const CONFIG = {
   testsDir: 'tests/generated',
   metaFile: 'tests/.generated-tests-meta.json',
   openRouterEndpoint: 'https://openrouter.ai/api/v1/chat/completions',
-  model: 'google/gemini-2.5-pro-preview-06-05',
+  model: 'inception/mercury-coder',
   excludePatterns: [
     /\.d\.ts$/,
     /main\.tsx$/,
@@ -242,7 +242,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
-      max_tokens: 500000,
+      max_tokens: 16000,
     }),
   });
 

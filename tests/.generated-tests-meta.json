@@ -1,0 +1,299 @@
+{
+  "version": "1.0",
+  "files": {
+    "src/lib/nodeModulesCache.ts": {
+      "sourceHash": "b96c9ec5c4a07a0d",
+      "testPath": "tests/generated/lib/nodeModulesCache.test.ts",
+      "generatedAt": "2025-12-08T11:36:20.428Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/lib/supabase.ts": {
+      "sourceHash": "01cba4875162ffce",
+      "testPath": "tests/generated/lib/supabase.test.ts",
+      "generatedAt": "2025-12-08T11:36:25.894Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/lib/webContainerManager.ts": {
+      "sourceHash": "be1e844a49291ce5",
+      "testPath": "tests/generated/lib/webContainerManager.test.ts",
+      "generatedAt": "2025-12-08T11:36:30.961Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/utils/titleGenerator.ts": {
+      "sourceHash": "46d3492980d242d0",
+      "testPath": "tests/generated/utils/titleGenerator.test.ts",
+      "generatedAt": "2025-12-08T11:36:34.898Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/App.tsx": {
+      "sourceHash": "04ebff7b08a342b0",
+      "testPath": "tests/generated/App.test.tsx",
+      "generatedAt": "2025-12-08T11:36:41.674Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/ActivityTimeline.tsx": {
+      "sourceHash": "83ed763c8e5199b8",
+      "testPath": "tests/generated/components/ActivityTimeline.test.tsx",
+      "generatedAt": "2025-12-08T11:36:46.309Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/BuildLogPanel.tsx": {
+      "sourceHash": "c06f895dd51e8ec4",
+      "testPath": "tests/generated/components/BuildLogPanel.test.tsx",
+      "generatedAt": "2025-12-08T11:36:51.599Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/ChatPanel.tsx": {
+      "sourceHash": "d82395293af3b150",
+      "testPath": "tests/generated/components/ChatPanel.test.tsx",
+      "generatedAt": "2025-12-08T11:36:57.460Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/CodeViewer.tsx": {
+      "sourceHash": "562e43f043bc87ed",
+      "testPath": "tests/generated/components/CodeViewer.test.tsx",
+      "generatedAt": "2025-12-08T11:37:01.836Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/FileManagerPanel.tsx": {
+      "sourceHash": "368c19362d9648f5",
+      "testPath": "tests/generated/components/FileManagerPanel.test.tsx",
+      "generatedAt": "2025-12-08T11:37:06.885Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/FilePreview.tsx": {
+      "sourceHash": "e4c1679ecf372dd2",
+      "testPath": "tests/generated/components/FilePreview.test.tsx",
+      "generatedAt": "2025-12-08T11:37:11.421Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/FileUploader.tsx": {
+      "sourceHash": "dcf3ee42883677d5",
+      "testPath": "tests/generated/components/FileUploader.test.tsx",
+      "generatedAt": "2025-12-08T11:37:15.128Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/HomePage.tsx": {
+      "sourceHash": "ac1014a27e202759",
+      "testPath": "tests/generated/components/HomePage.test.tsx",
+      "generatedAt": "2025-12-08T11:37:20.486Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/ImplementationTrigger.tsx": {
+      "sourceHash": "abdb442a1194f131",
+      "testPath": "tests/generated/components/ImplementationTrigger.test.tsx",
+      "generatedAt": "2025-12-08T11:37:25.346Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/InitializingPage.tsx": {
+      "sourceHash": "ca9a9ce732961b3b",
+      "testPath": "tests/generated/components/InitializingPage.test.tsx",
+      "generatedAt": "2025-12-08T11:37:31.156Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/LoginPage.tsx": {
+      "sourceHash": "13dd76a386205059",
+      "testPath": "tests/generated/components/LoginPage.test.tsx",
+      "generatedAt": "2025-12-08T11:37:36.016Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/ParticleField.tsx": {
+      "sourceHash": "e9393420f05bc863",
+      "testPath": "tests/generated/components/ParticleField.test.tsx",
+      "generatedAt": "2025-12-08T11:37:40.594Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/PreviewPanel.tsx": {
+      "sourceHash": "946b9a9e4b0a3988",
+      "testPath": "tests/generated/components/PreviewPanel.test.tsx",
+      "generatedAt": "2025-12-08T11:37:49.414Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/ProjectCard.tsx": {
+      "sourceHash": "383e9021f43ab9b7",
+      "testPath": "tests/generated/components/ProjectCard.test.tsx",
+      "generatedAt": "2025-12-08T11:37:54.236Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/ProjectsPage.tsx": {
+      "sourceHash": "329697ea79e5da20",
+      "testPath": "tests/generated/components/ProjectsPage.test.tsx",
+      "generatedAt": "2025-12-08T11:37:58.883Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/SignUpPage.tsx": {
+      "sourceHash": "2eb50be38c768f6f",
+      "testPath": "tests/generated/components/SignUpPage.test.tsx",
+      "generatedAt": "2025-12-08T11:38:02.875Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/StatusIndicator.tsx": {
+      "sourceHash": "605f6bd6964bd00b",
+      "testPath": "tests/generated/components/StatusIndicator.test.tsx",
+      "generatedAt": "2025-12-08T11:38:05.916Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/UserProfilePanel.tsx": {
+      "sourceHash": "1e09a39a5a00d18c",
+      "testPath": "tests/generated/components/UserProfilePanel.test.tsx",
+      "generatedAt": "2025-12-08T11:38:08.336Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/components/VersionManager.tsx": {
+      "sourceHash": "d19127641ff15179",
+      "testPath": "tests/generated/components/VersionManager.test.tsx",
+      "generatedAt": "2025-12-08T11:38:14.758Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/contexts/AuthContext.tsx": {
+      "sourceHash": "189f46e43ede15eb",
+      "testPath": "tests/generated/contexts/AuthContext.test.tsx",
+      "generatedAt": "2025-12-08T11:38:19.968Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/contexts/ProjectContext.tsx": {
+      "sourceHash": "38b3d4a341c5d0f9",
+      "testPath": "tests/generated/contexts/ProjectContext.test.tsx",
+      "generatedAt": "2025-12-08T11:38:24.290Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/contexts/RealtimeContext.tsx": {
+      "sourceHash": "e55936b4c8a923bd",
+      "testPath": "tests/generated/contexts/RealtimeContext.test.tsx",
+      "generatedAt": "2025-12-08T11:38:29.131Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/contexts/SettingsContext.tsx": {
+      "sourceHash": "e68be50e96b47bff",
+      "testPath": "tests/generated/contexts/SettingsContext.test.tsx",
+      "generatedAt": "2025-12-08T11:38:33.158Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/contexts/WorkflowContext.tsx": {
+      "sourceHash": "b9493b912afb9352",
+      "testPath": "tests/generated/contexts/WorkflowContext.test.tsx",
+      "generatedAt": "2025-12-08T11:38:37.207Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/hooks/useAgentEvents.ts": {
+      "sourceHash": "4f69fac71d494dd7",
+      "testPath": "tests/generated/realtime/hooks/useAgentEvents.test.ts",
+      "generatedAt": "2025-12-08T11:38:42.714Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/hooks/useBuildLogs.ts": {
+      "sourceHash": "0d546c2a4eadaa73",
+      "testPath": "tests/generated/realtime/hooks/useBuildLogs.test.ts",
+      "generatedAt": "2025-12-08T11:38:47.453Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/hooks/useFileEvents.ts": {
+      "sourceHash": "213efb79e06fa836",
+      "testPath": "tests/generated/realtime/hooks/useFileEvents.test.ts",
+      "generatedAt": "2025-12-08T11:38:56.760Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/hooks/useRealtimeResource.ts": {
+      "sourceHash": "551927cefc3e5833",
+      "testPath": "tests/generated/realtime/hooks/useRealtimeResource.test.ts",
+      "generatedAt": "2025-12-08T11:39:02.172Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/hooks/useTimelineEvents.ts": {
+      "sourceHash": "daab90b63c39f4dd",
+      "testPath": "tests/generated/realtime/hooks/useTimelineEvents.test.ts",
+      "generatedAt": "2025-12-08T11:39:07.955Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/realtimeClient.ts": {
+      "sourceHash": "e20169c7bc7d3e2a",
+      "testPath": "tests/generated/realtime/realtimeClient.test.ts",
+      "generatedAt": "2025-12-08T11:39:14.581Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/subscribeAgentEvents.ts": {
+      "sourceHash": "e05c68e0a96f7768",
+      "testPath": "tests/generated/realtime/subscribeAgentEvents.test.ts",
+      "generatedAt": "2025-12-08T11:39:20.302Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/subscribeBuildLogs.ts": {
+      "sourceHash": "b7f7bb67ae3ccf30",
+      "testPath": "tests/generated/realtime/subscribeBuildLogs.test.ts",
+      "generatedAt": "2025-12-08T11:39:24.248Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/subscribeFileEvents.ts": {
+      "sourceHash": "cad677dbe0c55165",
+      "testPath": "tests/generated/realtime/subscribeFileEvents.test.ts",
+      "generatedAt": "2025-12-08T11:39:29.363Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/realtime/types.ts": {
+      "sourceHash": "41575475bec1c6ca",
+      "testPath": "tests/generated/realtime/types.test.ts",
+      "generatedAt": "2025-12-08T11:39:38.567Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/aiTaskService.ts": {
+      "sourceHash": "b46d84531ba1dc18",
+      "testPath": "tests/generated/services/aiTaskService.test.ts",
+      "generatedAt": "2025-12-08T11:39:44.725Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/buildLogService.ts": {
+      "sourceHash": "c45e78faaa9cee22",
+      "testPath": "tests/generated/services/buildLogService.test.ts",
+      "generatedAt": "2025-12-08T11:39:51.394Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/fileService.ts": {
+      "sourceHash": "8e82903c5de62234",
+      "testPath": "tests/generated/services/fileService.test.ts",
+      "generatedAt": "2025-12-08T11:40:00.821Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/imageProxyService.ts": {
+      "sourceHash": "ec0202c84ceb542a",
+      "testPath": "tests/generated/services/imageProxyService.test.ts",
+      "generatedAt": "2025-12-08T11:40:04.867Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/messageService.ts": {
+      "sourceHash": "6c2b1d596bfeaa62",
+      "testPath": "tests/generated/services/messageService.test.ts",
+      "generatedAt": "2025-12-08T11:40:09.409Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/projectService.ts": {
+      "sourceHash": "748194ef2f40127b",
+      "testPath": "tests/generated/services/projectService.test.ts",
+      "generatedAt": "2025-12-08T11:40:16.705Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/promptService.ts": {
+      "sourceHash": "24c4a8d783dff923",
+      "testPath": "tests/generated/services/promptService.test.ts",
+      "generatedAt": "2025-12-08T11:40:23.733Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/templateService.ts": {
+      "sourceHash": "3bee5a338ef3c9cb",
+      "testPath": "tests/generated/services/templateService.test.ts",
+      "generatedAt": "2025-12-08T11:40:27.787Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/services/versionService.ts": {
+      "sourceHash": "765d3974ec29e3de",
+      "testPath": "tests/generated/services/versionService.test.ts",
+      "generatedAt": "2025-12-08T11:40:33.842Z",
+      "model": "inception/mercury-coder"
+    },
+    "src/types/project.ts": {
+      "sourceHash": "82d8e441050142d2",
+      "testPath": "tests/generated/types/project.test.ts",
+      "generatedAt": "2025-12-08T11:40:39.822Z",
+      "model": "inception/mercury-coder"
+    }
+  }
+}

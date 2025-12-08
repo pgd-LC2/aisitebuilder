@@ -21,9 +21,9 @@
   },
   
   "openRouter": {
-    "model": "google/gemini-2.5-pro-preview-06-05",
+    "model": "inception/mercury-coder",
     "temperature": 0.3,
-    "maxTokens": 4096
+    "maxTokens": 16000
   },
   
   "generation": {
