@@ -242,7 +242,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
-      max_tokens: 128000,
+      max_tokens: 16000,
     }),
   });
 

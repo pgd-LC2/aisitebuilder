@@ -87,7 +87,7 @@ npm run test:gen -- src/utils/titleGenerator.ts
   "openRouter": {
     "model": "inception/mercury-coder",
     "temperature": 0.3,
-    "maxTokens": 128000
+    "maxTokens": 16000
   },
   "skipFiles": ["src/App.tsx"]
 }
@@ -127,6 +127,14 @@ tests/
 // Source: src/utils/foo.ts
 // DO NOT EDIT MANUALLY - 修改将在下次生成时被覆盖
 ```
+
+## 重要提示
+
+**请勿删除 `tests/generated/` 目录下的测试文件！** 这些文件是通过 AI 自动生成的，删除后需要重新调用 API 生成，这会消耗额外的时间和 API 费用。如果需要修改测试，建议：
+
+1. 直接编辑现有的测试文件进行调整
+2. 如果源文件有重大变化，使用 `npm run test:gen` 增量更新（只会更新变化的文件）
+3. 只有在确实需要时才使用 `--force` 选项重新生成
 
 ## 最佳实践
 

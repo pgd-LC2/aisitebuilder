@@ -23,7 +23,7 @@
   "openRouter": {
     "model": "inception/mercury-coder",
     "temperature": 0.3,
-    "maxTokens": 128000
+    "maxTokens": 16000
   },
   
   "generation": {
