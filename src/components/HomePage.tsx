@@ -78,8 +78,6 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
             disabled={isCreating}
             isSubmitting={isCreating}
             showAgentSelector={true}
-            showUserCount={true}
-            userCount={1}
           />
 
           <div className="flex items-center justify-center gap-4 pt-2">

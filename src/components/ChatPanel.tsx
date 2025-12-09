@@ -11,6 +11,7 @@ import { useAgentEvents } from '../realtime';
 import BuildLogPanel from './BuildLogPanel';
 import ActivityTimeline from './ActivityTimeline';
 import ImplementationTrigger, { parseImplementReadyMarker } from './ImplementationTrigger';
+import ChatInput, { InputMode } from './ChatInput';
 
 interface ChatPanelProps {
   projectFilesContext?: ProjectFilesContext;
@@ -23,7 +24,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     mode, 
     isPlanningMode, 
     isBuildMode, 
-    enterPlanningMode, 
     exitToDefaultMode,
     planSummary
   } = useWorkflow();
@@ -163,14 +163,14 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     return 'chat_reply';
   }, [isBuildMode]);
 
-  const handleSend = async () => {
+  const handleSend = async (inputMode: InputMode) => {
     if (!input.trim() || !projectId) return;
 
     const messageContent = input;
     setInput('');
 
-    const taskType = getTaskTypeFromMode();
-    console.log('发送消息:', messageContent, '模式:', mode, '任务类型:', taskType, '时间:', new Date().toISOString());
+    const taskType = inputMode === 'build' ? 'build_site' : getTaskTypeFromMode();
+    console.log('发送消息:', messageContent, '模式:', mode, 'inputMode:', inputMode, '任务类型:', taskType, '时间:', new Date().toISOString());
     
     const { data: userMsg, error } = await messageService.addMessage(
       projectId,
@@ -249,13 +249,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
           }, 1000);
         }
       }
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
     }
   };
 
@@ -524,49 +517,23 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 bg-white rounded-2xl pl-4 py-2 pr-2 border border-gray-300 focus-within:border-blue-500 transition-colors shadow-sm">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder={
-                isPlanningMode 
-                  ? "描述你的需求，AI 将帮助你制定方案..." 
-                  : isBuildMode 
-                    ? "输入指令，AI 将执行代码修改..." 
-                    : isConnected 
-                      ? "输入指令..." 
-                      : "连接中..."
-              }
-              disabled={!isConnected}
-              className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 text-sm outline-none resize-none leading-tight py-1 overflow-hidden disabled:cursor-not-allowed"
-              rows={1}
-              style={{ height: '32px', maxHeight: '120px' }}
-            />
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {!isPlanningMode && !isBuildMode && (
-                <motion.button
-                  onClick={enterPlanningMode}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs font-medium rounded-full transition-colors"
-                  title="进入规划模式"
-                >
-                  <Lightbulb className="w-3.5 h-3.5" />
-                  Plan
-                </motion.button>
-              )}
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || !isConnected}
-                className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-              >
-                <Send className="w-3.5 h-3.5 text-white" />
-              </button>
-            </div>
-          </div>
-        </div>
+        <ChatInput
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSend}
+          placeholder={
+            isPlanningMode 
+              ? "描述你的需求，AI 将帮助你制定方案..." 
+              : isBuildMode 
+                ? "输入指令，AI 将执行代码修改..." 
+                : isConnected 
+                  ? "How can Bolt help you today? (or /command)" 
+                  : "连接中..."
+          }
+          disabled={!isConnected}
+          showAgentSelector={true}
+          variant="chat"
+        />
       </div>
     </div>
   );
