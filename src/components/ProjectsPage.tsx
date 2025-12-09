@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 import ProjectCard from './ProjectCard';
+import {
+  capturePositions,
+  applyFlipAnimation,
+  DEFAULT_ANIMATION_CONFIG,
+} from '../utils/huarongdaoAnimation';
 
 interface ProjectsPageProps {
   onCreateNew: () => void;
@@ -15,6 +20,10 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const positionsBeforeDeleteRef = useRef<Map<string, DOMRect>>(new Map());
 
   const filteredProjects = projects.filter(project => {
     const matchesSearch =
@@ -25,6 +34,64 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
 
     return matchesSearch && matchesStatus;
   });
+
+  const captureCurrentPositions = useCallback(() => {
+    if (gridContainerRef.current) {
+      positionsBeforeDeleteRef.current = capturePositions(gridContainerRef.current);
+    }
+  }, []);
+
+  const executeHuarongdaoReorderAnimation = useCallback(async () => {
+    if (!gridContainerRef.current || isAnimating) return;
+
+    setIsAnimating(true);
+
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    const newPositions = capturePositions(gridContainerRef.current);
+    const oldPositions = positionsBeforeDeleteRef.current;
+    const animationPromises: Promise<void>[] = [];
+
+    const itemsToAnimate = Array.from(newPositions.keys());
+    const totalItems = itemsToAnimate.length;
+
+    itemsToAnimate.forEach((id, index) => {
+      const oldPos = oldPositions.get(id);
+      const newPos = newPositions.get(id);
+
+      if (oldPos && newPos) {
+        const deltaX = oldPos.left - newPos.left;
+        const deltaY = oldPos.top - newPos.top;
+
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+          const element = gridContainerRef.current?.querySelector(
+            `[data-project-id="${id}"]`
+          ) as HTMLElement;
+
+          if (element) {
+            const delay = DEFAULT_ANIMATION_CONFIG.enableRandomPath
+              ? Math.random() * DEFAULT_ANIMATION_CONFIG.maxDelay
+              : (index / totalItems) * DEFAULT_ANIMATION_CONFIG.maxDelay;
+
+            animationPromises.push(
+              applyFlipAnimation(element, deltaX, deltaY, DEFAULT_ANIMATION_CONFIG, delay)
+            );
+          }
+        }
+      }
+    });
+
+    await Promise.all(animationPromises);
+
+    setIsAnimating(false);
+    positionsBeforeDeleteRef.current = new Map();
+  }, [isAnimating]);
+
+  useEffect(() => {
+    if (deletingId === null && positionsBeforeDeleteRef.current.size > 0 && !isAnimating) {
+      executeHuarongdaoReorderAnimation();
+    }
+  }, [deletingId, executeHuarongdaoReorderAnimation, isAnimating]);
 
   const handleDeleteClick = (projectId: string) => {
     setDeleteConfirm(projectId);
@@ -38,7 +105,9 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
     setDeletingId(projectIdToDelete);
     setDeleteConfirm(null);
 
-    await new Promise(resolve => setTimeout(resolve, 600));
+    captureCurrentPositions();
+
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     const { error } = await deleteProject(projectIdToDelete);
 
@@ -46,8 +115,9 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
       console.error('删除项目错误:', error);
       alert('删除项目失败，请重试');
       setDeletingId(null);
+      positionsBeforeDeleteRef.current = new Map();
     } else {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
       setDeletingId(null);
     }
 
@@ -194,20 +264,19 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div
+              ref={gridContainerRef}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            >
               {filteredProjects.map((project) => (
                 <div
                   key={project.id}
-                  className={`transition-all duration-500 ${
+                  data-project-id={project.id}
+                  className={`huarongdao-item ${
                     deletingId === project.id
-                      ? 'animate-bubble-out'
-                      : 'animate-bubble-in'
+                      ? 'animate-huarongdao-disappear'
+                      : ''
                   }`}
-                  style={{
-                    animation: deletingId === project.id
-                      ? 'bubbleOut 0.6s ease-out forwards'
-                      : undefined
-                  }}
                 >
                   <ProjectCard
                     project={project}
