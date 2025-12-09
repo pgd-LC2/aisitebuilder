@@ -1,48 +1,9 @@
-import { Plus, Lightbulb, Play, ChevronDown, Send, Ban, PlusSquare, Star, MoreHorizontal } from 'lucide-react';
+import { Plus, Lightbulb, Play, ChevronDown, Send } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import QuickCommands, { QuickCommand } from './QuickCommands';
 
 export type InputMode = 'default' | 'plan' | 'build';
-
-// 快捷指令定义
-interface QuickCommand {
-  id: string;
-  name: string;
-  icon: 'clear' | 'create' | 'supabase';
-  description?: string;
-}
-
-interface CommandCategory {
-  name: string;
-  commands: QuickCommand[];
-}
-
-const quickCommands: CommandCategory[] = [
-  {
-    name: 'Commands',
-    commands: [
-      { id: 'clear-context', name: 'Clear context', icon: 'clear' },
-      { id: 'create-prompt', name: 'Create Prompt', icon: 'create' },
-    ]
-  },
-  {
-    name: 'Supabase',
-    commands: [
-      { 
-        id: 'auth-feature', 
-        name: '创建登录/注册功能', 
-        icon: 'supabase',
-        description: '请为我的应用添加 Supabase 身份验证功能，包括：\n1. 用户注册页面\n2. 用户登录页面\n3. 用户管理服务\n4. 登录状态管理\n5. 退出登录功能'
-      },
-      { id: 'crawler', name: '爬虫实现', icon: 'supabase' },
-      { id: 'fix-connection', name: '修复前后端没接上', icon: 'supabase' },
-    ]
-  },
-  {
-    name: 'Accessibility',
-    commands: []
-  }
-];
 
 interface ChatInputProps {
   value: string;
@@ -82,9 +43,7 @@ export default function ChatInput({
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedMode, setSelectedMode] = useState<InputMode>('default');
   const [showCommandMenu, setShowCommandMenu] = useState(false);
-  const [hoveredCommand, setHoveredCommand] = useState<QuickCommand | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const commandMenuRef = useRef<HTMLDivElement>(null);
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -108,23 +67,6 @@ export default function ChatInput({
     }
   }, [value]);
 
-  // 点击外部关闭命令菜单
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (commandMenuRef.current && !commandMenuRef.current.contains(event.target as Node)) {
-        setShowCommandMenu(false);
-        setHoveredCommand(null);
-      }
-    };
-
-    if (showCommandMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showCommandMenu]);
 
   useEffect(() => {
     if (placeholder) return;
@@ -153,7 +95,6 @@ export default function ChatInput({
     }
     if (e.key === 'Escape') {
       setShowCommandMenu(false);
-      setHoveredCommand(null);
     }
   };
 
@@ -161,26 +102,11 @@ export default function ChatInput({
     const commandText = command.description || command.name;
     onChange(commandText);
     setShowCommandMenu(false);
-    setHoveredCommand(null);
     textareaRef.current?.focus();
   };
 
-  const renderCommandIcon = (iconType: QuickCommand['icon']) => {
-    switch (iconType) {
-      case 'clear':
-        return <Ban className="w-4 h-4 text-gray-500" />;
-      case 'create':
-        return <PlusSquare className="w-4 h-4 text-gray-500" />;
-      case 'supabase':
-        return (
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#3ECF8E"/>
-            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#3ECF8E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        );
-      default:
-        return null;
-    }
+  const handleCloseCommandMenu = () => {
+    setShowCommandMenu(false);
   };
 
   const handleSubmit = (mode: InputMode) => {
@@ -190,7 +116,7 @@ export default function ChatInput({
   };
 
   const handleModeSelect = (mode: InputMode) => {
-    setSelectedMode(mode);
+    setSelectedMode(prev => prev === mode ? 'default' : mode);
   };
 
   const handleBuildClick = () => {
@@ -202,75 +128,11 @@ export default function ChatInput({
 
   return (
     <div className="relative">
-      {/* 快捷指令菜单 - 放在外层容器外面避免被 overflow-hidden 裁剪 */}
-      <AnimatePresence>
-        {showCommandMenu && (
-          <motion.div
-            ref={commandMenuRef}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 flex flex-col pb-10"
-          >
-            {/* 左侧命令列表 */}
-            <div className="flex-1 max-h-[400px] overflow-y-auto">
-              {quickCommands.map((category) => (
-                <div key={category.name}>
-                  <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {category.name}
-                  </div>
-                  {category.commands.map((command) => (
-                    <button
-                      key={command.id}
-                      onClick={() => handleCommandSelect(command)}
-                      onMouseEnter={() => setHoveredCommand(command)}
-                      onMouseLeave={() => setHoveredCommand(null)}
-                      className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-blue-50 transition-colors text-left ${
-                        hoveredCommand?.id === command.id ? 'bg-blue-50' : ''
-                      }`}
-                    >
-                      {renderCommandIcon(command.icon)}
-                      <span className={`text-sm ${hoveredCommand?.id === command.id ? 'text-blue-600' : 'text-gray-700'}`}>
-                        {command.name}
-                      </span>
-                      {command.description && (
-                        <div className="ml-auto flex items-center gap-2">
-                          <Star className="w-4 h-4 text-gray-300 hover:text-yellow-400 cursor-pointer" />
-                          <MoreHorizontal className="w-4 h-4 text-gray-300" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            {/* 右侧预览面板 */}
-            {hoveredCommand?.description && (
-              <div className="w-80 border-l border-gray-200 bg-gray-50 p-4">
-                <h4 className="font-medium text-gray-900 mb-3">{hoveredCommand.name}</h4>
-                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
-                  {hoveredCommand.description}
-                </p>
-              </div>
-            )}
-
-            {/* 底部操作栏 */}
-            <div className="absolute bottom-0 left-0 right-0 px-4 py-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>Use Prompt</span>
-                <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">↵</kbd>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>Options</span>
-                <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">⌘</kbd>
-                <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">K</kbd>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <QuickCommands
+        isOpen={showCommandMenu}
+        onClose={handleCloseCommandMenu}
+        onSelect={handleCommandSelect}
+      />
 
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
         <div className="p-4 pb-2">

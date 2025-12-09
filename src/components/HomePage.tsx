@@ -1,5 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useProject } from '../contexts/ProjectContext';
 import ProjectCard from './ProjectCard';
 import ChatInput, { InputMode } from './ChatInput';
@@ -113,13 +114,40 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recentProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onClick={() => handleProjectClick(project)}
-                />
-              ))}
+              <AnimatePresence mode="popLayout">
+                {recentProjects.map((project, index) => (
+                  <motion.div
+                    key={project.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8, x: (Math.random() - 0.5) * 100, y: (Math.random() - 0.5) * 100 }}
+                    animate={{ 
+                      opacity: 1, 
+                      scale: 1, 
+                      x: 0, 
+                      y: 0,
+                    }}
+                    exit={{ 
+                      opacity: 0, 
+                      scale: 0.8,
+                      x: (Math.random() - 0.5) * 200,
+                      y: (Math.random() - 0.5) * 200,
+                      transition: { duration: 0.3 }
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 25,
+                      mass: 1,
+                      delay: index * 0.05,
+                    }}
+                  >
+                    <ProjectCard
+                      project={project}
+                      onClick={() => handleProjectClick(project)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </div>
         </div>
