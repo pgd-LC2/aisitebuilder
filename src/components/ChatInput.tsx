@@ -201,8 +201,8 @@ export default function ChatInput({
   const currentPlaceholderText = placeholder || placeholders[currentPlaceholder];
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden relative">
-      {/* 快捷指令菜单 */}
+    <div className="relative">
+      {/* 快捷指令菜单 - 放在外层容器外面避免被 overflow-hidden 裁剪 */}
       <AnimatePresence>
         {showCommandMenu && (
           <motion.div
@@ -211,7 +211,7 @@ export default function ChatInput({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 flex"
+            className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 flex flex-col pb-10"
           >
             {/* 左侧命令列表 */}
             <div className="flex-1 max-h-[400px] overflow-y-auto">
@@ -272,9 +272,10 @@ export default function ChatInput({
         )}
       </AnimatePresence>
 
-      <div className="p-4 pb-2">
-        <div className="relative">
-          <textarea
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="p-4 pb-2">
+          <div className="relative">
+            <textarea
             ref={textareaRef}
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -363,6 +364,7 @@ export default function ChatInput({
               <Send className="w-4 h-4 text-white" />
             </motion.button>
           )}
+        </div>
         </div>
       </div>
     </div>
