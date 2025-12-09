@@ -53,7 +53,7 @@ const defaultQuickCommands: CommandCategory[] = [
         id: 'fix-connection', 
         name: '修复前后端没接上', 
         icon: 'supabase',
-        description: '诊断并修复前端与 Supabase 后端的连接问题。检查 API 密钥配置、CORS 设置、网络请求和响应格式，确保数据能够正常传输。'
+        description: '诊断并修复前端与 Supabase 后端的连接问题。检查 API 密钥配置、CORS 设置、网络请求和响应格式，确保数据能够正常传输。并且保证前端不要硬编码数据 应全部从数据库调取'
       },
     ]
   },
@@ -82,7 +82,7 @@ const defaultQuickCommands: CommandCategory[] = [
         id: 'rich-text',
         name: 'Accessible Rich Text Content',
         icon: 'accessibility',
-        description: 'Analyze my text content and provide recommendations for improving readability and accessibility. Include proper heading structure (h1-h6), text spacing, line height, and color contrast. Suggest CSS changes to improve readability for users with dyslexia or visual impairments.'
+        description: '分析我的文本内容，并提供提高可读性和可访问性的建议。包括适当的标题结构（h1-h6）、文本间距、行高和颜色对比度。建议通过CSS更改来改善阅读障碍或视力障碍用户的可读性。'
       },
       {
         id: 'aria-landmarks',
@@ -111,7 +111,7 @@ const defaultQuickCommands: CommandCategory[] = [
         id: 'local-seo',
         name: 'Local SEO Implementation',
         icon: 'seo',
-        description: 'Generate code for implementing local SEO elements on my business website. Include structured data markup for local business, Google Business Profile integration suggestions, location-specific content, and NAP (Name, Address, Phone) consistency implementation across all pages.'
+        description: '为我的企业网站生成实现本地SEO元素的代码。包括本地企业的结构化数据标记、Google商家资料集成建议、特定位置的内容，以及在所有页面上保持名称、地址、电话（NAP）信息一致性的实施方案。'
       },
       {
         id: 'content-readability',
@@ -146,7 +146,7 @@ const defaultQuickCommands: CommandCategory[] = [
         id: 'input-validation',
         name: 'Input Validation UX',
         icon: 'usability',
-        description: 'Generate code for implementing user-friendly form validation that provides clear, immediate feedback. Include strategies for inline validation, error prevention, helpful error messages, and successful submission confirmation. Focus on reducing form abandonment and user frustration.'
+        description: '生成实现用户友好型表单验证的代码，以提供清晰、即时的反馈。包括内联验证、错误预防、有用的错误提示以及提交成功确认的策略。重点在于减少表单放弃和用户挫败感。'
       },
       {
         id: 'inclusive-design',
@@ -204,7 +204,7 @@ const defaultQuickCommands: CommandCategory[] = [
         id: 'api-docs',
         name: 'API Documentation Generator',
         icon: 'workflow',
-        description: 'Generate comprehensive documentation for my API endpoints. Include request/response examples, authentication requirements, error handling, and status codes. Create a template that can be expanded as the API grows. Recommend tools for automatic API documentation generation.'
+        description: '为我的 API 端点生成全面的文档。包括请求/响应示例、身份验证要求、错误处理和状态码。创建一个可随着 API 扩展而扩展的模板。推荐用于自动生成 API 文档的工具。'
       },
     ]
   }
