@@ -4,10 +4,10 @@
  * 一键部署 Supabase Edge Function
  * 
  * 使用方法:
- *   node deploy-tools/deploy-edge-function.cjs <function-name>
+ *   node tools/deploy-edge-function.cjs <function-name>
  * 
  * 示例:
- *   node deploy-tools/deploy-edge-function.cjs process-ai-tasks
+ *   node tools/deploy-edge-function.cjs process-ai-tasks
  * 
  * 功能:
  *   1. 自动生成 MCP JSON 文件
@@ -144,15 +144,15 @@ async function main() {
     console.log('一键部署 Supabase Edge Function');
     console.log('');
     console.log('使用方法:');
-    console.log('  node deploy-tools/deploy-edge-function.cjs <function-name> [project-id]');
+    console.log('  node tools/deploy-edge-function.cjs <function-name> [project-id]');
     console.log('');
     console.log('参数:');
     console.log('  function-name  要部署的边缘函数名称');
     console.log('  project-id     Supabase 项目 ID (可选，默认: ' + DEFAULT_PROJECT_ID + ')');
     console.log('');
     console.log('示例:');
-    console.log('  node deploy-tools/deploy-edge-function.cjs process-ai-tasks');
-    console.log('  node deploy-tools/deploy-edge-function.cjs process-ai-tasks bsiukgyvrfkanuhjkxuh');
+    console.log('  node tools/deploy-edge-function.cjs process-ai-tasks');
+    console.log('  node tools/deploy-edge-function.cjs process-ai-tasks bsiukgyvrfkanuhjkxuh');
     console.log('');
     console.log('可用的边缘函数:');
     

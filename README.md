@@ -36,9 +36,10 @@ aisitebuilder/
 │   ├── specs/              # 技术规范（当前使用）
 │   └── legacy/             # 历史文档（供参考）
 │
-├── deploy-tools/           # 部署工具集
+├── tools/                  # 开发工具集
 │   ├── deploy-edge-function.cjs    # 一键部署 Edge Function
-│   └── generate-edge-function-mcp.cjs # 生成 MCP JSON
+│   ├── generate-edge-function-mcp.cjs # 生成 MCP JSON
+│   └── perplexity-search.py        # Perplexity 搜索工具
 │
 ├── public/                 # 静态资源
 ├── scripts/                # 构建脚本
@@ -74,20 +75,20 @@ aisitebuilder/
 
 ### Edge Function 部署
 
-使用 `deploy-tools` 目录下的工具可以一键部署 Edge Function 到 Supabase：
+使用 `tools` 目录下的工具可以一键部署 Edge Function 到 Supabase：
 
 ```bash
 # 一键部署 process-ai-tasks
-node deploy-tools/deploy-edge-function.cjs process-ai-tasks
+node tools/deploy-edge-function.cjs process-ai-tasks
 
 # 仅生成 MCP JSON（不执行部署）
-node deploy-tools/generate-edge-function-mcp.cjs process-ai-tasks
+node tools/generate-edge-function-mcp.cjs process-ai-tasks
 
 # 查看帮助和可用函数列表
-node deploy-tools/deploy-edge-function.cjs --help
+node tools/deploy-edge-function.cjs --help
 ```
 
-详细说明请参阅 [deploy-tools/README.md](deploy-tools/README.md)。
+详细说明请参阅 [tools/README.md](tools/README.md)。
 
 ## 贡献指南
 
