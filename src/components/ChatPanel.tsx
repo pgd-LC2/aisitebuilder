@@ -25,6 +25,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     isPlanningMode, 
     isBuildMode, 
     exitToDefaultMode,
+    enterPlanningMode,
+    enterBuildMode,
     planSummary
   } = useWorkflow();
   const projectId = currentProject?.id;
@@ -169,8 +171,19 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     const messageContent = input;
     setInput('');
 
+    // 根据 inputMode 更新 WorkflowContext 的状态
+    // inputMode 映射到 workflowMode: 'plan' -> 'planning', 'build' -> 'build', 'default' -> 'default'
+    let effectiveWorkflowMode = mode;
+    if (inputMode === 'plan' && !isPlanningMode) {
+      enterPlanningMode();
+      effectiveWorkflowMode = 'planning';
+    } else if (inputMode === 'build' && !isBuildMode) {
+      enterBuildMode();
+      effectiveWorkflowMode = 'build';
+    }
+
     const taskType = inputMode === 'build' ? 'build_site' : getTaskTypeFromMode();
-    console.log('发送消息:', messageContent, '模式:', mode, 'inputMode:', inputMode, '任务类型:', taskType, '时间:', new Date().toISOString());
+    console.log('发送消息:', messageContent, '模式:', mode, 'inputMode:', inputMode, 'effectiveWorkflowMode:', effectiveWorkflowMode, '任务类型:', taskType, '时间:', new Date().toISOString());
     
     const { data: userMsg, error } = await messageService.addMessage(
       projectId,
@@ -198,11 +211,11 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     }
 
     if (userMsg) {
-      // 方案B: 构建任务 payload，在 build_site 模式下传递 planSummary
+      // 构建任务 payload，传递 effectiveWorkflowMode 而不是 mode
       const taskPayload: Record<string, unknown> = {
         messageId: userMsg.id,
         content: messageContent,
-        workflowMode: mode
+        workflowMode: effectiveWorkflowMode
       };
       
       // 如果是 build_site 模式且有 planSummary，添加到 payload
