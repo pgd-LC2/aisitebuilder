@@ -189,20 +189,37 @@ export default function ChatInput({
         </div>
 
         <div className="flex items-center gap-2">
-          <motion.button
-            onClick={() => handleModeSelect('plan')}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            disabled={disabled || isSubmitting}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedMode === 'plan'
-                ? 'bg-amber-100 text-amber-700 border border-amber-300'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Lightbulb className="w-4 h-4" />
-            Plan
-          </motion.button>
+          {/* Plan / Build 分段按钮 */}
+          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+            <motion.button
+              onClick={() => handleModeSelect('plan')}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              disabled={disabled || isSubmitting}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-r border-gray-200 transition-colors ${
+                selectedMode === 'plan'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Lightbulb className="w-4 h-4" />
+              Plan
+            </motion.button>
+            <motion.button
+              onClick={() => handleModeSelect('build')}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              disabled={disabled || isSubmitting}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                selectedMode === 'build'
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Play className="w-4 h-4" />
+              Build
+            </motion.button>
+          </div>
 
           {variant === 'home' ? (
             <motion.button

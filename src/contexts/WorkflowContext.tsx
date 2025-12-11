@@ -10,7 +10,7 @@ interface WorkflowContextType {
   isBuildMode: boolean;
   isDefaultMode: boolean;
   enterPlanningMode: () => void;
-  enterBuildMode: (planSummary: PlanSummary) => void;
+  enterBuildMode: (planSummary?: PlanSummary) => void;
   exitToDefaultMode: () => void;
   setImplementReady: (ready: boolean) => void;
   resetWorkflow: () => void;
@@ -36,14 +36,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     console.log('[WorkflowContext] 进入规划模式');
   }, []);
 
-  const enterBuildMode = useCallback((planSummary: PlanSummary) => {
+  const enterBuildMode = useCallback((planSummary?: PlanSummary) => {
     setWorkflowState(prev => ({
       ...prev,
       mode: 'build',
-      planSummary,
+      planSummary: planSummary ?? null,
       isImplementReady: false,
     }));
-    console.log('[WorkflowContext] 进入构建模式，规划摘要已锁定');
+    if (planSummary) {
+      console.log('[WorkflowContext] 进入构建模式，规划摘要已锁定');
+    } else {
+      console.log('[WorkflowContext] 进入构建模式（直接构建，无规划摘要）');
+    }
   }, []);
 
   const exitToDefaultMode = useCallback(() => {
