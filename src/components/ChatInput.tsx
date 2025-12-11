@@ -189,35 +189,36 @@ export default function ChatInput({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Plan / Build 分段按钮 */}
-          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+          {/* Plan / Build 分段按钮 - Liquid Glass 胶囊型设计 */}
+          <div className="inline-flex rounded-full backdrop-blur-md bg-white/15 border border-white/30 shadow-[0_4px_12px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.2)] overflow-hidden">
             <motion.button
               onClick={() => handleModeSelect('plan')}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               disabled={disabled || isSubmitting}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-r border-gray-200 transition-colors ${
+              className={`relative flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-all duration-200 overflow-hidden ${
                 selectedMode === 'plan'
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-amber-500/20 text-amber-700 shadow-[inset_0_0_12px_rgba(245,158,11,0.15)]'
+                  : 'text-gray-600 hover:bg-white/20'
               }`}
             >
-              <Lightbulb className="w-4 h-4" />
-              Plan
+              <Lightbulb className="w-4 h-4 relative z-10" />
+              <span className="relative z-10">Plan</span>
             </motion.button>
+            <div className="w-px bg-white/20" />
             <motion.button
               onClick={() => handleModeSelect('build')}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               disabled={disabled || isSubmitting}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`relative flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-all duration-200 overflow-hidden ${
                 selectedMode === 'build'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-green-500/20 text-green-700 shadow-[inset_0_0_12px_rgba(34,197,94,0.15)]'
+                  : 'text-gray-600 hover:bg-white/20'
               }`}
             >
-              <Play className="w-4 h-4" />
-              Build
+              <Play className="w-4 h-4 relative z-10" />
+              <span className="relative z-10">Build</span>
             </motion.button>
           </div>
 
