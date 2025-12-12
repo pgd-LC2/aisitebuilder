@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { UserPlus, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, AlertCircle, CheckCircle, User, Camera } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { userProfileService } from '../services/userProfileService';
 
 interface SignUpPageProps {
   onSwitchToLogin: () => void;
@@ -10,15 +12,97 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { signUp } = useAuth();
+
+  const validateUsername = (value: string) => {
+    if (!value) {
+      setUsernameError('');
+      return true;
+    }
+    if (value.length < 3) {
+      setUsernameError('用户名至少需要 3 个字符');
+      return false;
+    }
+    if (value.length > 20) {
+      setUsernameError('用户名最多 20 个字符');
+      return false;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+      setUsernameError('用户名只能包含字母、数字和下划线');
+      return false;
+    }
+    setUsernameError('');
+    return true;
+  };
+
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setUsername(value);
+    validateUsername(value);
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('头像文件大小不能超过 2MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        setError('请选择图片文件');
+        return;
+      }
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAvatarPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadAvatar = async (userId: string): Promise<string | null> => {
+    if (!avatarFile) return null;
+    
+    const fileExt = avatarFile.name.split('.').pop();
+    const fileName = `${userId}/avatar.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(fileName, avatarFile, { upsert: true });
+    
+    if (uploadError) {
+      console.error('头像上传失败:', uploadError);
+      return null;
+    }
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(fileName);
+    
+    return publicUrl;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess(false);
+
+    if (username && !validateUsername(username)) {
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('两次输入的密码不一致');
@@ -30,14 +114,35 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
       return;
     }
 
+    if (username) {
+      const { data: isAvailable } = await userProfileService.checkUsernameAvailable(username);
+      if (!isAvailable) {
+        setError('该用户名已被使用');
+        return;
+      }
+    }
+
     setLoading(true);
 
-    const { error } = await signUp(email, password);
+    const { error, data } = await signUp(email, password);
 
     if (error) {
       setError('注册失败，请重试');
       setLoading(false);
     } else {
+      if (data?.user && (username || avatarFile)) {
+        let avatarUrl: string | null = null;
+        if (avatarFile) {
+          avatarUrl = await uploadAvatar(data.user.id);
+        }
+        
+        if (username || avatarUrl) {
+          await userProfileService.updateProfile(data.user.id, {
+            ...(username && { username }),
+            ...(avatarUrl && { avatar_url: avatarUrl }),
+          });
+        }
+      }
       setSuccess(true);
       setLoading(false);
     }
@@ -141,12 +246,61 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
               </div>
             )}
 
+            <div className="flex flex-col items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={handleAvatarClick}
+                className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-blue-200 border-2 border-dashed border-blue-300 hover:border-blue-400 transition-colors group"
+              >
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="头像预览" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-blue-400 group-hover:text-blue-500 transition-colors">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-white" />
+                </div>
+              </button>
+              <p className="mt-2 text-xs text-gray-500">点击上传头像（可选）</p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                用户名 <span className="text-gray-400 font-normal">（可选）</span>
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={handleUsernameChange}
+                  className={`w-full pl-10 pr-4 py-3 backdrop-blur-sm bg-white/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all ${
+                    usernameError ? 'border-red-300 focus:border-red-300' : 'border-white/60 focus:border-blue-300/50'
+                  }`}
+                  placeholder="3-20个字符，字母、数字、下划线"
+                />
+              </div>
+              {usernameError && (
+                <p className="text-xs text-red-500 mt-1">{usernameError}</p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 邮箱地址
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="email"
                   type="email"
@@ -164,7 +318,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                 密码
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="password"
                   type="password"
@@ -182,7 +336,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                 确认密码
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="confirmPassword"
                   type="password"
