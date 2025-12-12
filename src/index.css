@@ -6,6 +6,18 @@
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
+
+  /* 覆盖 Chrome 自动填充的默认样式，保持输入框背景一致 */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.5) inset !important;
+    box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.5) inset !important;
+    background-color: transparent !important;
+    -webkit-text-fill-color: #111827 !important; /* text-gray-900 */
+    transition: background-color 9999s ease-out 0s;
+  }
 }
 
 @layer utilities {
