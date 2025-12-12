@@ -2,16 +2,20 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, refreshRealtimeAuth } from '../lib/supabase';
 import RealtimeClient, { cleanupRealtime } from '../realtime/realtimeClient';
+import { userProfileService, UserProfile } from '../services/userProfileService';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   authReady: boolean;
   authVersion: number;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithUsername: (username: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,11 +23,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authVersion, setAuthVersion] = useState(0);
   
   // 保存上一个用户 ID，用于检测账号切换
   const prevUserIdRef = useRef<string | null>(null);
+
+  // 刷新用户资料
+  const refreshUserProfile = async () => {
+    if (!user) {
+      setUserProfile(null);
+      return;
+    }
+    const { data } = await userProfileService.getProfileByUserId(user.id);
+    setUserProfile(data);
+  };
 
   useEffect(() => {
     (async () => {
@@ -112,8 +127,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithUsername = async (username: string, password: string) => {
+    try {
+      // 通过用户名获取邮箱
+      const { data: email, error: lookupError } = await userProfileService.getEmailByUsername(username);
+      
+      if (lookupError || !email) {
+        return { error: { message: '用户名不存在' } };
+      }
+      
+      // 使用邮箱登录
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
+    setUserProfile(null);
   };
 
   const authReady = !loading && user !== null;
@@ -121,12 +157,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     user,
     session,
+    userProfile,
     loading,
     authReady,
     authVersion,
     signUp,
     signIn,
+    signInWithUsername,
     signOut,
+    refreshUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

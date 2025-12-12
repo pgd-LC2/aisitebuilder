@@ -16,7 +16,7 @@ export default function LoginPage({ onSwitchToSignUp }: LoginPageProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, signInWithUsername } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,11 +29,19 @@ export default function LoginPage({ onSwitchToSignUp }: LoginPageProps) {
 
     setLoading(true);
 
-    const loginEmail = activeTab === 'email' ? email : `${username}@placeholder.com`;
-    const { error } = await signIn(loginEmail, password);
+    let result;
+    if (activeTab === 'email') {
+      result = await signIn(email, password);
+    } else {
+      result = await signInWithUsername(username, password);
+    }
 
-    if (error) {
-      setError('邮箱或密码错误，请重试');
+    if (result.error) {
+      if (activeTab === 'username' && result.error.message === '用户名不存在') {
+        setError('用户名不存在');
+      } else {
+        setError(activeTab === 'email' ? '邮箱或密码错误，请重试' : '用户名或密码错误，请重试');
+      }
       setLoading(false);
     }
   };
