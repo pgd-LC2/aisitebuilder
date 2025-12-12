@@ -14,13 +14,14 @@ import VersionManager from './components/VersionManager';
 import InitializingPage from './components/InitializingPage';
 import UserProfilePanel from './components/UserProfilePanel';
 import ParticleField from './components/ParticleField';
+import IntroPage from './components/IntroPage';
 import { generateTitle } from './utils/titleGenerator';
 import { buildLogService } from './services/buildLogService';
 import { templateService } from './services/templateService';
 import { versionService } from './services/versionService';
 import { ProjectVersion } from './types/project';
 
-type ViewType = 'home' | 'projects' | 'building' | 'initializing';
+type ViewType = 'home' | 'projects' | 'building' | 'initializing' | 'intro';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>('home');
@@ -141,6 +142,10 @@ function App() {
     return <InitializingPage projectTitle={initializingProjectTitle} />;
   }
 
+  if (currentView === 'intro') {
+    return <IntroPage onBack={() => setCurrentView('home')} />;
+  }
+
   const homeView = (
     <motion.div
       key="home-view"
@@ -214,6 +219,7 @@ function App() {
             onStartBuilding={handleStartBuilding}
             onViewAllProjects={() => setCurrentView('projects')}
             onProjectClick={handleProjectClick}
+            onIntroClick={() => setCurrentView('intro')}
           />
         ) : (
           <ProjectsPage

@@ -773,12 +773,15 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
                 <motion.button
                   onClick={() => setViewportMode('desktop')}
-                  whileTap={{ scale: 0.9 }}
+                  disabled={isRestartDisabled}
+                  whileTap={{ scale: isRestartDisabled ? 1 : 0.9 }}
                   transition={PANEL_SPRING}
                   className={`p-1.5 rounded transition-colors ${
-                    viewportMode === 'desktop'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                    isRestartDisabled
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : viewportMode === 'desktop'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
                   }`}
                   title="桌面视图"
                 >
@@ -786,12 +789,15 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
                 </motion.button>
                 <motion.button
                   onClick={() => setViewportMode('tablet')}
-                  whileTap={{ scale: 0.9 }}
+                  disabled={isRestartDisabled}
+                  whileTap={{ scale: isRestartDisabled ? 1 : 0.9 }}
                   transition={PANEL_SPRING}
                   className={`p-1.5 rounded transition-colors ${
-                    viewportMode === 'tablet'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                    isRestartDisabled
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : viewportMode === 'tablet'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
                   }`}
                   title="平板视图"
                 >
@@ -799,12 +805,15 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
                 </motion.button>
                 <motion.button
                   onClick={() => setViewportMode('mobile')}
-                  whileTap={{ scale: 0.9 }}
+                  disabled={isRestartDisabled}
+                  whileTap={{ scale: isRestartDisabled ? 1 : 0.9 }}
                   transition={PANEL_SPRING}
                   className={`p-1.5 rounded transition-colors ${
-                    viewportMode === 'mobile'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                    isRestartDisabled
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : viewportMode === 'mobile'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
                   }`}
                   title="手机视图"
                 >

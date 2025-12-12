@@ -9,9 +9,10 @@ interface HomePageProps {
   onStartBuilding: (prompt: string) => void;
   onViewAllProjects: () => void;
   onProjectClick: (project: any) => void;
+  onIntroClick?: () => void;
 }
 
-export default function HomePage({ onStartBuilding, onViewAllProjects, onProjectClick }: HomePageProps) {
+export default function HomePage({ onStartBuilding, onViewAllProjects, onProjectClick, onIntroClick }: HomePageProps) {
   const [input, setInput] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const { getRecentProjects } = useProject();
@@ -55,11 +56,14 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
 
         <div className="relative z-10 max-w-2xl w-full px-6 space-y-8">
           <div className="flex justify-center mb-6">
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full shadow-sm hover:shadow-md transition-shadow">
+            <button
+              onClick={onIntroClick}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full shadow-sm hover:shadow-md transition-shadow"
+            >
               <svg className="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <span className="text-sm font-medium text-gray-700">Introducing Bolt V2</span>
+              <span className="text-sm font-medium text-gray-700">Introducing aisitebuilder V1</span>
             </button>
           </div>
 
