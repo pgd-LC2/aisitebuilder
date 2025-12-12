@@ -278,7 +278,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                 用户名 <span className="text-gray-400 font-normal">（可选）</span>
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="username"
                   type="text"
@@ -300,7 +300,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                 邮箱地址
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="email"
                   type="email"
@@ -318,7 +318,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                 密码
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="password"
                   type="password"
@@ -336,7 +336,7 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
                 确认密码
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   id="confirmPassword"
                   type="password"
