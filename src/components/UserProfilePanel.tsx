@@ -359,6 +359,7 @@ export default function UserProfilePanel({
               <p className="text-xs text-gray-400 mt-1">即将推出，敬请期待</p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
