@@ -25,9 +25,9 @@ COMMENT ON COLUMN public.users_profile.updated_at IS '更新时间';
 -- 启用 RLS
 ALTER TABLE public.users_profile ENABLE ROW LEVEL SECURITY;
 
--- RLS 策略：用户可以查看所有用户资料（用于用户名查找）
+-- RLS 策略：用户只能查看自己的资料（安全性考虑，用户名查找通过 Edge Function 处理）
 CREATE POLICY "users_profile_select_policy" ON public.users_profile
-  FOR SELECT USING (true);
+  FOR SELECT USING (auth.uid() = user_id);
 
 -- RLS 策略：用户只能更新自己的资料
 CREATE POLICY "users_profile_update_policy" ON public.users_profile
@@ -79,17 +79,6 @@ CREATE TRIGGER on_auth_user_created
 CREATE INDEX IF NOT EXISTS users_profile_username_idx ON public.users_profile (username);
 CREATE INDEX IF NOT EXISTS users_profile_user_id_idx ON public.users_profile (user_id);
 
--- 创建函数：通过用户名获取用户邮箱（用于登录）
-CREATE OR REPLACE FUNCTION public.get_email_by_username(p_username TEXT)
-RETURNS TEXT AS $$
-DECLARE
-  user_email TEXT;
-BEGIN
-  SELECT au.email INTO user_email
-  FROM public.users_profile up
-  JOIN auth.users au ON up.user_id = au.id
-  WHERE up.username = p_username;
-  
-  RETURN user_email;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 注意：用户名登录功能通过 Edge Function (username-login) 实现
+-- Edge Function 使用 service role 在服务端安全地查找用户名对应的邮箱
+-- 前端不能直接查询用户邮箱，确保用户隐私安全

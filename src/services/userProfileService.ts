@@ -21,23 +21,6 @@ export const userProfileService = {
     return { data, error };
   },
 
-  async getProfileByUsername(username: string): Promise<{ data: UserProfile | null; error: any }> {
-    const { data, error } = await supabase
-      .from('users_profile')
-      .select('*')
-      .eq('username', username)
-      .maybeSingle();
-
-    return { data, error };
-  },
-
-  async getEmailByUsername(username: string): Promise<{ data: string | null; error: any }> {
-    const { data, error } = await supabase
-      .rpc('get_email_by_username', { p_username: username });
-
-    return { data, error };
-  },
-
   async updateProfile(
     userId: string,
     updates: Partial<Pick<UserProfile, 'username' | 'display_name' | 'avatar_url'>>

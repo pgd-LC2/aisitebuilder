@@ -4,6 +4,9 @@ import { supabase, refreshRealtimeAuth } from '../lib/supabase';
 import RealtimeClient, { cleanupRealtime } from '../realtime/realtimeClient';
 import { userProfileService, UserProfile } from '../services/userProfileService';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -129,21 +132,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithUsername = async (username: string, password: string) => {
     try {
-      // 通过用户名获取邮箱
-      const { data: email, error: lookupError } = await userProfileService.getEmailByUsername(username);
-      
-      if (lookupError || !email) {
-        return { error: { message: '用户名不存在' } };
-      }
-      
-      // 使用邮箱登录
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // 通过 Edge Function 安全地处理用户名登录
+      // Edge Function 在服务端查找用户名对应的邮箱，前端不会暴露邮箱信息
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/username-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ username, password }),
       });
-      return { error };
-    } catch (error) {
-      return { error };
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        // 统一返回"用户名或密码错误"，不区分具体错误类型，防止用户名枚举
+        return { error: { message: '用户名或密码错误' } };
+      }
+
+      // 使用返回的 token 设置 session
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+
+      if (sessionError) {
+        return { error: sessionError };
+      }
+
+      return { error: null };
+    } catch {
+      return { error: { message: '登录失败，请稍后重试' } };
     }
   };
 
