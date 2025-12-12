@@ -182,7 +182,7 @@ export default function ChatInput({
                 <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#4285F4"/>
                 <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4285F4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              <span className="text-sm text-gray-700 font-medium">Gemini Agent</span>
+              <span className="text-sm text-gray-700 font-medium">Gemini</span>
               <ChevronDown className="w-4 h-4 text-gray-400" />
             </button>
           )}
