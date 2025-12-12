@@ -45,13 +45,30 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-4 relative overflow-hidden">
-        {/* 背景装饰元素 */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-400/20 rounded-full blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-400/20 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-400/10 rounded-full blur-3xl" />
-        </div>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-4 relative overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute -top-32 -right-32 w-96 h-96 opacity-50">
+              <img 
+                src="/images/gradient-flower.webp" 
+                alt="" 
+                className="w-full h-full object-cover blur-2xl scale-150 rotate-12"
+              />
+            </div>
+            <div className="absolute -bottom-32 -left-32 w-96 h-96 opacity-40">
+              <img 
+                src="/images/gradient-blue.webp" 
+                alt="" 
+                className="w-full h-full object-cover blur-xl scale-150 -rotate-12"
+              />
+            </div>
+            <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-80 h-80 opacity-35">
+              <img 
+                src="/images/gradient-wave.webp" 
+                alt="" 
+                className="w-full h-full object-cover blur-2xl scale-125 rotate-45"
+              />
+            </div>
+          </div>
 
         <div className="w-full max-w-md relative z-10">
           <div className="backdrop-blur-xl bg-white/70 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border border-white/50 p-8 text-center">
@@ -75,11 +92,35 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4 relative overflow-hidden">
-      {/* 背景装饰元素 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-400/20 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-400/10 rounded-full blur-3xl" />
+        <div className="absolute -top-32 -right-32 w-96 h-96 opacity-60">
+          <img 
+            src="/images/gradient-wave.webp" 
+            alt="" 
+            className="w-full h-full object-cover blur-2xl scale-150 rotate-12"
+          />
+        </div>
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 opacity-50">
+          <img 
+            src="/images/gradient-pink.webp" 
+            alt="" 
+            className="w-full h-full object-cover blur-xl scale-150 -rotate-12"
+          />
+        </div>
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-80 h-80 opacity-40">
+          <img 
+            src="/images/gradient-blue.webp" 
+            alt="" 
+            className="w-full h-full object-cover blur-2xl scale-125 rotate-45"
+          />
+        </div>
+        <div className="absolute bottom-1/4 right-1/4 w-72 h-72 opacity-35">
+          <img 
+            src="/images/gradient-flower.webp" 
+            alt="" 
+            className="w-full h-full object-cover blur-xl scale-110 -rotate-6"
+          />
+        </div>
       </div>
 
       <div className="w-full max-w-md relative z-10">
