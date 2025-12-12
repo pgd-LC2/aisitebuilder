@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, FlaskConical, Settings, Bell, Shield, Palette, Camera, Mail, Check, Loader2, User } from 'lucide-react';
+import { X, FlaskConical, Bell, Shield, Palette, Camera, Check, Loader2, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { userProfileService, UserProfile } from '../services/userProfileService';
 
@@ -149,80 +149,83 @@ export default function UserProfilePanel({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-sm">
-      <div className="w-full max-w-md h-full bg-white shadow-2xl flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-gray-600" />
-            <p className="text-sm font-medium text-gray-900">用户设置</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-            aria-label="关闭"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-4xl max-h-[90vh] mx-4 bg-white rounded-2xl shadow-2xl flex overflow-hidden">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleAvatarChange}
+          className="hidden"
+        />
 
-        <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-200">
-          <div className="flex flex-col items-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarChange}
-              className="hidden"
-            />
-            <button
-              onClick={handleAvatarClick}
-              disabled={isUploadingAvatar}
-              className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 border-4 border-white shadow-lg group"
-            >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex items-center justify-center h-full text-white text-2xl font-bold">
-                  {displayName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                {isUploadingAvatar ? (
-                  <Loader2 className="w-6 h-6 text-white animate-spin" />
+        <div className="w-56 bg-gray-50 border-r border-gray-200 flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <p className="text-sm font-medium text-gray-500">Personal Settings</p>
+          </div>
+
+          <nav className="flex-1 p-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleAvatarClick}
+                disabled={isUploadingAvatar}
+                className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0 group"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
                 ) : (
-                  <Camera className="w-6 h-6 text-white" />
+                  <div className="flex items-center justify-center h-full text-white text-sm font-bold">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
                 )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {isUploadingAvatar ? (
+                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-4 h-4 text-white" />
+                  )}
+                </div>
+              </button>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                <p className="text-xs text-gray-500 truncate">{email}</p>
               </div>
-            </button>
-            <p className="mt-3 text-lg font-semibold text-gray-900">{displayName}</p>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className="mt-1 text-sm text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              {email}
-            </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex border-b border-gray-200 px-2">
-          {tabs.map((tab) => (
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {tabs.find(t => t.id === activeTab)?.label}
+            </h2>
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === tab.id
-                  ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700'
-              }`}
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              aria-label="关闭"
             >
-              {tab.icon}
-              {tab.label}
+              <X className="w-5 h-5" />
             </button>
-          ))}
-        </div>
+          </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-6">
           {activeTab === 'profile' && (
             <div className="space-y-4">
               <div>
