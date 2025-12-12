@@ -14,7 +14,7 @@ interface AuthContextType {
   loading: boolean;
   authReady: boolean;
   authVersion: number;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string) => Promise<{ error: any; data?: { user: User | null } }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithUsername: (username: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -42,6 +42,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await userProfileService.getProfileByUserId(user.id);
     setUserProfile(data);
   };
+
+  // 当用户变化时自动加载用户资料
+  useEffect(() => {
+    if (user) {
+      (async () => {
+        const { data } = await userProfileService.getProfileByUserId(user.id);
+        setUserProfile(data);
+      })();
+    } else {
+      setUserProfile(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     (async () => {
@@ -108,11 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const { error, data } = await supabase.auth.signUp({
         email,
         password,
       });
-      return { error };
+      return { error, data: data ? { user: data.user } : undefined };
     } catch (error) {
       return { error };
     }

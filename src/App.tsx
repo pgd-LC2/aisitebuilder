@@ -30,7 +30,7 @@ function App() {
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [initializingProjectTitle, setInitializingProjectTitle] = useState('');
   const [currentVersion, setCurrentVersion] = useState<ProjectVersion | null>(null);
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, userProfile, refreshUserProfile } = useAuth();
   const { createProject, currentProject, setCurrentProject, updateProjectStatus } = useProject();
   const { preloadNodeModules, setPreloadNodeModules } = useSettings();
   const buttonSpring = useMemo<Transition>(
@@ -352,8 +352,11 @@ function App() {
         open={showProfilePanel}
         onClose={() => setShowProfilePanel(false)}
         email={user.email ?? ''}
+        userId={user.id}
+        userProfile={userProfile}
         preloadNodeModules={preloadNodeModules}
         onTogglePreload={setPreloadNodeModules}
+        onProfileUpdate={refreshUserProfile}
       />
       <AnimatePresence>
         {showVersionManager && currentProject && (
