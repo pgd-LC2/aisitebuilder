@@ -259,10 +259,10 @@ function App() {
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <motion.button
             onClick={handleBackToHome}
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.95 }}
             transition={buttonSpring}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            className="flex-shrink-0 cursor-pointer"
             aria-label="返回主页"
           >
             <img src="/favicon.svg" alt="" className="w-6 h-6" />

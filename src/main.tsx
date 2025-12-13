@@ -5,7 +5,10 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProjectProvider } from './contexts/ProjectContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { WorkflowProvider } from './contexts/WorkflowContext';
+import { logVersionInfo } from './utils/versionInfo';
 import './index.css';
+
+logVersionInfo();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
