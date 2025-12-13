@@ -10,6 +10,13 @@ export interface UserProfile {
   updated_at: string;
 }
 
+export interface AvatarTransformOptions {
+  width?: number;
+  height?: number;
+  quality?: number;
+  resize?: 'cover' | 'contain' | 'fill';
+}
+
 export const userProfileService = {
   async getProfileByUserId(userId: string): Promise<{ data: UserProfile | null; error: any }> {
     const { data, error } = await supabase
@@ -50,5 +57,41 @@ export const userProfileService = {
     }
 
     return { data: data === null, error: null };
+  },
+
+  getOptimizedAvatarUrl(
+    filePath: string,
+    options: AvatarTransformOptions = {}
+  ): string {
+    const { width = 200, height = 200, quality = 80, resize = 'cover' } = options;
+    
+    const { data } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath, {
+        transform: {
+          width,
+          height,
+          quality,
+          resize
+        }
+      });
+    
+    return data.publicUrl;
+  },
+
+  getAvatarUrlWithTransform(
+    avatarUrl: string | null,
+    options: AvatarTransformOptions = {}
+  ): string | null {
+    if (!avatarUrl) return null;
+    
+    const { width = 200, height = 200, quality = 80 } = options;
+    
+    const url = new URL(avatarUrl);
+    url.searchParams.set('width', width.toString());
+    url.searchParams.set('height', height.toString());
+    url.searchParams.set('quality', quality.toString());
+    
+    return url.toString();
   }
 };
