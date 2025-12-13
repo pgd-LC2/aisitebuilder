@@ -8,11 +8,31 @@ interface ProjectCardProps {
   onDelete?: () => void;
 }
 
-const statusColors = {
-  draft: 'bg-gray-100 text-gray-700',
-  building: 'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  failed: 'bg-red-100 text-red-700'
+const statusStyles = {
+  draft: {
+    bg: 'bg-gray-500/10',
+    text: 'text-gray-600',
+    border: 'border-gray-500/20',
+    ring: 'ring-gray-500/10'
+  },
+  building: {
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-600',
+    border: 'border-blue-500/20',
+    ring: 'ring-blue-500/10'
+  },
+  completed: {
+    bg: 'bg-green-500/10',
+    text: 'text-green-600',
+    border: 'border-green-500/20',
+    ring: 'ring-green-500/10'
+  },
+  failed: {
+    bg: 'bg-red-500/10',
+    text: 'text-red-600',
+    border: 'border-red-500/20',
+    ring: 'ring-red-500/10'
+  }
 };
 
 const statusLabels = {
@@ -77,25 +97,29 @@ export default function ProjectCard({ project, onClick, onDelete }: ProjectCardP
     onDelete?.();
   };
 
+  const style = statusStyles[project.status];
+
   return (
     <div
       onClick={onClick}
-      className="group bg-white border border-gray-200 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md hover:border-gray-300 relative"
+      className="group relative cursor-pointer rounded-3xl border border-white/60 bg-white/60 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.6)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.10)] p-5"
     >
+      <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-br from-white/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      
       {onDelete && (
-        <div ref={menuRef} className="absolute top-3 right-3 z-10">
+        <div ref={menuRef} className="absolute top-4 right-4 z-10">
           <button
             onClick={handleMenuClick}
-            className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-gray-100 rounded-lg transition-opacity"
+            className="p-2 rounded-xl bg-white/40 border border-white/60 shadow-sm opacity-0 group-hover:opacity-100 hover:bg-white/60 transition-all"
           >
-            <MoreVertical className="w-4 h-4 text-gray-600" />
+            <MoreVertical className="w-4 h-4 text-gray-500" />
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[120px]">
+            <div className="absolute right-0 mt-2 rounded-2xl backdrop-blur-xl bg-white/90 border border-white/60 shadow-[0_12px_32px_rgba(0,0,0,0.12)] overflow-hidden min-w-[140px]">
               <button
                 onClick={handleDelete}
-                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50/80 flex items-center gap-2.5 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
                 删除项目
@@ -105,19 +129,19 @@ export default function ProjectCard({ project, onClick, onDelete }: ProjectCardP
         </div>
       )}
 
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3 pr-8">
-          <h3 className="font-semibold text-gray-900 text-base line-clamp-2">
+      <div className="space-y-3 relative z-[1]">
+        <div className="flex items-start justify-between gap-3 pr-10">
+          <h3 className="font-semibold text-gray-900 text-base line-clamp-2 leading-snug">
             {project.title}
           </h3>
         </div>
 
-        <p className="text-sm text-gray-600 line-clamp-2">
+        <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
           {truncateDescription(project.description)}
         </p>
 
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[project.status]}`}>
+        <div className="flex items-center justify-between pt-3 border-t border-white/60">
+          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ring-1 ${style.bg} ${style.text} ${style.ring} border ${style.border}`}>
             {statusLabels[project.status]}
           </span>
 
