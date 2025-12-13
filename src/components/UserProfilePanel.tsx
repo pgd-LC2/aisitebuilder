@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, FlaskConical, Bell, Shield, Palette, Camera, Check, Loader2, User } from 'lucide-react';
+import { X, FlaskConical, Bell, Shield, Palette, Camera, Check, Loader2, User, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { userProfileService, UserProfile } from '../services/userProfileService';
 
@@ -12,6 +12,7 @@ interface UserProfilePanelProps {
   preloadNodeModules: boolean;
   onTogglePreload: (value: boolean) => void;
   onProfileUpdate?: () => void;
+  onSignOut?: () => void;
 }
 
 type SettingsTab = 'profile' | 'preferences' | 'notifications' | 'security';
@@ -24,7 +25,8 @@ export default function UserProfilePanel({
   userProfile,
   preloadNodeModules,
   onTogglePreload,
-  onProfileUpdate
+  onProfileUpdate,
+  onSignOut
 }: UserProfilePanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [isEditingUsername, setIsEditingUsername] = useState(false);
@@ -150,7 +152,7 @@ export default function UserProfilePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-4xl h-[70vh] mx-4 bg-white rounded-2xl shadow-2xl flex overflow-hidden">
+      <div className="w-[90vw] max-w-5xl h-[60vh] min-h-[400px] max-h-[600px] mx-4 bg-white rounded-2xl shadow-2xl flex overflow-hidden">
         <input
           ref={fileInputRef}
           type="file"
@@ -182,7 +184,7 @@ export default function UserProfilePanel({
           </nav>
 
           <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-3">
               <button
                 onClick={handleAvatarClick}
                 disabled={isUploadingAvatar}
@@ -208,6 +210,15 @@ export default function UserProfilePanel({
                 <p className="text-xs text-gray-500 truncate">{email}</p>
               </div>
             </div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                退出登录
+              </button>
+            )}
           </div>
         </div>
 
