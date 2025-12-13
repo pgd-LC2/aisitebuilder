@@ -1,4 +1,4 @@
-import { Home, LogOut, FolderOpen, GitBranch } from 'lucide-react';
+import { Home, FolderOpen, GitBranch } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
@@ -189,26 +189,25 @@ function App() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <motion.button
             onClick={() => setShowProfilePanel(true)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             transition={buttonSpring}
-            className="text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
             title="个人信息"
           >
-            {user.email}
-          </motion.button>
-          <motion.button
-            onClick={signOut}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.96 }}
-            transition={buttonSpring}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            退出登录
+            <span>{user.email}</span>
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
+              {userProfile?.avatar_url ? (
+                <img src={userProfile.avatar_url} alt="头像" className="w-full h-full object-cover" />
+              ) : (
+                <div className="flex items-center justify-center h-full text-white text-xs font-bold">
+                  {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
           </motion.button>
         </div>
       </header>
@@ -292,23 +291,22 @@ function App() {
         <div className="flex items-center gap-4 flex-shrink-0">
           <motion.button
             onClick={() => setShowProfilePanel(true)}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             transition={buttonSpring}
-            className="text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
             title="个人信息"
           >
-            {user.email}
-          </motion.button>
-          <motion.button
-            onClick={signOut}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.96 }}
-            transition={buttonSpring}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            退出
+            <span>{user.email}</span>
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
+              {userProfile?.avatar_url ? (
+                <img src={userProfile.avatar_url} alt="头像" className="w-full h-full object-cover" />
+              ) : (
+                <div className="flex items-center justify-center h-full text-white text-xs font-bold">
+                  {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
           </motion.button>
           {currentProject && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
@@ -357,6 +355,7 @@ function App() {
         preloadNodeModules={preloadNodeModules}
         onTogglePreload={setPreloadNodeModules}
         onProfileUpdate={refreshUserProfile}
+        onSignOut={signOut}
       />
       <AnimatePresence>
         {showVersionManager && currentProject && (
