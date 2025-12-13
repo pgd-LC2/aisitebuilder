@@ -101,10 +101,26 @@ export interface AITask {
   status: AITaskStatus;
   result?: Record<string, any>;
   model?: string;
+  model_id?: string;
   error?: string;
   created_at: string;
   started_at?: string;
   finished_at?: string;
+}
+
+/**
+ * AI 模型配置接口
+ * 存储模型的 API 调用名称和显示名称映射
+ */
+export interface Model {
+  id: string;
+  api_name: string;
+  display_name: string;
+  description?: string;
+  provider?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export type PromptCategory = 'system' | 'task' | 'tool';
