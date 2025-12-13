@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useProject } from '../contexts/ProjectContext';
+import { useProject } from '../hooks/useProject';
 import ProjectCard from './ProjectCard';
 import ChatInput, { InputMode } from './ChatInput';
 

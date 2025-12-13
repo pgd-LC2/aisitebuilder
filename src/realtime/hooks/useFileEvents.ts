@@ -16,7 +16,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { ProjectFile } from '../../types/project';
 import { fileService } from '../../services/fileService';
 import { subscribeFileEvents } from '../subscribeFileEvents';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getRealtimeClient } from '../realtimeClient';
 import type { FileState, FileAction, UseFileEventsOptions, UseFileEventsReturn, DbFileEvent, RealtimeSubscribeStatus, StatusChangeMeta } from '../types';
 

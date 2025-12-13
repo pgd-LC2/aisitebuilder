@@ -12,11 +12,11 @@
  * 避免旧的回调干扰新的订阅流程。
  */
 
-import { createContext, useContext, useState, useCallback, useRef, ReactNode, useMemo } from 'react';
+import { createContext, useState, useCallback, useRef, ReactNode, useEffect } from 'react';
 import type { RealtimeContextValue, RealtimeContextState, ConnectionStatus } from '../realtime/types';
 import { getRealtimeClient } from '../realtime/realtimeClient';
 
-const RealtimeContext = createContext<RealtimeContextValue | undefined>(undefined);
+export const RealtimeContext = createContext<RealtimeContextValue | undefined>(undefined);
 
 interface RealtimeProviderProps {
   children: ReactNode;
@@ -101,7 +101,7 @@ export function RealtimeProvider({ children, authReady, authVersion }: RealtimeP
   }, [client]);
 
   // 当 authVersion 变化时同步 generation
-  useMemo(() => {
+  useEffect(() => {
     syncGeneration();
   }, [authVersion, syncGeneration]);
 
@@ -127,36 +127,6 @@ export function RealtimeProvider({ children, authReady, authVersion }: RealtimeP
       {children}
     </RealtimeContext.Provider>
   );
-}
-
-/**
- * 使用 Realtime 上下文
- * 必须在 RealtimeProvider 内部使用
- */
-export function useRealtime(): RealtimeContextValue {
-  const context = useContext(RealtimeContext);
-  if (context === undefined) {
-    throw new Error('useRealtime must be used within a RealtimeProvider');
-  }
-  return context;
-}
-
-/**
- * 使用 Realtime generation
- * 简化版 hook，只返回 generation 相关的功能
- */
-export function useRealtimeGeneration() {
-  const { sessionGeneration, isGenerationValid, getCurrentGeneration } = useRealtime();
-  return { sessionGeneration, isGenerationValid, getCurrentGeneration };
-}
-
-/**
- * 使用 Realtime 连接状态
- * 简化版 hook，只返回连接状态相关的功能
- */
-export function useRealtimeConnection() {
-  const { connectionStatus, authReady, authVersion, isExpectedClose } = useRealtime();
-  return { connectionStatus, authReady, authVersion, isExpectedClose };
 }
 
 export default RealtimeContext;

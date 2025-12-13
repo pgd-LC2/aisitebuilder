@@ -94,37 +94,7 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
     [selectedFile, syntaxLanguage]
   );
 
-  useEffect(() => {
-    loadFiles();
-  }, [projectId, versionId]);
-
-  useEffect(() => {
-    if (selectedFile) {
-      loadFileContent(selectedFile);
-    }
-  }, [selectedFile]);
-
-  useEffect(() => {
-    if (searchQuery) {
-      const filteredFiles = files.filter(file =>
-        file.file_name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-
-      if (filteredFiles.length > 0) {
-        const pathsToExpand = new Set<string>(['root']);
-        filteredFiles.forEach(file => {
-          const pathParts = file.file_path.split('/').filter(p => p);
-          const relevantParts = pathParts.slice(2);
-          for (let i = 0; i < relevantParts.length - 1; i++) {
-            pathsToExpand.add(relevantParts.slice(0, i + 1).join('/'));
-          }
-        });
-        setExpandedFolders(pathsToExpand);
-      }
-    }
-  }, [searchQuery, files]);
-
-  const loadFiles = async () => {
+  const loadFiles = useCallback(async () => {
     setLoading(true);
     const { data, error } = await fileService.getFilesByProject(projectId, versionId);
     if (!error && data) {
@@ -134,9 +104,9 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
       }
     }
     setLoading(false);
-  };
+  }, [projectId, versionId, selectedFile]);
 
-  const loadFileContent = async (file: ProjectFile) => {
+  const loadFileContent = useCallback(async (file: ProjectFile) => {
     setLoadingContent(true);
     setFileContent('');
     setFileUrl(null);
@@ -162,7 +132,37 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
       setPreviewMessage('文件下载失败');
     }
     setLoadingContent(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
+
+  useEffect(() => {
+    if (selectedFile) {
+      loadFileContent(selectedFile);
+    }
+  }, [selectedFile, loadFileContent]);
+
+  useEffect(() => {
+    if (searchQuery) {
+      const filteredFiles = files.filter(file =>
+        file.file_name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+      if (filteredFiles.length > 0) {
+        const pathsToExpand = new Set<string>(['root']);
+        filteredFiles.forEach(file => {
+          const pathParts = file.file_path.split('/').filter(p => p);
+          const relevantParts = pathParts.slice(2);
+          for (let i = 0; i < relevantParts.length - 1; i++) {
+            pathsToExpand.add(relevantParts.slice(0, i + 1).join('/'));
+          }
+        });
+        setExpandedFolders(pathsToExpand);
+      }
+    }
+  }, [searchQuery, files]);
 
   const buildFileTree = (): FileTreeNode => {
     const root: FileTreeNode = {

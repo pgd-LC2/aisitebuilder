@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useState, useCallback, ReactNode } from 'react';
 import { WorkflowMode, PlanSummary, WorkflowState } from '../types/project';
 
 interface WorkflowContextType {
@@ -22,7 +22,7 @@ const initialWorkflowState: WorkflowState = {
   isImplementReady: false,
 };
 
-const WorkflowContext = createContext<WorkflowContextType | undefined>(undefined);
+export const WorkflowContext = createContext<WorkflowContextType | undefined>(undefined);
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [workflowState, setWorkflowState] = useState<WorkflowState>(initialWorkflowState);
@@ -94,12 +94,4 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       {children}
     </WorkflowContext.Provider>
   );
-}
-
-export function useWorkflow() {
-  const context = useContext(WorkflowContext);
-  if (context === undefined) {
-    throw new Error('useWorkflow must be used within a WorkflowProvider');
-  }
-  return context;
 }

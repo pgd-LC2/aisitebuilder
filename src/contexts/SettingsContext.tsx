@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const PRELOAD_STORAGE_KEY = 'aisb:preload-node-modules';
 
@@ -7,7 +7,7 @@ interface SettingsContextValue {
   setPreloadNodeModules: (value: boolean) => void;
 }
 
-const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
+export const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [preloadNodeModules, setPreloadNodeModulesState] = useState(true);
@@ -42,11 +42,3 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
-
-export const useSettings = () => {
-  const ctx = useContext(SettingsContext);
-  if (!ctx) {
-    throw new Error('useSettings 必须在 SettingsProvider 内部使用');
-  }
-  return ctx;
-};

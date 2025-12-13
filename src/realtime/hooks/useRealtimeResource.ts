@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState, useMemo } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getRealtimeClient } from '../realtimeClient';
 import type {
   RealtimeResourceConfig,
@@ -102,6 +102,10 @@ export function useRealtimeResource<T>(config: RealtimeResourceConfig<T>): Realt
 
   const { authReady, authVersion } = useAuth();
   const client = getRealtimeClient();
+
+  // 将 deps 数组序列化为字符串，用于稳定化依赖
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const depsKey = useMemo(() => JSON.stringify(deps), deps);
 
   const reducer = useMemo(() => createReducer(getItemId), [getItemId]);
   const [state, dispatch] = useReducer(reducer, { items: [], isLoading: false, error: null });
@@ -320,7 +324,7 @@ export function useRealtimeResource<T>(config: RealtimeResourceConfig<T>): Realt
       unsubscribe();
       setIsConnected(false);
     };
-  }, [authReady, authVersion, projectId, enabled, resourceKey, refresh, subscribeIncrements, insertItem, updateItem, deleteItem, handleStatusChange, client, ...deps]);
+  }, [authReady, authVersion, projectId, enabled, resourceKey, refresh, subscribeIncrements, insertItem, updateItem, deleteItem, handleStatusChange, client, depsKey]);
 
   /**
    * 追加项目（别名）
