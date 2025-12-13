@@ -1,9 +1,9 @@
 import { Home, FolderOpen, GitBranch } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from './contexts/AuthContext';
-import { useProject } from './contexts/ProjectContext';
-import { useSettings } from './contexts/SettingsContext';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from './hooks/useAuth';
+import { useProject } from './hooks/useProject';
+import { useSettings } from './hooks/useSettings';
 import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
 import HomePage from './components/HomePage';
@@ -49,7 +49,7 @@ function App() {
     };
   }, [currentProject, currentVersion]);
 
-  const refreshCurrentVersion = async () => {
+  const refreshCurrentVersion = useCallback(async () => {
     if (!currentProject) {
       setCurrentVersion(null);
       return;
@@ -61,7 +61,7 @@ function App() {
     } else {
       setCurrentVersion(null);
     }
-  };
+  }, [currentProject]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -70,7 +70,7 @@ function App() {
     }
 
     refreshCurrentVersion();
-  }, [currentProject]);
+  }, [currentProject, refreshCurrentVersion]);
 
   const handleStartBuilding = async (prompt: string) => {
     try {

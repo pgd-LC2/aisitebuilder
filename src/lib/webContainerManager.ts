@@ -143,7 +143,9 @@ const boot = async (): Promise<WebContainerInstance | null> => {
         await teardown();
       }
 
-      const newInstance = await webContainerClass!.boot();
+      const newInstance = await webContainerClass!.boot({
+        coep: 'credentialless'
+      });
       instance = newInstance;
       state = 'ready';
       return newInstance;

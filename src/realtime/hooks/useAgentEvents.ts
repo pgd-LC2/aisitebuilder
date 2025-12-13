@@ -16,7 +16,7 @@ import { messageService } from '../../services/messageService';
 import { aiTaskService } from '../../services/aiTaskService';
 import { imageProxyService } from '../../services/imageProxyService';
 import { subscribeAgentEvents } from '../subscribeAgentEvents';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getRealtimeClient } from '../realtimeClient';
 import type {
   AgentState,

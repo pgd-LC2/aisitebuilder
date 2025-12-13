@@ -1,6 +1,6 @@
 import { X, GitBranch, RotateCcw, Trash2, Clock, ChevronRight, Folder, FileText, Plus, Code } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ProjectVersion, ProjectFile } from '../types/project';
 import { versionService } from '../services/versionService';
 import { fileService } from '../services/fileService';
@@ -22,6 +22,86 @@ interface FileNode {
   file?: ProjectFile;
 }
 
+const extractRelativePath = (file: ProjectFile) => {
+  const source = (file.file_path || file.file_name || '').split('/').filter(Boolean);
+  if (source.length > 2) {
+    return source.slice(2).join('/');
+  }
+  return source[source.length - 1] || file.file_name;
+};
+
+const buildFileTree = (files: ProjectFile[]): FileNode => {
+  const root: FileNode = {
+    name: 'root',
+    path: '',
+    type: 'folder',
+    children: []
+  };
+
+  const folderMap = new Map<string, FileNode>();
+  folderMap.set('', root);
+
+  const ensureFolder = (parent: FileNode, folderName: string, fullPath: string) => {
+    let folder = folderMap.get(fullPath);
+    if (!folder) {
+      folder = {
+        name: folderName,
+        path: fullPath,
+        type: 'folder',
+        children: []
+      };
+      parent.children?.push(folder);
+      folderMap.set(fullPath, folder);
+    }
+    return folder;
+  };
+
+  files.forEach(file => {
+    const relativePath = extractRelativePath(file);
+    const parts = relativePath.split('/').filter(Boolean);
+    if (parts.length === 0) return;
+
+    let currentPath = '';
+    let currentNode = root;
+
+    parts.forEach((part, index) => {
+      const isFile = index === parts.length - 1;
+
+      if (isFile) {
+        const alreadyExists = currentNode.children?.some(
+          child => child.type === 'file' && child.path === relativePath
+        );
+        if (!alreadyExists) {
+          currentNode.children?.push({
+            name: part,
+            path: relativePath,
+            type: 'file',
+            file
+          });
+        }
+        return;
+      }
+
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      currentNode = ensureFolder(currentNode, part, currentPath);
+    });
+  });
+
+  const sortTree = (node: FileNode) => {
+    if (!node.children) return;
+    node.children.forEach(sortTree);
+    node.children.sort((a, b) => {
+      if (a.type === b.type) {
+        return a.name.localeCompare(b.name, 'zh-CN');
+      }
+      return a.type === 'folder' ? -1 : 1;
+    });
+  };
+
+  sortTree(root);
+  return root;
+};
+
 export default function VersionManager({
   projectId,
   currentVersionId,
@@ -38,17 +118,7 @@ export default function VersionManager({
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [viewingCode, setViewingCode] = useState<{ code: string; language: string; filename: string } | null>(null);
 
-  useEffect(() => {
-    loadVersions();
-  }, [projectId]);
-
-  useEffect(() => {
-    if (selectedVersion) {
-      loadVersionFiles(selectedVersion.id);
-    }
-  }, [selectedVersion]);
-
-  const loadVersions = async () => {
+  const loadVersions = useCallback(async () => {
     setLoading(true);
     const { data, error } = await versionService.getVersionsByProjectId(projectId);
     if (!error && data) {
@@ -58,9 +128,9 @@ export default function VersionManager({
       }
     }
     setLoading(false);
-  };
+  }, [projectId, selectedVersion]);
 
-  const loadVersionFiles = async (versionId: string) => {
+  const loadVersionFiles = useCallback(async (versionId: string) => {
     setLoadingFiles(true);
     const { data: files } = await fileService.getFilesByProject(projectId, versionId);
 
@@ -71,15 +141,17 @@ export default function VersionManager({
       setFileTree(null);
     }
     setLoadingFiles(false);
-  };
+  }, [projectId]);
 
-const extractRelativePath = (file: ProjectFile) => {
-  const source = (file.file_path || file.file_name || '').split('/').filter(Boolean);
-  if (source.length > 2) {
-    return source.slice(2).join('/');
-  }
-  return source[source.length - 1] || file.file_name;
-};
+  useEffect(() => {
+    loadVersions();
+  }, [loadVersions]);
+
+  useEffect(() => {
+    if (selectedVersion) {
+      loadVersionFiles(selectedVersion.id);
+    }
+  }, [selectedVersion, loadVersionFiles]);
 
 const findCodeInSnapshot = (
   snapshot: Record<string, any> | undefined,
@@ -106,78 +178,6 @@ const findCodeInSnapshot = (
 
   return null;
 };
-
-const buildFileTree = (files: ProjectFile[]): FileNode => {
-  const root: FileNode = {
-    name: 'root',
-    path: '',
-    type: 'folder',
-      children: []
-    };
-
-    const folderMap = new Map<string, FileNode>();
-    folderMap.set('', root);
-
-    const ensureFolder = (parent: FileNode, folderName: string, fullPath: string) => {
-      let folder = folderMap.get(fullPath);
-      if (!folder) {
-        folder = {
-          name: folderName,
-          path: fullPath,
-          type: 'folder',
-          children: []
-        };
-        parent.children?.push(folder);
-        folderMap.set(fullPath, folder);
-      }
-      return folder;
-    };
-
-  files.forEach(file => {
-    const relativePath = extractRelativePath(file);
-    const parts = relativePath.split('/').filter(Boolean);
-    if (parts.length === 0) return;
-
-    let currentPath = '';
-    let currentNode = root;
-
-      parts.forEach((part, index) => {
-        const isFile = index === parts.length - 1;
-
-        if (isFile) {
-          const alreadyExists = currentNode.children?.some(
-            child => child.type === 'file' && child.path === relativePath
-          );
-          if (!alreadyExists) {
-            currentNode.children?.push({
-              name: part,
-              path: relativePath,
-              type: 'file',
-              file
-            });
-          }
-          return;
-        }
-
-        currentPath = currentPath ? `${currentPath}/${part}` : part;
-        currentNode = ensureFolder(currentNode, part, currentPath);
-      });
-    });
-
-    const sortTree = (node: FileNode) => {
-      if (!node.children) return;
-      node.children.forEach(sortTree);
-      node.children.sort((a, b) => {
-        if (a.type === b.type) {
-          return a.name.localeCompare(b.name, 'zh-CN');
-        }
-        return a.type === 'folder' ? -1 : 1;
-      });
-    };
-
-    sortTree(root);
-    return root;
-  };
 
   const getCurrentFolder = (): FileNode => {
     if (!fileTree) return { name: 'root', path: '', type: 'folder', children: [] };

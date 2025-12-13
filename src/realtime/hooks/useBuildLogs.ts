@@ -14,7 +14,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { BuildLog } from '../../types/project';
 import { buildLogService } from '../../services/buildLogService';
 import { subscribeBuildLogs } from '../subscribeBuildLogs';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getRealtimeClient } from '../realtimeClient';
 import type {
   BuildLogState,

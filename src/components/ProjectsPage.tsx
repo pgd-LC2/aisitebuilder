@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle } from 'lucide-react';
-import { useProject } from '../contexts/ProjectContext';
+import { useProject } from '../hooks/useProject';
 import ProjectCard from './ProjectCard';
 import {
   capturePositions,

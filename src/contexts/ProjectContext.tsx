@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Project } from '../types/project';
 import { projectService } from '../services/projectService';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 interface ProjectContextType {
   projects: Project[];
@@ -15,7 +15,7 @@ interface ProjectContextType {
   getRecentProjects: (limit: number) => Project[];
 }
 
-const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
+export const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -23,7 +23,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  const refreshProjects = async () => {
+  const refreshProjects = useCallback(async () => {
     if (!user) {
       setProjects([]);
       setLoading(false);
@@ -36,11 +36,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       setProjects(data);
     }
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     refreshProjects();
-  }, [user]);
+  }, [refreshProjects]);
 
   const createProject = async (title: string, description: string) => {
     if (!user) {
@@ -106,12 +106,4 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       {children}
     </ProjectContext.Provider>
   );
-}
-
-export function useProject() {
-  const context = useContext(ProjectContext);
-  if (context === undefined) {
-    throw new Error('useProject must be used within a ProjectProvider');
-  }
-  return context;
 }

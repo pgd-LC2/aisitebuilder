@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { UserPlus, Mail, Lock, AlertCircle, CheckCircle, User, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { userProfileService } from '../services/userProfileService';
