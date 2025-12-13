@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useProject } from '../hooks/useProject';
 import ProjectCard from './ProjectCard';
+import FloatingBackground, { defaultProjectsPageBlobs } from './FloatingBackground';
 import {
   capturePositions,
   applyFlipAnimation,
@@ -172,29 +173,7 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-96 h-96 opacity-40">
-          <img 
-            src="/images/gradient-wave.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-2xl scale-150 rotate-12"
-          />
-        </div>
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 opacity-30">
-          <img 
-            src="/images/gradient-pink.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-xl scale-150 -rotate-12"
-          />
-        </div>
-        <div className="absolute top-1/3 left-1/4 -translate-y-1/2 w-80 h-80 opacity-25">
-          <img 
-            src="/images/gradient-blue.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-2xl scale-125 rotate-45"
-          />
-        </div>
-      </div>
+      <FloatingBackground blobs={defaultProjectsPageBlobs} />
 
       {deleteConfirm && projectToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

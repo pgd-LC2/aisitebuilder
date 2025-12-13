@@ -110,4 +110,57 @@
   .huarongdao-item {
     will-change: transform;
   }
+
+  /* 漂浮背景动画 - 使用 CSS 变量实现随机性 */
+  @keyframes asb-float {
+    0%, 100% {
+      transform: 
+        translate(var(--float-x1, 0px), var(--float-y1, 0px)) 
+        scale(var(--float-scale, 1)) 
+        rotate(var(--float-rotate, 0deg));
+    }
+    25% {
+      transform: 
+        translate(var(--float-x2, 30px), var(--float-y2, -25px)) 
+        scale(calc(var(--float-scale, 1) * 1.02)) 
+        rotate(calc(var(--float-rotate, 0deg) + 3deg));
+    }
+    50% {
+      transform: 
+        translate(var(--float-x3, -20px), var(--float-y3, 15px)) 
+        scale(var(--float-scale, 1)) 
+        rotate(calc(var(--float-rotate, 0deg) - 2deg));
+    }
+    75% {
+      transform: 
+        translate(var(--float-x4, 25px), var(--float-y4, -10px)) 
+        scale(calc(var(--float-scale, 1) * 0.98)) 
+        rotate(calc(var(--float-rotate, 0deg) + 1deg));
+    }
+  }
+
+  /* 呼吸动画 - 叠加在漂浮动画上增加生命感 */
+  @keyframes asb-breathe {
+    0%, 100% {
+      opacity: var(--breathe-opacity-min, 0.3);
+    }
+    50% {
+      opacity: var(--breathe-opacity-max, 0.5);
+    }
+  }
+
+  .asb-floating-blob {
+    will-change: transform, opacity;
+    animation: 
+      asb-float var(--float-duration, 30s) ease-in-out infinite,
+      asb-breathe var(--breathe-duration, 8s) ease-in-out infinite;
+    animation-delay: var(--float-delay, 0s), var(--breathe-delay, 0s);
+  }
+
+  /* 尊重用户的减少动画偏好 */
+  @media (prefers-reduced-motion: reduce) {
+    .asb-floating-blob {
+      animation: none;
+    }
+  }
 }

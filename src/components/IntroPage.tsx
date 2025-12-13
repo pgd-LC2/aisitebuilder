@@ -1,5 +1,6 @@
 import { ArrowLeft, Sparkles, Zap, Shield, Globe, Code, Layers, Cpu, Rocket } from 'lucide-react';
 import { motion } from 'framer-motion';
+import FloatingBackground, { defaultIntroPageBlobs } from './FloatingBackground';
 
 interface IntroPageProps {
   onBack: () => void;
@@ -53,37 +54,8 @@ const stats = [
 
 export default function IntroPage({ onBack }: IntroPageProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 overflow-auto">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-20 -left-20 w-96 h-96 opacity-60">
-          <img 
-            src="/images/gradient-wave.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-2xl scale-150 rotate-12"
-          />
-        </div>
-        <div className="absolute top-1/4 -right-32 w-80 h-80 opacity-50">
-          <img 
-            src="/images/gradient-blue.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-xl scale-125 -rotate-6"
-          />
-        </div>
-        <div className="absolute bottom-1/4 left-1/4 w-72 h-72 opacity-40">
-          <img 
-            src="/images/gradient-flower.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-2xl scale-110 rotate-45"
-          />
-        </div>
-        <div className="absolute -bottom-20 right-1/3 w-96 h-96 opacity-50">
-          <img 
-            src="/images/gradient-pink.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-xl scale-150 -rotate-12"
-          />
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 overflow-auto relative">
+      <FloatingBackground blobs={defaultIntroPageBlobs} />
 
       <div className="relative z-10">
         <header className="sticky top-0 z-20 px-6 py-4">
