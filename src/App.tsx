@@ -259,14 +259,13 @@ function App() {
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <motion.button
             onClick={handleBackToHome}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             transition={buttonSpring}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex-shrink-0"
-            title="返回我的项目"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            aria-label="返回主页"
           >
-            <FolderOpen className="w-4 h-4" />
-            我的项目
+            <img src="/favicon.svg" alt="" className="w-6 h-6" />
           </motion.button>
           {currentProject && (
             <>
