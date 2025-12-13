@@ -1,4 +1,4 @@
-import { Home, FolderOpen, GitBranch } from 'lucide-react';
+import { FolderOpen, GitBranch } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
@@ -259,12 +259,14 @@ function App() {
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <motion.button
             onClick={handleBackToHome}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             transition={buttonSpring}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-            title="返回主页"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="返回我的项目"
           >
-            <Home className="w-5 h-5 text-gray-600" />
+            <FolderOpen className="w-4 h-4" />
+            我的项目
           </motion.button>
           {currentProject && (
             <>
