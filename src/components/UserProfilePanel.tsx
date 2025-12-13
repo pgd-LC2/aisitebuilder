@@ -150,7 +150,7 @@ export default function UserProfilePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] mx-4 bg-white rounded-2xl shadow-2xl flex overflow-hidden">
+      <div className="w-full max-w-4xl h-[70vh] mx-4 bg-white rounded-2xl shadow-2xl flex overflow-hidden">
         <input
           ref={fileInputRef}
           type="file"
