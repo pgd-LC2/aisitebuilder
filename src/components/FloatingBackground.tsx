@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useRef } from 'react';
 
 export interface FloatingBlob {
   id: string;
@@ -21,7 +21,26 @@ interface FloatingBackgroundProps {
   className?: string;
 }
 
-function generateRandomFloatParams() {
+interface BlobAnimationParams {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  x3: number;
+  y3: number;
+  x4: number;
+  y4: number;
+  scale: number;
+  rotate: number;
+  floatDuration: number;
+  floatDelay: number;
+  breatheDuration: number;
+  breatheDelay: number;
+  opacityMin: number;
+  opacityMax: number;
+}
+
+function generateRandomFloatParams(): BlobAnimationParams {
   const randomRange = (min: number, max: number) => 
     Math.floor(Math.random() * (max - min + 1)) + min;
   
@@ -45,75 +64,45 @@ function generateRandomFloatParams() {
   };
 }
 
+function createBlobStyle(blob: FloatingBlob, params: BlobAnimationParams): React.CSSProperties {
+  return {
+    '--float-x1': `${params.x1}px`,
+    '--float-y1': `${params.y1}px`,
+    '--float-x2': `${params.x2}px`,
+    '--float-y2': `${params.y2}px`,
+    '--float-x3': `${params.x3}px`,
+    '--float-y3': `${params.y3}px`,
+    '--float-x4': `${params.x4}px`,
+    '--float-y4': `${params.y4}px`,
+    '--float-scale': blob.baseScale ?? params.scale,
+    '--float-rotate': `${blob.baseRotate ?? params.rotate}deg`,
+    '--float-duration': `${params.floatDuration}s`,
+    '--float-delay': `${params.floatDelay}s`,
+    '--breathe-duration': `${params.breatheDuration}s`,
+    '--breathe-delay': `${params.breatheDelay}s`,
+    '--breathe-opacity-min': params.opacityMin * blob.baseOpacity,
+    '--breathe-opacity-max': params.opacityMax * blob.baseOpacity,
+  } as React.CSSProperties;
+}
+
 export default function FloatingBackground({ blobs, className = '' }: FloatingBackgroundProps) {
-  const [isClient, setIsClient] = useState(false);
-  
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const paramsMapRef = useRef<Map<string, BlobAnimationParams>>(new Map());
 
-  const blobStyles = useMemo(() => {
-    if (!isClient) return [];
-    
-    return blobs.map((blob) => {
-      const params = generateRandomFloatParams();
-      
-      return {
-        id: blob.id,
-        style: {
-          '--float-x1': `${params.x1}px`,
-          '--float-y1': `${params.y1}px`,
-          '--float-x2': `${params.x2}px`,
-          '--float-y2': `${params.y2}px`,
-          '--float-x3': `${params.x3}px`,
-          '--float-y3': `${params.y3}px`,
-          '--float-x4': `${params.x4}px`,
-          '--float-y4': `${params.y4}px`,
-          '--float-scale': blob.baseScale ?? params.scale,
-          '--float-rotate': `${blob.baseRotate ?? params.rotate}deg`,
-          '--float-duration': `${params.floatDuration}s`,
-          '--float-delay': `${params.floatDelay}s`,
-          '--breathe-duration': `${params.breatheDuration}s`,
-          '--breathe-delay': `${params.breatheDelay}s`,
-          '--breathe-opacity-min': params.opacityMin * blob.baseOpacity,
-          '--breathe-opacity-max': params.opacityMax * blob.baseOpacity,
-        } as React.CSSProperties,
-      };
-    });
-  }, [blobs, isClient]);
-
-  if (!isClient) {
-    return (
-      <div className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`}>
-        {blobs.map((blob) => (
-          <div
-            key={blob.id}
-            className="absolute"
-            style={{
-              ...blob.position,
-              width: blob.size,
-              height: blob.size,
-              opacity: blob.baseOpacity * 0.35,
-            }}
-          >
-            <img
-              src={blob.src}
-              alt=""
-              className={`w-full h-full object-cover ${blob.blur}`}
-              style={{
-                transform: `scale(${blob.baseScale ?? 1.25}) rotate(${blob.baseRotate ?? 0}deg)`,
-              }}
-            />
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const getOrCreateParams = (blobId: string): BlobAnimationParams => {
+    const existingParams = paramsMapRef.current.get(blobId);
+    if (existingParams) {
+      return existingParams;
+    }
+    const newParams = generateRandomFloatParams();
+    paramsMapRef.current.set(blobId, newParams);
+    return newParams;
+  };
 
   return (
     <div className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`}>
-      {blobs.map((blob, index) => {
-        const blobStyle = blobStyles[index];
+      {blobs.map((blob) => {
+        const params = getOrCreateParams(blob.id);
+        const style = createBlobStyle(blob, params);
         
         return (
           <div
@@ -123,7 +112,7 @@ export default function FloatingBackground({ blobs, className = '' }: FloatingBa
               ...blob.position,
               width: blob.size,
               height: blob.size,
-              ...blobStyle?.style,
+              ...style,
             }}
           >
             <img
@@ -137,112 +126,3 @@ export default function FloatingBackground({ blobs, className = '' }: FloatingBa
     </div>
   );
 }
-
-export const defaultProjectsPageBlobs: FloatingBlob[] = [
-  {
-    id: 'wave-top-right',
-    src: '/images/gradient-wave.webp',
-    position: { top: '-8rem', right: '-8rem' },
-    size: '24rem',
-    blur: 'blur-2xl',
-    baseOpacity: 1,
-    baseRotate: 12,
-    baseScale: 1.5,
-  },
-  {
-    id: 'pink-bottom-left',
-    src: '/images/gradient-pink.webp',
-    position: { bottom: '-8rem', left: '-8rem' },
-    size: '24rem',
-    blur: 'blur-xl',
-    baseOpacity: 0.8,
-    baseRotate: -12,
-    baseScale: 1.5,
-  },
-  {
-    id: 'blue-center',
-    src: '/images/gradient-blue.webp',
-    position: { top: '33%', left: '25%' },
-    size: '20rem',
-    blur: 'blur-2xl',
-    baseOpacity: 0.7,
-    baseRotate: 45,
-    baseScale: 1.25,
-  },
-];
-
-export const defaultIntroPageBlobs: FloatingBlob[] = [
-  {
-    id: 'wave-top-left',
-    src: '/images/gradient-wave.webp',
-    position: { top: '-5rem', left: '-5rem' },
-    size: '24rem',
-    blur: 'blur-2xl',
-    baseOpacity: 1,
-    baseRotate: 12,
-    baseScale: 1.5,
-  },
-  {
-    id: 'blue-top-right',
-    src: '/images/gradient-blue.webp',
-    position: { top: '25%', right: '-8rem' },
-    size: '20rem',
-    blur: 'blur-xl',
-    baseOpacity: 0.85,
-    baseRotate: -6,
-    baseScale: 1.25,
-  },
-  {
-    id: 'flower-center-left',
-    src: '/images/gradient-flower.webp',
-    position: { bottom: '25%', left: '25%' },
-    size: '18rem',
-    blur: 'blur-2xl',
-    baseOpacity: 0.7,
-    baseRotate: 45,
-    baseScale: 1.1,
-  },
-  {
-    id: 'pink-bottom-right',
-    src: '/images/gradient-pink.webp',
-    position: { bottom: '-5rem', right: '33%' },
-    size: '24rem',
-    blur: 'blur-xl',
-    baseOpacity: 0.85,
-    baseRotate: -12,
-    baseScale: 1.5,
-  },
-];
-
-export const defaultHomePageBlobs: FloatingBlob[] = [
-  {
-    id: 'wave-top-right',
-    src: '/images/gradient-wave.webp',
-    position: { top: '-10rem', right: '-5rem' },
-    size: '28rem',
-    blur: 'blur-2xl',
-    baseOpacity: 0.5,
-    baseRotate: 15,
-    baseScale: 1.4,
-  },
-  {
-    id: 'blue-bottom-left',
-    src: '/images/gradient-blue.webp',
-    position: { bottom: '10%', left: '-8rem' },
-    size: '22rem',
-    blur: 'blur-2xl',
-    baseOpacity: 0.4,
-    baseRotate: -20,
-    baseScale: 1.3,
-  },
-  {
-    id: 'pink-center-right',
-    src: '/images/gradient-pink.webp',
-    position: { top: '40%', right: '10%' },
-    size: '16rem',
-    blur: 'blur-xl',
-    baseOpacity: 0.35,
-    baseRotate: 30,
-    baseScale: 1.2,
-  },
-];

@@ -1,6 +1,7 @@
 import { ArrowLeft, Sparkles, Zap, Shield, Globe, Code, Layers, Cpu, Rocket } from 'lucide-react';
 import { motion } from 'framer-motion';
-import FloatingBackground, { defaultIntroPageBlobs } from './FloatingBackground';
+import FloatingBackground from './FloatingBackground';
+import { defaultIntroPageBlobs } from './floatingBackgroundPresets';
 
 interface IntroPageProps {
   onBack: () => void;

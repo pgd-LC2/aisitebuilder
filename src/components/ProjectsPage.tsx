@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useProject } from '../hooks/useProject';
 import ProjectCard from './ProjectCard';
-import FloatingBackground, { defaultProjectsPageBlobs } from './FloatingBackground';
+import FloatingBackground from './FloatingBackground';
+import { defaultProjectsPageBlobs } from './floatingBackgroundPresets';
 import {
   capturePositions,
   applyFlipAnimation,
