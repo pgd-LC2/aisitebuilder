@@ -1,14 +1,16 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useProject } from '../hooks/useProject';
 import ProjectCard from './ProjectCard';
 import FloatingBackground from './FloatingBackground';
 import { defaultProjectsPageBlobs } from './floatingBackgroundPresets';
+import FireBurnOverlay from './FireBurnOverlay';
 import {
   capturePositions,
   applyFlipAnimation,
   DEFAULT_ANIMATION_CONFIG,
 } from '../utils/huarongdaoAnimation';
+import { Project } from '../types/project';
 
 interface ProjectsPageProps {
   onCreateNew: () => void;
@@ -23,29 +25,48 @@ const statusOptions = [
   { value: 'failed', label: '失败' },
 ];
 
+interface BurningProject {
+  project: Project;
+  rect: DOMRect;
+}
+
 export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPageProps) {
   const { projects, loading, deleteProject } = useProject();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [pendingSearchTerm, setPendingSearchTerm] = useState('');
+  const [appliedSearchTerm, setAppliedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [burningProjects, setBurningProjects] = useState<BurningProject[]>([]);
+  const [exitingProjectIds, setExitingProjectIds] = useState<Set<string>>(new Set());
+  const [heatShakeIds, setHeatShakeIds] = useState<Set<string>>(new Set());
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const positionsBeforeDeleteRef = useRef<Map<string, DOMRect>>(new Map());
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const projectRectsRef = useRef<Map<string, DOMRect>>(new Map());
 
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch =
-      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchTerm.toLowerCase());
+  const baseFilteredProjects = useMemo(() => {
+    return projects.filter(project => {
+      const matchesSearch =
+        project.title.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+        project.description.toLowerCase().includes(appliedSearchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    });
+  }, [projects, appliedSearchTerm, statusFilter]);
+
+  const displayedProjects = useMemo(() => {
+    return baseFilteredProjects.filter(p => !exitingProjectIds.has(p.id));
+  }, [baseFilteredProjects, exitingProjectIds]);
+
+  const filteredProjects = displayedProjects;
 
   const captureCurrentPositions = useCallback(() => {
     if (gridContainerRef.current) {
@@ -129,6 +150,105 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
     setStatusFilter(value);
     setShowStatusDropdown(false);
   };
+
+  const captureProjectRects = useCallback(() => {
+    if (!gridContainerRef.current) return;
+    const items = gridContainerRef.current.querySelectorAll('[data-project-id]');
+    const rects = new Map<string, DOMRect>();
+    items.forEach((item) => {
+      const id = item.getAttribute('data-project-id');
+      if (id) {
+        rects.set(id, item.getBoundingClientRect());
+      }
+    });
+    projectRectsRef.current = rects;
+  }, []);
+
+  const handleSearch = useCallback(async () => {
+    if (isSearching || isAnimating) return;
+
+    const newSearchTerm = pendingSearchTerm.trim();
+    if (newSearchTerm === appliedSearchTerm) return;
+
+    setIsSearching(true);
+
+    captureProjectRects();
+    captureCurrentPositions();
+
+    const currentProjects = projects.filter(project => {
+      const matchesSearch =
+        project.title.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+        project.description.toLowerCase().includes(appliedSearchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    const nextProjects = projects.filter(project => {
+      const matchesSearch =
+        project.title.toLowerCase().includes(newSearchTerm.toLowerCase()) ||
+        project.description.toLowerCase().includes(newSearchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    const nextProjectIds = new Set(nextProjects.map(p => p.id));
+    const projectsToRemove = currentProjects.filter(p => !nextProjectIds.has(p.id));
+
+    if (projectsToRemove.length > 0) {
+      const allCurrentIds = new Set(currentProjects.map(p => p.id));
+      setHeatShakeIds(allCurrentIds);
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setHeatShakeIds(new Set());
+
+      const burningList: BurningProject[] = [];
+      projectsToRemove.forEach(project => {
+        const rect = projectRectsRef.current.get(project.id);
+        if (rect) {
+          burningList.push({ project, rect });
+        }
+      });
+
+      if (burningList.length > 0) {
+        setBurningProjects(burningList);
+        setExitingProjectIds(new Set(projectsToRemove.map(p => p.id)));
+
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    }
+
+    setAppliedSearchTerm(newSearchTerm);
+    setBurningProjects([]);
+    setExitingProjectIds(new Set());
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    if (projectsToRemove.length > 0) {
+      executeHuarongdaoReorderAnimation();
+    }
+
+    setIsSearching(false);
+  }, [
+    isSearching,
+    isAnimating,
+    pendingSearchTerm,
+    appliedSearchTerm,
+    projects,
+    statusFilter,
+    captureProjectRects,
+    captureCurrentPositions,
+    executeHuarongdaoReorderAnimation,
+  ]);
+
+  const handleBurnComplete = useCallback((projectId: string) => {
+    setBurningProjects(prev => prev.filter(bp => bp.project.id !== projectId));
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  }, [handleSearch]);
 
   const currentStatusLabel = statusOptions.find(opt => opt.value === statusFilter)?.label || '全部状态';
 
@@ -246,12 +366,24 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={pendingSearchTerm}
+                  onChange={(e) => setPendingSearchTerm(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="搜索项目..."
                   className="w-full pl-12 pr-4 py-3 backdrop-blur-sm bg-white/50 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all text-gray-700 placeholder-gray-400"
                 />
               </div>
+
+              <button
+                onClick={handleSearch}
+                disabled={isSearching || isAnimating}
+                className={`relative px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium shadow-[0_4px_16px_rgba(249,115,22,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] border border-orange-400/30 transition-all overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed search-button-sweep ${isSearching ? 'is-searching' : ''}`}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  搜索
+                </span>
+              </button>
 
               <div ref={statusDropdownRef} className="relative">
                 <button
@@ -291,21 +423,21 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
           {filteredProjects.length === 0 ? (
             <div className="w-full max-w-lg mx-auto rounded-3xl backdrop-blur-xl bg-white/60 border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-10 text-center">
               <div className="mx-auto mb-6 inline-flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/15 to-purple-500/10 border border-white/60">
-                {searchTerm || statusFilter !== 'all' ? (
+                {appliedSearchTerm || statusFilter !== 'all' ? (
                   <Search className="w-10 h-10 text-blue-500/70" />
                 ) : (
                   <Home className="w-10 h-10 text-blue-500/70" />
                 )}
               </div>
               <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 mb-3">
-                {searchTerm || statusFilter !== 'all' ? '未找到项目' : '还没有项目'}
+                {appliedSearchTerm || statusFilter !== 'all' ? '未找到项目' : '还没有项目'}
               </h3>
               <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-8">
-                {searchTerm || statusFilter !== 'all'
+                {appliedSearchTerm || statusFilter !== 'all'
                   ? '尝试调整搜索条件或筛选器'
                   : '前往主页开始创建你的第一个 AI 项目'}
               </p>
-              {projects.length === 0 && !searchTerm && statusFilter === 'all' && (
+              {projects.length === 0 && !appliedSearchTerm && statusFilter === 'all' && (
                 <button
                   onClick={onCreateNew}
                   className="relative inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-500/90 hover:bg-blue-600/90 text-white font-medium shadow-[0_4px_16px_rgba(59,130,246,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] border border-blue-400/30 transition-all overflow-hidden group"
@@ -328,6 +460,10 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
                   className={`huarongdao-item ${
                     deletingId === project.id
                       ? 'animate-huarongdao-disappear'
+                      : exitingProjectIds.has(project.id)
+                      ? 'animate-fire-burn-disappear'
+                      : heatShakeIds.has(project.id)
+                      ? 'animate-heat-shake'
                       : ''
                   }`}
                 >
@@ -342,6 +478,14 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
           )}
         </div>
       </div>
+
+      {burningProjects.map((bp) => (
+        <FireBurnOverlay
+          key={bp.project.id}
+          targetRect={bp.rect}
+          onComplete={() => handleBurnComplete(bp.project.id)}
+        />
+      ))}
     </div>
   );
 }
