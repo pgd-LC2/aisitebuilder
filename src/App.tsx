@@ -19,6 +19,7 @@ import { generateTitle } from './utils/titleGenerator';
 import { buildLogService } from './services/buildLogService';
 import { templateService } from './services/templateService';
 import { versionService } from './services/versionService';
+import { userProfileService } from './services/userProfileService';
 import { ProjectVersion } from './types/project';
 
 type ViewType = 'home' | 'projects' | 'building' | 'initializing' | 'intro';
@@ -201,7 +202,7 @@ function App() {
             <span>{user.email}</span>
             <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
               {userProfile?.avatar_url ? (
-                <img src={userProfile.avatar_url} alt="头像" className="w-full h-full object-cover" />
+                <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 <div className="flex items-center justify-center h-full text-white text-xs font-bold">
                   {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
@@ -300,7 +301,7 @@ function App() {
             <span>{user.email}</span>
             <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
               {userProfile?.avatar_url ? (
-                <img src={userProfile.avatar_url} alt="头像" className="w-full h-full object-cover" />
+                <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 <div className="flex items-center justify-center h-full text-white text-xs font-bold">
                   {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}

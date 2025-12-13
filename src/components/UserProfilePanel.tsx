@@ -131,11 +131,14 @@ export default function UserProfilePanel({
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(fileName);
+    const optimizedUrl = userProfileService.getOptimizedAvatarUrl(fileName, {
+      width: 200,
+      height: 200,
+      quality: 80,
+      resize: 'cover'
+    });
 
-    await userProfileService.updateProfile(userId, { avatar_url: publicUrl });
+    await userProfileService.updateProfile(userId, { avatar_url: optimizedUrl });
     setIsUploadingAvatar(false);
     onProfileUpdate?.();
   };
