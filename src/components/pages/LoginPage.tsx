@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
 
 type LoginTab = 'email' | 'username';
 
 interface LoginPageProps {
   onSwitchToSignUp: () => void;
+  onBack?: () => void;
 }
 
-export default function LoginPage({ onSwitchToSignUp }: LoginPageProps) {
+export default function LoginPage({ onSwitchToSignUp, onBack }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<LoginTab>('email');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -80,6 +81,15 @@ export default function LoginPage({ onSwitchToSignUp }: LoginPageProps) {
       </div>
 
       <div className="w-full max-w-md relative z-10">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 mb-4 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm font-medium">返回主页</span>
+          </button>
+        )}
         <div className="backdrop-blur-xl bg-white/70 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border border-white/50 p-8">
           <div className="flex gap-6 mb-8 border-b border-gray-200/50 pb-4">
             <button

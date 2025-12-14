@@ -187,13 +187,13 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'delete_file',
-      description: '删除指定文件。谨慎使用，仅在用户明确要求删除时调用。',
+      description: '删除指定文件或文件夹。支持递归删除文件夹及其所有内容。谨慎使用，仅在用户明确要求删除时调用。',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: '要删除的文件路径，相对于项目根目录'
+            description: '要删除的文件或文件夹路径，相对于项目根目录。如果是文件夹，将递归删除其中所有内容。'
           }
         },
         required: ['path']

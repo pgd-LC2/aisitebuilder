@@ -1,6 +1,6 @@
 import { FolderOpen, GitBranch } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useProject } from './hooks/useProject';
 import { useSettings } from './hooks/useSettings';
@@ -17,14 +17,17 @@ import { userProfileService } from './services/userProfileService';
 import { ProjectVersion } from './types/project';
 
 type ViewType = 'home' | 'projects' | 'building' | 'initializing' | 'intro';
+type AuthViewType = 'none' | 'login' | 'signup';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>('home');
-  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+  const [authView, setAuthView] = useState<AuthViewType>('none');
   const [showVersionManager, setShowVersionManager] = useState(false);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [initializingProjectTitle, setInitializingProjectTitle] = useState('');
   const [currentVersion, setCurrentVersion] = useState<ProjectVersion | null>(null);
+  // 保存待处理的 prompt，用于登录后自动触发 Build 流程
+  const [pendingBuildPrompt, setPendingBuildPrompt] = useState<string | null>(null);
   const { user, loading, signOut, userProfile, refreshUserProfile } = useAuth();
   const { createProject, currentProject, setCurrentProject, updateProjectStatus } = useProject();
   const { preloadNodeModules, setPreloadNodeModules } = useSettings();
@@ -67,7 +70,14 @@ function App() {
     refreshCurrentVersion();
   }, [currentProject, refreshCurrentVersion]);
 
-  const handleStartBuilding = async (prompt: string) => {
+  const handleStartBuilding = useCallback(async (prompt: string) => {
+    // 如果用户未登录，保存 prompt 并跳转到登录页
+    if (!user) {
+      setPendingBuildPrompt(prompt);
+      setAuthView('login');
+      return;
+    }
+
     try {
       const title = generateTitle(prompt);
       const { data, error } = await createProject(title, prompt);
@@ -103,7 +113,24 @@ function App() {
       console.error('创建项目出错:', err);
       alert('创建项目出错，请重试');
     }
-  };
+  }, [user, createProject, updateProjectStatus]);
+
+  // 使用 ref 存储 handleStartBuilding 的引用，避免 useEffect 依赖变化导致的循环
+  const handleStartBuildingRef = useRef(handleStartBuilding);
+  handleStartBuildingRef.current = handleStartBuilding;
+
+  // 登录成功后，如果有待处理的 prompt，自动触发 Build 流程
+  useEffect(() => {
+    if (user && pendingBuildPrompt) {
+      const prompt = pendingBuildPrompt;
+      setPendingBuildPrompt(null);
+      setAuthView('none');
+      // 使用 setTimeout 确保状态更新完成后再触发
+      setTimeout(() => {
+        handleStartBuildingRef.current(prompt);
+      }, 100);
+    }
+  }, [user, pendingBuildPrompt]);
 
   const handleProjectClick = (project: any) => {
     setCurrentProject(project);
@@ -126,11 +153,23 @@ function App() {
     );
   }
 
-  if (!user) {
+  // 未登录用户：只有当 authView 不是 'none' 时才显示登录/注册页
+  // 否则显示主页，让用户可以先浏览
+  if (!user && authView !== 'none') {
     if (authView === 'login') {
-      return <LoginPage onSwitchToSignUp={() => setAuthView('signup')} />;
+      return (
+        <LoginPage 
+          onSwitchToSignUp={() => setAuthView('signup')} 
+          onBack={() => setAuthView('none')}
+        />
+      );
     }
-    return <SignUpPage onSwitchToLogin={() => setAuthView('login')} />;
+    return (
+      <SignUpPage 
+        onSwitchToLogin={() => setAuthView('login')} 
+        onBack={() => setAuthView('none')}
+      />
+    );
   }
 
   if (currentView === 'initializing') {
@@ -168,7 +207,13 @@ function App() {
               主页
             </motion.button>
             <motion.button
-              onClick={() => setCurrentView('projects')}
+              onClick={() => {
+                if (user) {
+                  setCurrentView('projects');
+                } else {
+                  setAuthView('login');
+                }
+              }}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               transition={buttonSpring}
@@ -185,25 +230,37 @@ function App() {
         </div>
 
         <div className="flex items-center gap-4">
-          <motion.button
-            onClick={() => setShowProfilePanel(true)}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            transition={buttonSpring}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
-            title="个人信息"
-          >
-            <span>{user.email}</span>
-            <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
-              {userProfile?.avatar_url ? (
-                <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex items-center justify-center h-full text-white text-xs font-bold">
-                  {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
-                </div>
-              )}
-            </div>
-          </motion.button>
+          {user ? (
+            <motion.button
+              onClick={() => setShowProfilePanel(true)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={buttonSpring}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
+              title="个人信息"
+            >
+              <span>{user.email}</span>
+              <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
+                {userProfile?.avatar_url ? (
+                  <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-white text-xs font-bold">
+                    {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={() => setAuthView('login')}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={buttonSpring}
+              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+            >
+              登录
+            </motion.button>
+          )}
         </div>
       </header>
 
@@ -293,13 +350,13 @@ function App() {
             className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
             title="个人信息"
           >
-            <span>{user.email}</span>
+            <span>{user?.email}</span>
             <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
               {userProfile?.avatar_url ? (
                 <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 <div className="flex items-center justify-center h-full text-white text-xs font-bold">
-                  {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
+                  {(userProfile?.display_name || userProfile?.username || user?.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
@@ -342,17 +399,19 @@ function App() {
       <AnimatePresence mode="wait">
         {currentView !== 'building' ? homeView : buildingView}
       </AnimatePresence>
-      <UserProfilePanel
-        open={showProfilePanel}
-        onClose={() => setShowProfilePanel(false)}
-        email={user.email ?? ''}
-        userId={user.id}
-        userProfile={userProfile}
-        preloadNodeModules={preloadNodeModules}
-        onTogglePreload={setPreloadNodeModules}
-        onProfileUpdate={refreshUserProfile}
-        onSignOut={signOut}
-      />
+      {user && (
+        <UserProfilePanel
+          open={showProfilePanel}
+          onClose={() => setShowProfilePanel(false)}
+          email={user.email ?? ''}
+          userId={user.id}
+          userProfile={userProfile}
+          preloadNodeModules={preloadNodeModules}
+          onTogglePreload={setPreloadNodeModules}
+          onProfileUpdate={refreshUserProfile}
+          onSignOut={signOut}
+        />
+      )}
       <AnimatePresence>
         {showVersionManager && currentProject && (
           <VersionManagerPortal

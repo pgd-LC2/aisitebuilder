@@ -278,6 +278,9 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   const handleImplementClick = useCallback(async (clickedPlanSummary: typeof planSummary) => {
     if (!projectId) return;
     
+    // 立即切换到 Build 模式，确保 UI 状态一致
+    enterBuildMode(clickedPlanSummary ?? undefined);
+    
     const implementMessage = "Great, let's implement this plan together!";
     console.log('[ChatPanel] 用户点击开始实现，发送消息:', implementMessage, '规划摘要:', clickedPlanSummary);
     
@@ -355,7 +358,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         }
       }
     }
-  }, [projectId, appendMessage, scrollToMessageTop, refreshMessages, projectFilesContext]);
+  }, [projectId, appendMessage, scrollToMessageTop, refreshMessages, projectFilesContext, enterBuildMode]);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
