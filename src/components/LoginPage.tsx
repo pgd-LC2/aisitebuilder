@@ -191,7 +191,7 @@ export default function LoginPage({ onSwitchToSignUp }: LoginPageProps) {
               className="relative w-full py-4 rounded-2xl backdrop-blur-sm bg-blue-500/90 hover:bg-blue-600/90 disabled:bg-gray-300/80 disabled:cursor-not-allowed text-white font-medium shadow-[0_4px_16px_rgba(59,130,246,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] border border-blue-400/30 transition-all duration-200 overflow-hidden group"
             >
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-500" />
-              <span className="relative z-10">{loading ? '登录中...' : '登录/注册'}</span>
+              <span className="relative z-10">{loading ? '登录中...' : '登录'}</span>
             </button>
           </form>
 
