@@ -1,6 +1,4 @@
-import { Send, Lightbulb, X } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useProject } from '../../hooks/useProject';
 import { useWorkflow } from '../../hooks/useWorkflow';
 import { buildLogService } from '../../services/buildLogService';
@@ -25,7 +23,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     mode, 
     isPlanningMode, 
     isBuildMode, 
-    exitToDefaultMode,
     enterPlanningMode,
     enterBuildMode,
     planSummary
@@ -490,49 +487,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
             <p className="text-xs text-yellow-700">连接中，请稍候...</p>
           </div>
         )}
-        <AnimatePresence>
-          {isPlanningMode && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-4 h-4 text-amber-600" />
-                <span className="text-xs text-amber-700 font-medium">规划模式</span>
-                <span className="text-xs text-amber-600">AI 将帮助你澄清需求和制定方案</span>
-              </div>
-              <button
-                onClick={exitToDefaultMode}
-                className="p-1 hover:bg-amber-100 rounded transition-colors"
-                title="退出规划模式"
-              >
-                <X className="w-3.5 h-3.5 text-amber-600" />
-              </button>
-            </motion.div>
-          )}
-          {isBuildMode && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <Send className="w-4 h-4 text-green-600" />
-                <span className="text-xs text-green-700 font-medium">构建模式</span>
-              </div>
-              <button
-                onClick={exitToDefaultMode}
-                className="p-1 hover:bg-green-100 rounded transition-colors"
-                title="退出构建模式"
-              >
-                <X className="w-3.5 h-3.5 text-green-600" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
         <ChatInput
           value={input}
           onChange={setInput}
