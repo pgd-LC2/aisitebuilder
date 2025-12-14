@@ -98,6 +98,9 @@ function App() {
           await buildLogService.addBuildLog(data.id, 'success', '项目准备就绪，可以开始对话');
           await updateProjectStatus(data.id, 'completed');
           setCurrentView('building');
+          
+          // Fire-and-forget: 补充模板池，确保下次创建项目时有预创建模板可用
+          templateService.ensureTemplatePool();
         } else {
           await buildLogService.addBuildLog(data.id, 'error', '初始化项目失败');
           await updateProjectStatus(data.id, 'failed');
