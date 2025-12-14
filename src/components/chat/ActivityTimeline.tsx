@@ -29,7 +29,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from 'lucide-react';
-import { useTimelineEvents } from '../realtime';
+import { useTimelineEvents } from '../../realtime';
 import type {
   AgentPhaseEvent,
   ToolCallEvent,
@@ -37,7 +37,7 @@ import type {
   SelfRepairEvent,
   ErrorEvent,
   AgentPhase,
-} from '../realtime/types';
+} from '../../realtime/types';
 
 interface ActivityTimelineProps {
   projectId: string;

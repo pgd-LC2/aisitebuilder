@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Upload, FilePlus, X, Download, Trash2, Search } from 'lucide-react';
-import { ProjectFile, FileUploadProgress, FileCategory, FileTreeNode } from '../types/project';
-import { fileService } from '../services/fileService';
-import FileUploader from './FileUploader';
+import { ProjectFile, FileUploadProgress, FileCategory, FileTreeNode } from '../../types/project';
+import { fileService } from '../../services/fileService';
+import { FileUploader } from '../common';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, FlaskConical, Bell, Shield, Palette, Camera, Check, Loader2, User, LogOut } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { userProfileService, UserProfile } from '../services/userProfileService';
+import { supabase } from '../../lib/supabase';
+import { userProfileService, UserProfile } from '../../services/userProfileService';
 
 interface UserProfilePanelProps {
   open: boolean;

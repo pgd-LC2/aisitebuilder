@@ -1,9 +1,9 @@
 import { X, GitBranch, RotateCcw, Trash2, Clock, ChevronRight, Folder, FileText, Plus, Code } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
-import { ProjectVersion, ProjectFile } from '../types/project';
-import { versionService } from '../services/versionService';
-import { fileService } from '../services/fileService';
+import { ProjectVersion, ProjectFile } from '../../types/project';
+import { versionService } from '../../services/versionService';
+import { fileService } from '../../services/fileService';
 import CodeViewer from './CodeViewer';
 
 interface VersionManagerProps {

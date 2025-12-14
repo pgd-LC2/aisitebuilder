@@ -1,17 +1,17 @@
 import { Monitor, Smartphone, Tablet, Eye, FolderOpen, RefreshCcw, AlertTriangle, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useProject } from '../hooks/useProject';
-import { fileService } from '../services/fileService';
+import { useProject } from '../../hooks/useProject';
+import { fileService } from '../../services/fileService';
 import FileManagerPanel from './FileManagerPanel';
-import type { ProjectFile } from '../types/project';
+import type { ProjectFile } from '../../types/project';
 import {
   clearNodeModulesCache,
   loadNodeModulesSnapshot,
   saveNodeModulesSnapshot
-} from '../lib/nodeModulesCache';
-import { useSettings } from '../hooks/useSettings';
-import { webContainerManager } from '../lib/webContainerManager';
+} from '../../lib/nodeModulesCache';
+import { useSettings } from '../../hooks/useSettings';
+import { webContainerManager } from '../../lib/webContainerManager';
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile';
 type PanelMode = 'preview' | 'files';

@@ -11,7 +11,7 @@ import {
   drawParticle,
   calculateErosionMask,
   getFireEdgeColor,
-} from '../utils/fireBurnAnimation';
+} from '../../utils/fireBurnAnimation';
 
 interface FireBurnOverlayProps {
   targetRect: DOMRect;

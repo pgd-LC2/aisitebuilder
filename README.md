@@ -7,28 +7,54 @@
 ```
 aisitebuilder/
 ├── src/                              # 前端 React 应用
-│   ├── components/                   # UI 组件
-│   │   ├── ActivityTimeline.tsx      # AI Agent 活动时间线
-│   │   ├── BuildLogPanel.tsx         # 构建日志面板
-│   │   ├── ChatInput.tsx             # 聊天输入组件
-│   │   ├── ChatPanel.tsx             # AI 对话面板
-│   │   ├── CodeViewer.tsx            # 代码查看器
-│   │   ├── FileManagerPanel.tsx      # 文件管理面板
-│   │   ├── FilePreview.tsx           # 文件预览组件
-│   │   ├── FileUploader.tsx          # 文件上传组件
-│   │   ├── HomePage.tsx              # 首页
-│   │   ├── ImplementationTrigger.tsx # 实现触发器
-│   │   ├── InitializingPage.tsx      # 初始化页面
-│   │   ├── LoginPage.tsx             # 登录页面
-│   │   ├── ParticleField.tsx         # 粒子动画背景
-│   │   ├── PreviewPanel.tsx          # WebContainer 实时预览
-│   │   ├── ProjectCard.tsx           # 项目卡片
-│   │   ├── ProjectsPage.tsx          # 项目列表页
-│   │   ├── QuickCommands.tsx         # 快捷命令
-│   │   ├── SignUpPage.tsx            # 注册页面
-│   │   ├── StatusIndicator.tsx       # 状态指示器
-│   │   ├── UserProfilePanel.tsx      # 用户设置面板
-│   │   └── VersionManager.tsx        # 版本管理器
+│   ├── components/                   # UI 组件（按功能分类）
+│   │   ├── index.ts                  # 统一导出入口
+│   │   │
+│   │   ├── pages/                    # 页面级组件
+│   │   │   ├── index.ts              # 页面组件导出
+│   │   │   ├── HomePage.tsx          # 首页
+│   │   │   ├── LoginPage.tsx         # 登录页面
+│   │   │   ├── SignUpPage.tsx        # 注册页面
+│   │   │   ├── ProjectsPage.tsx      # 项目列表页
+│   │   │   ├── InitializingPage.tsx  # 初始化页面
+│   │   │   └── IntroPage.tsx         # 介绍页面
+│   │   │
+│   │   ├── chat/                     # 聊天相关组件
+│   │   │   ├── index.ts              # 聊天组件导出
+│   │   │   ├── ChatPanel.tsx         # AI 对话面板
+│   │   │   ├── ChatInput.tsx         # 聊天输入组件
+│   │   │   ├── BuildLogPanel.tsx     # 构建日志面板
+│   │   │   ├── ActivityTimeline.tsx  # AI Agent 活动时间线
+│   │   │   ├── ImplementationTrigger.tsx # 实现触发器
+│   │   │   └── QuickCommands.tsx     # 快捷命令
+│   │   │
+│   │   ├── editor/                   # 编辑器相关组件
+│   │   │   ├── index.ts              # 编辑器组件导出
+│   │   │   ├── PreviewPanel.tsx      # WebContainer 实时预览
+│   │   │   ├── FileManagerPanel.tsx  # 文件管理面板
+│   │   │   ├── CodeViewer.tsx        # 代码查看器
+│   │   │   ├── FilePreview.tsx       # 文件预览组件
+│   │   │   └── VersionManager.tsx    # 版本管理器
+│   │   │
+│   │   ├── project/                  # 项目相关组件
+│   │   │   ├── index.ts              # 项目组件导出
+│   │   │   └── ProjectCard.tsx       # 项目卡片
+│   │   │
+│   │   ├── user/                     # 用户相关组件
+│   │   │   ├── index.ts              # 用户组件导出
+│   │   │   └── UserProfilePanel.tsx  # 用户设置面板
+│   │   │
+│   │   ├── common/                   # 通用组件
+│   │   │   ├── index.ts              # 通用组件导出
+│   │   │   ├── StatusIndicator.tsx   # 状态指示器
+│   │   │   └── FileUploader.tsx      # 文件上传组件
+│   │   │
+│   │   └── visual/                   # 视觉效果组件
+│   │       ├── index.ts              # 视觉组件导出
+│   │       ├── FloatingBackground.tsx # 漂浮背景
+│   │       ├── floatingBackgroundPresets.ts # 背景预设
+│   │       ├── ParticleField.tsx     # 粒子动画背景
+│   │       └── FireBurnOverlay.tsx   # 火焰燃烧效果
 │   │
 │   ├── contexts/                     # React Context 状态管理
 │   │   ├── AuthContext.tsx           # 认证状态与会话管理

@@ -1,6 +1,6 @@
 import { Upload, X, File, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState, useRef } from 'react';
-import { FileUploadProgress } from '../types/project';
+import { FileUploadProgress } from '../../types/project';
 
 interface FileUploaderProps {
   onFilesSelected: (files: File[]) => void;
