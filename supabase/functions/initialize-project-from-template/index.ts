@@ -132,99 +132,6 @@ async function markTemplateFailed(
   }
 }
 
-// --- 需要替换占位符的文件列表 ---
-const FILES_WITH_PLACEHOLDERS = [
-  'index.html',
-  'src/App.tsx',
-  'README.md',
-  'package.json'
-];
-
-// --- 替换模板中的占位符 ---
-function replaceTemplatePlaceholders(
-  codeSnapshot: Record<string, string>,
-  title: string,
-  description: string
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  
-  for (const [path, content] of Object.entries(codeSnapshot)) {
-    let newContent = content;
-    
-    // 替换占位符
-    newContent = newContent.replace(/\{\{PROJECT_TITLE\}\}/g, title);
-    newContent = newContent.replace(/\{\{PROJECT_DESCRIPTION\}\}/g, description || '');
-    
-    // 对于 package.json，需要特殊处理 name 字段
-    if (path === 'package.json') {
-      try {
-        const pkg = JSON.parse(newContent);
-        pkg.name = title.toLowerCase().replace(/\s+/g, '-');
-        newContent = JSON.stringify(pkg, null, 2);
-      } catch {
-        // 如果解析失败，保持原样
-      }
-    }
-    
-    result[path] = newContent;
-  }
-  
-  return result;
-}
-
-// --- 重新上传包含占位符的文件（替换后的内容） ---
-async function uploadReplacedFiles(
-  supabase: ReturnType<typeof createClient>,
-  finalCodeSnapshot: Record<string, string>,
-  targetPrefix: string,
-  fileManifest: FileManifestItem[]
-): Promise<{ updatedCount: number; errorCount: number }> {
-  let updatedCount = 0;
-  let errorCount = 0;
-  
-  // 创建文件清单的映射，用于获取 mime_type
-  const manifestMap = new Map<string, FileManifestItem>();
-  for (const item of fileManifest) {
-    manifestMap.set(item.relative_path, item);
-  }
-  
-  for (const filePath of FILES_WITH_PLACEHOLDERS) {
-    const content = finalCodeSnapshot[filePath];
-    if (!content) continue;
-    
-    const manifestItem = manifestMap.get(filePath);
-    const mimeType = manifestItem?.mime_type || 'text/plain';
-    
-    try {
-      const storagePath = `${targetPrefix}/${filePath}`.replace(/\/+/g, '/');
-      const encoder = new TextEncoder();
-      const contentBytes = encoder.encode(content);
-      
-      // 使用 upsert 覆盖已复制的文件
-      const { error: uploadError } = await supabase.storage
-        .from(PROJECT_BUCKET)
-        .upload(storagePath, contentBytes, {
-          contentType: mimeType,
-          cacheControl: '3600',
-          upsert: true
-        });
-      
-      if (uploadError) {
-        console.error(`重新上传文件失败: ${filePath}`, uploadError);
-        errorCount++;
-        continue;
-      }
-      
-      updatedCount++;
-    } catch (err) {
-      console.error(`重新上传文件出错 ${filePath}:`, err);
-      errorCount++;
-    }
-  }
-  
-  return { updatedCount, errorCount };
-}
-
 // --- 并发复制文件 ---
 async function copyFilesWithConcurrency(
   supabase: ReturnType<typeof createClient>,
@@ -498,34 +405,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 替换模板中的占位符生成最终的代码快照
-    const finalCodeSnapshot = replaceTemplatePlaceholders(
-      template.code_snapshot,
-      title,
-      description || ''
-    );
-
-    // 重新上传包含占位符的文件（替换后的内容）
-    // 这确保 Storage 中的文件内容与 code_snapshot 一致
-    const { updatedCount, errorCount: uploadErrorCount } = await uploadReplacedFiles(
-      supabase,
-      finalCodeSnapshot,
-      targetPrefix,
-      template.file_manifest
-    );
-
-    if (updatedCount > 0) {
-      await writeBuildLog(supabase, projectId, 'info', `已更新 ${updatedCount} 个文件的项目信息`);
-    }
-    if (uploadErrorCount > 0) {
-      console.warn(`重新上传文件时有 ${uploadErrorCount} 个文件失败`);
-    }
-
-    // 更新版本记录
+    // 更新版本记录（直接使用模板的 code_snapshot）
     const { error: updateError } = await supabase
       .from('project_versions')
       .update({
-        code_snapshot: finalCodeSnapshot,
+        code_snapshot: template.code_snapshot,
         storage_path: targetPrefix,
         total_files: successCount,
         total_size: template.total_size
