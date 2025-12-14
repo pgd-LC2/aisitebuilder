@@ -1,17 +1,17 @@
 import { Send, Lightbulb, X } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useProject } from '../hooks/useProject';
-import { useWorkflow } from '../hooks/useWorkflow';
-import { buildLogService } from '../services/buildLogService';
-import { messageService } from '../services/messageService';
-import { aiTaskService } from '../services/aiTaskService';
-import { ProjectFilesContext, BuildLog } from '../types/project';
-import { useAgentEvents } from '../realtime';
+import { useProject } from '../../hooks/useProject';
+import { useWorkflow } from '../../hooks/useWorkflow';
+import { buildLogService } from '../../services/buildLogService';
+import { messageService } from '../../services/messageService';
+import { aiTaskService } from '../../services/aiTaskService';
+import { ProjectFilesContext, BuildLog } from '../../types/project';
+import { useAgentEvents } from '../../realtime';
 import BuildLogPanel from './BuildLogPanel';
 import ActivityTimeline from './ActivityTimeline';
 import ImplementationTrigger from './ImplementationTrigger';
-import { parseImplementReadyMarker } from '../utils/implementReadyParser';
+import { parseImplementReadyMarker } from '../../utils/implementReadyParser';
 import ChatInput, { InputMode } from './ChatInput';
 
 interface ChatPanelProps {

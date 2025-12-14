@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
 
 type LoginTab = 'email' | 'username';

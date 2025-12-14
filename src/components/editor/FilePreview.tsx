@@ -1,7 +1,7 @@
 import { X, Download, Share2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { ProjectFile } from '../types/project';
-import { fileService } from '../services/fileService';
+import { ProjectFile } from '../../types/project';
+import { fileService } from '../../services/fileService';
 
 interface FilePreviewProps {
   file: ProjectFile;

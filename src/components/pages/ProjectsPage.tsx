@@ -1,16 +1,16 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle, ChevronDown } from 'lucide-react';
-import { useProject } from '../hooks/useProject';
-import ProjectCard from './ProjectCard';
-import FloatingBackground from './FloatingBackground';
-import { defaultProjectsPageBlobs } from './floatingBackgroundPresets';
-import FireBurnOverlay from './FireBurnOverlay';
+import { useProject } from '../../hooks/useProject';
+import { ProjectCard } from '../project';
+import { FloatingBackground, floatingBackgroundPresets, FireBurnOverlay } from '../visual';
 import {
   capturePositions,
   applyFlipAnimation,
   DEFAULT_ANIMATION_CONFIG,
-} from '../utils/huarongdaoAnimation';
-import { Project } from '../types/project';
+} from '../../utils/huarongdaoAnimation';
+import { Project } from '../../types/project';
+
+const { defaultProjectsPageBlobs } = floatingBackgroundPresets;
 
 interface ProjectsPageProps {
   onCreateNew: () => void;

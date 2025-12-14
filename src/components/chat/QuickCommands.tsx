@@ -1,8 +1,8 @@
 import { Ban, PlusSquare, Star, MoreHorizontal, Search, Hand, Sparkles, GitBranch, Accessibility } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { CommandIconType, QuickCommand, CommandCategory } from '../types/quickCommands';
-import { defaultQuickCommands } from '../data/quickCommands';
+import type { CommandIconType, QuickCommand, CommandCategory } from '../../types/quickCommands';
+import { defaultQuickCommands } from '../../data/quickCommands';
 
 export type { CommandIconType, QuickCommand, CommandCategory };
 

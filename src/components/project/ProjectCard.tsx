@@ -1,5 +1,5 @@
 import { Clock, MoreVertical, Trash2 } from 'lucide-react';
-import { Project } from '../types/project';
+import { Project } from '../../types/project';
 import { useState, useRef, useEffect } from 'react';
 
 interface ProjectCardProps {

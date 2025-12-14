@@ -1,8 +1,8 @@
 import { Rocket, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useWorkflow } from '../hooks/useWorkflow';
-import { PlanSummary } from '../types/project';
-import { parseImplementReadyMarker } from '../utils/implementReadyParser';
+import { useWorkflow } from '../../hooks/useWorkflow';
+import { PlanSummary } from '../../types/project';
+import { parseImplementReadyMarker } from '../../utils/implementReadyParser';
 
 interface ImplementationTriggerProps {
   planSummary: PlanSummary;
