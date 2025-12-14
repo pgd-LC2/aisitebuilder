@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, memo } from 'react';
 
 export interface FloatingBlob {
   id: string;
@@ -22,107 +22,110 @@ interface FloatingBackgroundProps {
 }
 
 interface BlobAnimationParams {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  x3: number;
-  y3: number;
-  x4: number;
-  y4: number;
-  scale: number;
-  rotate: number;
-  floatDuration: number;
-  floatDelay: number;
+  driftX: number;
+  driftY: number;
+  scaleStart: number;
+  scaleEnd: number;
+  rotateStart: number;
+  rotateEnd: number;
+  driftDuration: number;
   breatheDuration: number;
-  breatheDelay: number;
   opacityMin: number;
   opacityMax: number;
+  blurMin: number;
+  blurMax: number;
 }
 
-function generateRandomFloatParams(): BlobAnimationParams {
+const blurValues: Record<FloatingBlob['blur'], { min: number; max: number }> = {
+  'blur-xl': { min: 24, max: 28 },
+  'blur-2xl': { min: 40, max: 48 },
+  'blur-3xl': { min: 64, max: 72 },
+};
+
+function generateDriftParams(blob: FloatingBlob): BlobAnimationParams {
   const randomRange = (min: number, max: number) => 
     Math.floor(Math.random() * (max - min + 1)) + min;
+  const randomFloat = (min: number, max: number) =>
+    min + Math.random() * (max - min);
+  
+  const baseScale = blob.baseScale ?? 1;
+  const baseRotate = blob.baseRotate ?? 0;
+  const blurRange = blurValues[blob.blur];
   
   return {
-    x1: randomRange(-15, 15),
-    y1: randomRange(-15, 15),
-    x2: randomRange(20, 50),
-    y2: randomRange(-40, -15),
-    x3: randomRange(-40, -10),
-    y3: randomRange(10, 35),
-    x4: randomRange(15, 45),
-    y4: randomRange(-25, 5),
-    scale: 1 + (Math.random() * 0.3 - 0.15),
-    rotate: randomRange(-15, 15),
-    floatDuration: randomRange(25, 45),
-    floatDelay: randomRange(0, 10),
-    breatheDuration: randomRange(6, 12),
-    breatheDelay: randomRange(0, 5),
-    opacityMin: 0.25 + Math.random() * 0.15,
-    opacityMax: 0.45 + Math.random() * 0.2,
+    driftX: randomRange(40, 80) * (Math.random() > 0.5 ? 1 : -1),
+    driftY: randomRange(30, 60) * (Math.random() > 0.5 ? 1 : -1),
+    scaleStart: baseScale,
+    scaleEnd: baseScale * randomFloat(1.01, 1.04),
+    rotateStart: baseRotate,
+    rotateEnd: baseRotate + randomRange(3, 8) * (Math.random() > 0.5 ? 1 : -1),
+    driftDuration: randomRange(35, 55),
+    breatheDuration: randomRange(8, 14),
+    opacityMin: (0.3 + Math.random() * 0.15) * blob.baseOpacity,
+    opacityMax: (0.5 + Math.random() * 0.2) * blob.baseOpacity,
+    blurMin: blurRange.min,
+    blurMax: blurRange.max,
   };
 }
 
-function createBlobStyle(blob: FloatingBlob, params: BlobAnimationParams): React.CSSProperties {
+function createBlobStyle(params: BlobAnimationParams): React.CSSProperties {
   return {
-    '--float-x1': `${params.x1}px`,
-    '--float-y1': `${params.y1}px`,
-    '--float-x2': `${params.x2}px`,
-    '--float-y2': `${params.y2}px`,
-    '--float-x3': `${params.x3}px`,
-    '--float-y3': `${params.y3}px`,
-    '--float-x4': `${params.x4}px`,
-    '--float-y4': `${params.y4}px`,
-    '--float-scale': blob.baseScale ?? params.scale,
-    '--float-rotate': `${blob.baseRotate ?? params.rotate}deg`,
-    '--float-duration': `${params.floatDuration}s`,
-    '--float-delay': `${params.floatDelay}s`,
+    '--drift-x': `${params.driftX}px`,
+    '--drift-y': `${params.driftY}px`,
+    '--drift-scale-start': params.scaleStart,
+    '--drift-scale-end': params.scaleEnd,
+    '--drift-rotate-start': `${params.rotateStart}deg`,
+    '--drift-rotate-end': `${params.rotateEnd}deg`,
+    '--drift-duration': `${params.driftDuration}s`,
     '--breathe-duration': `${params.breatheDuration}s`,
-    '--breathe-delay': `${params.breatheDelay}s`,
-    '--breathe-opacity-min': params.opacityMin * blob.baseOpacity,
-    '--breathe-opacity-max': params.opacityMax * blob.baseOpacity,
+    '--breathe-opacity-min': params.opacityMin,
+    '--breathe-opacity-max': params.opacityMax,
+    '--blur-min': `${params.blurMin}px`,
+    '--blur-max': `${params.blurMax}px`,
   } as React.CSSProperties;
 }
 
-export default function FloatingBackground({ blobs, className = '' }: FloatingBackgroundProps) {
-  const paramsMapRef = useRef<Map<string, BlobAnimationParams>>(new Map());
+interface BlobItemProps {
+  blob: FloatingBlob;
+}
 
-  const getOrCreateParams = (blobId: string): BlobAnimationParams => {
-    const existingParams = paramsMapRef.current.get(blobId);
-    if (existingParams) {
-      return existingParams;
-    }
-    const newParams = generateRandomFloatParams();
-    paramsMapRef.current.set(blobId, newParams);
-    return newParams;
-  };
+const BlobItem = memo(function BlobItem({ blob }: BlobItemProps) {
+  const animationStyle = useMemo(() => {
+    const params = generateDriftParams(blob);
+    return createBlobStyle(params);
+  }, [blob]);
+
+  const positionStyle = useMemo(() => ({
+    ...blob.position,
+    width: blob.size,
+    height: blob.size,
+  }), [blob]);
 
   return (
+    <div
+      className="absolute asb-floating-blob"
+      style={{
+        ...positionStyle,
+        ...animationStyle,
+      }}
+    >
+      <img
+        src={blob.src}
+        alt=""
+        className="w-full h-full object-cover"
+      />
+    </div>
+  );
+});
+
+function FloatingBackground({ blobs, className = '' }: FloatingBackgroundProps) {
+  return (
     <div className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`}>
-      {blobs.map((blob) => {
-        const params = getOrCreateParams(blob.id);
-        const style = createBlobStyle(blob, params);
-        
-        return (
-          <div
-            key={blob.id}
-            className="absolute asb-floating-blob"
-            style={{
-              ...blob.position,
-              width: blob.size,
-              height: blob.size,
-              ...style,
-            }}
-          >
-            <img
-              src={blob.src}
-              alt=""
-              className={`w-full h-full object-cover ${blob.blur}`}
-            />
-          </div>
-        );
-      })}
+      {blobs.map((blob) => (
+        <BlobItem key={blob.id} blob={blob} />
+      ))}
     </div>
   );
 }
+
+export default memo(FloatingBackground);
