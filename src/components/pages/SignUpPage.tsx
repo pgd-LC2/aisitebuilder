@@ -1,14 +1,15 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { UserPlus, Mail, Lock, AlertCircle, CheckCircle, User, Camera } from 'lucide-react';
+import { UserPlus, Mail, Lock, AlertCircle, CheckCircle, User, Camera, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { userProfileService } from '../../services/userProfileService';
 
 interface SignUpPageProps {
   onSwitchToLogin: () => void;
+  onBack?: () => void;
 }
 
-export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
+export default function SignUpPage({ onSwitchToLogin, onBack }: SignUpPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -229,6 +230,15 @@ export default function SignUpPage({ onSwitchToLogin }: SignUpPageProps) {
       </div>
 
       <div className="w-full max-w-md relative z-10">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 mb-4 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm font-medium">返回主页</span>
+          </button>
+        )}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full backdrop-blur-md bg-blue-500/80 border border-blue-400/50 shadow-[0_8px_32px_rgba(59,130,246,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] mb-4">
             <UserPlus className="w-8 h-8 text-white" />

@@ -185,41 +185,152 @@ export async function handleWriteFile(
   }
 }
 
-// 删除文件
+// 递归列出目录下所有文件
+async function listAllFilesRecursively(
+  ctx: ToolContext,
+  dirPath: string
+): Promise<string[]> {
+  const allFiles: string[] = [];
+  
+  const { data: items, error } = await ctx.supabase.storage
+    .from(ctx.bucket)
+    .list(dirPath, {
+      limit: 1000,
+      sortBy: { column: 'name', order: 'asc' }
+    });
+  
+  if (error || !items) {
+    return allFiles;
+  }
+  
+  for (const item of items) {
+    const itemPath = `${dirPath}/${item.name}`.replace(/\/+/g, '/');
+    if (item.id) {
+      // 是文件
+      allFiles.push(itemPath);
+    } else {
+      // 是目录，递归列出
+      const subFiles = await listAllFilesRecursively(ctx, itemPath);
+      allFiles.push(...subFiles);
+    }
+  }
+  
+  return allFiles;
+}
+
+// 检查路径是文件还是目录
+async function isDirectory(
+  ctx: ToolContext,
+  path: string
+): Promise<boolean> {
+  // 尝试列出该路径下的内容，如果能列出内容则是目录
+  const { data: items, error } = await ctx.supabase.storage
+    .from(ctx.bucket)
+    .list(path, { limit: 1 });
+  
+  // 如果没有错误且有内容，说明是目录
+  if (!error && items && items.length > 0) {
+    return true;
+  }
+  
+  // 尝试下载该路径，如果能下载则是文件
+  const { data: fileData } = await ctx.supabase.storage
+    .from(ctx.bucket)
+    .download(path);
+  
+  // 如果能下载到数据，说明是文件
+  if (fileData) {
+    return false;
+  }
+  
+  // 默认当作文件处理
+  return false;
+}
+
+// 删除文件或文件夹（支持递归删除）
 export async function handleDeleteFile(
   ctx: ToolContext, 
   args: { path: string }
 ): Promise<FileOperationResult> {
   try {
     const fullPath = `${ctx.basePath}/${args.path}`.replace(/\/+/g, '/');
-    const fileName = args.path.split('/').pop() || 'unnamed';
+    const pathName = args.path.split('/').pop() || 'unnamed';
     
-    const { error: deleteError } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .remove([fullPath]);
+    // 检查是否是目录
+    const isDir = await isDirectory(ctx, fullPath);
     
-    if (deleteError) {
-      return { success: false, error: `删除文件失败: ${deleteError.message}` };
+    if (isDir) {
+      // 递归删除目录
+      const allFiles = await listAllFilesRecursively(ctx, fullPath);
+      
+      if (allFiles.length === 0) {
+        // 空目录，直接返回成功
+        await logFileEvent(
+          ctx.supabase,
+          ctx.projectId,
+          args.path,
+          'delete',
+          `删除空目录: ${pathName}`
+        );
+        return { success: true };
+      }
+      
+      // 批量删除所有文件
+      const { error: deleteError } = await ctx.supabase.storage
+        .from(ctx.bucket)
+        .remove(allFiles);
+      
+      if (deleteError) {
+        return { success: false, error: `删除目录失败: ${deleteError.message}` };
+      }
+      
+      // 删除数据库中的文件记录
+      for (const filePath of allFiles) {
+        await ctx.supabase
+          .from('project_files')
+          .delete()
+          .eq('project_id', ctx.projectId)
+          .eq('file_path', filePath);
+      }
+      
+      await logFileEvent(
+        ctx.supabase,
+        ctx.projectId,
+        args.path,
+        'delete',
+        `递归删除目录: ${pathName} (共 ${allFiles.length} 个文件)`
+      );
+      
+      return { success: true };
+    } else {
+      // 删除单个文件
+      const { error: deleteError } = await ctx.supabase.storage
+        .from(ctx.bucket)
+        .remove([fullPath]);
+      
+      if (deleteError) {
+        return { success: false, error: `删除文件失败: ${deleteError.message}` };
+      }
+      
+      await ctx.supabase
+        .from('project_files')
+        .delete()
+        .eq('project_id', ctx.projectId)
+        .eq('file_path', fullPath);
+      
+      await logFileEvent(
+        ctx.supabase,
+        ctx.projectId,
+        args.path,
+        'delete',
+        `删除文件: ${pathName}`
+      );
+      
+      return { success: true };
     }
-    
-    await ctx.supabase
-      .from('project_files')
-      .delete()
-      .eq('project_id', ctx.projectId)
-      .eq('file_path', fullPath);
-    
-    await logFileEvent(
-      ctx.supabase,
-      ctx.projectId,
-      args.path,
-      'delete',
-      `删除文件: ${fileName}`
-    );
-    
-    return { success: true };
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    return { success: false, error: `删除文件异常: ${errorMessage}` };
+    return { success: false, error: `删除文件/目录异常: ${errorMessage}` };
   }
 }
 
