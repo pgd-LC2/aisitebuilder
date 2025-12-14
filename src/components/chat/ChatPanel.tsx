@@ -522,7 +522,6 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-green-600" />
                 <span className="text-xs text-green-700 font-medium">构建模式</span>
-                <span className="text-xs text-green-600">AI 正在按计划执行代码修改</span>
               </div>
               <button
                 onClick={exitToDefaultMode}
