@@ -282,4 +282,21 @@
       animation: none;
     }
   }
+
+  /* 不定进度条动画 - 蓝色胶囊型 */
+  @keyframes progressIndeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(150%);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+
+  .animate-progress-indeterminate {
+    animation: progressIndeterminate 2s ease-in-out infinite;
+  }
 }

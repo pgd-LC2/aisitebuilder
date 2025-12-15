@@ -38,7 +38,7 @@ interface FileRecord {
 }
 
 // --- 模板生成函数 ---
-function generateViteReactTemplate(projectTitle: string, projectDescription: string): TemplateFile[] {
+function generateViteReactTemplate(projectTitle: string): TemplateFile[] {
   return [
     {
       path: 'package.json',
@@ -296,38 +296,10 @@ code {
       path: 'src/App.tsx',
       mimeType: 'text/typescript',
       category: 'code',
-      content: `import { Sparkles } from 'lucide-react';
-
-function App() {
+      content: `function App() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8 md:p-12">
-        <div className="text-center space-y-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-2xl">
-            <Sparkles className="w-8 h-8 text-white" />
-          </div>
-
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
-            ${projectTitle}
-          </h1>
-
-          <p className="text-lg text-gray-600 max-w-lg mx-auto">
-            ${projectDescription}
-          </p>
-
-          <div className="pt-4">
-            <button className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/30">
-              开始使用
-            </button>
-          </div>
-
-          <div className="pt-8 border-t border-gray-200">
-            <p className="text-sm text-gray-500">
-              由 AI BUILD 创建 · Vite + React + TypeScript
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <p className="text-white text-2xl">:) to see magic happen</p>
     </div>
   );
 }
@@ -370,40 +342,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-`
-    },
-    {
-      path: 'README.md',
-      mimeType: 'text/markdown',
-      category: 'document',
-      content: `# ${projectTitle}
-
-${projectDescription}
-
-## 技术栈
-
-- React 18
-- TypeScript
-- Vite
-- Tailwind CSS
-- Lucide React Icons
-
-## 开发
-
-\`\`\`bash
-npm install
-npm run dev
-\`\`\`
-
-## 构建
-
-\`\`\`bash
-npm run build
-\`\`\`
-
----
-
-由 AI BUILD 创建
 `
     }
   ];
@@ -549,7 +487,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 解析请求体
-    const { projectId, title, description } = await req.json() as InitializeProjectRequest;
+    const { projectId, title } = await req.json() as InitializeProjectRequest;
 
     if (!projectId || !title) {
       return new Response(
@@ -592,7 +530,7 @@ Deno.serve(async (req: Request) => {
     await writeBuildLog(supabase, projectId, 'info', '开始初始化项目文件...');
 
     // 生成模板文件
-    const templateFiles = generateViteReactTemplate(title, description || '');
+    const templateFiles = generateViteReactTemplate(title);
     await writeBuildLog(supabase, projectId, 'info', `使用模板: Vite + React + TypeScript (${templateFiles.length} 个文件)`);
 
     // 创建版本记录
