@@ -145,15 +145,17 @@ async function triggerCreateTemplate(
 ): Promise<boolean> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // 使用 anon key 调用，因为 create-precreated-template 有 verify_jwt: true
+    // anon key 是有效的 JWT，可以通过验证
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     
     // 使用 raw fetch 调用，同时设置 Authorization 和 apikey headers
     const response = await fetch(`${supabaseUrl}/functions/v1/create-precreated-template`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceRoleKey}`,
-        'apikey': serviceRoleKey
+        'Authorization': `Bearer ${anonKey}`,
+        'apikey': anonKey
       },
       body: JSON.stringify({ templateKey })
     });
