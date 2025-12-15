@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 
 interface InitializingPageProps {
@@ -20,11 +20,7 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
   const [matchedPairs, setMatchedPairs] = useState(0);
   const [moves, setMoves] = useState(0);
 
-  useEffect(() => {
-    initializeGame();
-  }, []);
-
-  const initializeGame = () => {
+  const initializeGame = useCallback(() => {
     const shuffledIcons = [...cardIcons, ...cardIcons]
       .sort(() => Math.random() - 0.5)
       .map((icon, index) => ({
@@ -37,7 +33,11 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
     setFlippedCards([]);
     setMatchedPairs(0);
     setMoves(0);
-  };
+  }, []);
+
+  useEffect(() => {
+    initializeGame();
+  }, [initializeGame]);
 
   const handleCardClick = (cardId: number) => {
     if (flippedCards.length === 2) return;
@@ -94,9 +94,17 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
           <p className="text-gray-600 mb-2">
             <span className="font-medium text-gray-900">{projectTitle}</span>
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 mb-4">
             正在创建预设文件，请稍候...
           </p>
+          <div className="w-full max-w-md mx-auto h-3 bg-blue-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 rounded-full animate-progress-indeterminate"
+              style={{
+                width: '40%',
+              }}
+            />
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
