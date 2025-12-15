@@ -22,3 +22,6 @@ test-dist
 *.sln
 *.sw?
 .env
+
+# Supabase CLI temp files
+supabase/.temp/
