@@ -144,13 +144,24 @@ async function triggerCreateTemplate(
   templateKey: string
 ): Promise<boolean> {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    // 使用 anon key 调用，因为 create-precreated-template 有 verify_jwt: true
-    // anon key 是有效的 JWT，可以通过验证
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    // 检查环境变量是否存在
+    if (!supabaseUrl) {
+      console.error('SUPABASE_URL 环境变量未设置');
+      return false;
+    }
+    if (!anonKey) {
+      console.error('SUPABASE_ANON_KEY 环境变量未设置');
+      return false;
+    }
+    
+    const url = `${supabaseUrl}/functions/v1/create-precreated-template`;
+    console.log('调用 create-precreated-template:', url);
     
     // 使用 raw fetch 调用，同时设置 Authorization 和 apikey headers
-    const response = await fetch(`${supabaseUrl}/functions/v1/create-precreated-template`, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -159,6 +170,8 @@ async function triggerCreateTemplate(
       },
       body: JSON.stringify({ templateKey })
     });
+
+    console.log('create-precreated-template 响应状态:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
