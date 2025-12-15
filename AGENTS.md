@@ -29,6 +29,81 @@
 
 切勿提交 `.env`，部署时通过环境变量提供 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_ANON_KEY`。审查 `supabase/` 目录改动时确认权限最小化，并在上传调试日志前清理敏感信息。
 
+## Supabase Edge Functions 部署方法（MCP CLI）
+
+当无法使用 `supabase functions deploy` 命令（缺少 SUPABASE_ACCESS_TOKEN）时，可以使用 MCP CLI 直接部署 Edge Functions。
+
+### 部署步骤
+
+1. **准备部署参数**：将 Edge Function 代码读取并构建为 JSON 格式
+
+```bash
+node -e "
+const fs = require('fs');
+const content = fs.readFileSync('supabase/functions/YOUR_FUNCTION_NAME/index.ts', 'utf8');
+const args = {
+  project_id: 'bsiukgyvrfkanuhjkxuh',
+  name: 'YOUR_FUNCTION_NAME',
+  entrypoint_path: 'index.ts',
+  files: [{ name: 'index.ts', content: content }]
+};
+console.log(JSON.stringify(args));
+" > /tmp/deploy-args.json
+```
+
+2. **调用 MCP 部署工具**：
+
+```bash
+mcp-cli tool call deploy_edge_function --server supabase --input "$(cat /tmp/deploy-args.json)"
+```
+
+3. **验证部署结果**：
+
+```bash
+mcp-cli tool call list_edge_functions --server supabase --input '{"project_id":"bsiukgyvrfkanuhjkxuh"}'
+```
+
+### 参数说明
+
+- `project_id`：Supabase 项目 ID（本项目为 `bsiukgyvrfkanuhjkxuh`）
+- `name`：Edge Function 名称（与 `supabase/functions/` 下的目录名一致）
+- `entrypoint_path`：入口文件路径（通常为 `index.ts`）
+- `files`：文件数组，每个元素包含 `name`（文件名）和 `content`（文件内容）
+
+### 多文件 Edge Function
+
+如果 Edge Function 包含多个文件，需要将所有文件添加到 `files` 数组中：
+
+```javascript
+const args = {
+  project_id: 'bsiukgyvrfkanuhjkxuh',
+  name: 'YOUR_FUNCTION_NAME',
+  entrypoint_path: 'index.ts',
+  files: [
+    { name: 'index.ts', content: fs.readFileSync('supabase/functions/YOUR_FUNCTION_NAME/index.ts', 'utf8') },
+    { name: 'utils.ts', content: fs.readFileSync('supabase/functions/YOUR_FUNCTION_NAME/utils.ts', 'utf8') }
+  ]
+};
+```
+
+### 数据库迁移部署
+
+使用 MCP 部署数据库迁移：
+
+```bash
+mcp-cli tool call apply_migration --server supabase --input '{
+  "project_id": "bsiukgyvrfkanuhjkxuh",
+  "name": "YOUR_MIGRATION_NAME",
+  "query": "YOUR_SQL_CONTENT"
+}'
+```
+
+### 注意事项
+
+- MCP CLI 已预配置 Supabase 认证，无需额外提供 access token
+- 部署成功后会返回包含 `status: "ACTIVE"` 的响应
+- 如果部署失败，检查文件内容是否包含语法错误
+
 ## 语言与代理说明
 
 本文件要求所有协作者与自动化 Agent 在此仓库上下文中永远使用中文交流；即便收到其他语言的输入，也必须转换为中文回复，以确保沟通一致。
