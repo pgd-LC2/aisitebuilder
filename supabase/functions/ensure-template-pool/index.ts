@@ -141,20 +141,30 @@ async function cleanupStuckCreating(
 
 // --- 触发创建新模板 ---
 async function triggerCreateTemplate(
-  supabase: ReturnType<typeof createClient>,
   templateKey: string
 ): Promise<boolean> {
   try {
-    // 使用 supabase.functions.invoke 调用，自动处理认证 header
-    const { data, error } = await supabase.functions.invoke('create-precreated-template', {
-      body: { templateKey }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    // 使用 raw fetch 调用，同时设置 Authorization 和 apikey headers
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-precreated-template`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'apikey': serviceRoleKey
+      },
+      body: JSON.stringify({ templateKey })
     });
 
-    if (error) {
-      console.error('触发创建模板失败:', error);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('触发创建模板失败:', response.status, errorText);
       return false;
     }
 
+    const data = await response.json();
     console.log('触发创建模板成功:', data);
     return true;
   } catch (error) {
@@ -267,7 +277,7 @@ Deno.serve(async (req: Request) => {
     // 并发触发多个创建请求，使用 await 确保请求真的发出
     const createPromises: Promise<boolean>[] = [];
     for (let i = 0; i < actualCreateCount; i++) {
-      createPromises.push(triggerCreateTemplate(supabase, templateKey));
+      createPromises.push(triggerCreateTemplate(templateKey));
     }
     
     // 等待所有创建请求发出（不等待创建完成）
