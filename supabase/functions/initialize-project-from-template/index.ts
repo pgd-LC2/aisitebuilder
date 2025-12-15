@@ -208,15 +208,17 @@ async function fallbackToOriginalInitialize(
   projectId: string,
   title: string,
   description: string,
-  supabaseUrl: string
+  supabaseUrl: string,
+  userToken: string
 ): Promise<Response> {
   console.log('降级到原有初始化逻辑');
   
   // 调用原有的 initialize-project Edge Function
+  // 使用用户的 token 而不是 service role key，因为 initialize-project 的 verify_jwt=true
   const response = await fetch(`${supabaseUrl}/functions/v1/initialize-project`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      'Authorization': `Bearer ${userToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -332,7 +334,7 @@ Deno.serve(async (req: Request) => {
     if (!template) {
       // 没有可用的预创建模板，降级到原有逻辑
       await writeBuildLog(supabase, projectId, 'info', '预创建模板池为空，使用标准初始化流程');
-      return await fallbackToOriginalInitialize(supabase, projectId, title, description, supabaseUrl);
+      return await fallbackToOriginalInitialize(supabase, projectId, title, description, supabaseUrl, token);
     }
 
     console.log(`使用预创建模板: ${template.id}`);
@@ -390,7 +392,7 @@ Deno.serve(async (req: Request) => {
     if (successCount === 0) {
       await markTemplateFailed(supabase, template.id, '所有文件复制失败', false);
       await writeBuildLog(supabase, projectId, 'error', '文件复制全部失败，尝试标准初始化流程');
-      return await fallbackToOriginalInitialize(supabase, projectId, title, description, supabaseUrl);
+      return await fallbackToOriginalInitialize(supabase, projectId, title, description, supabaseUrl, token);
     }
 
     // 批量插入文件记录到数据库
