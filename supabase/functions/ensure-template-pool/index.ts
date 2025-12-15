@@ -8,8 +8,9 @@ const corsHeaders = {
 };
 
 // --- 常量配置 ---
-const MIN_POOL_SIZE = 2;
-const MAX_POOL_SIZE = 3;
+const MIN_POOL_SIZE = 20;  // 最小池大小（从 2 改为 20）
+const MAX_POOL_SIZE = 50;  // 最大池大小（从 3 改为 50）
+const MAX_CONCURRENT_CREATING = 5;  // 允许的最大并发创建数
 const TIMEOUT_MINUTES = 5;
 
 // --- 类型定义 ---
@@ -30,19 +31,45 @@ async function getPoolStatus(
   supabase: ReturnType<typeof createClient>,
   templateKey: string
 ): Promise<PoolStatus> {
+  // 使用 v2 版本的 RPC 函数，返回正确的格式
   const { data, error } = await supabase
-    .rpc('get_template_pool_status', {
+    .rpc('get_template_pool_status_v2', {
       p_template_key: templateKey
     });
 
   if (error) {
     console.error('获取池状态失败:', error);
-    return {
+    // 如果 v2 函数不存在，尝试使用旧函数并手动转换
+    const { data: oldData, error: oldError } = await supabase
+      .rpc('get_template_pool_status', {
+        p_template_key: templateKey
+      });
+    
+    if (oldError || !oldData) {
+      return {
+        ready_count: 0,
+        creating_count: 0,
+        reserved_count: 0,
+        total_active: 0
+      };
+    }
+    
+    // 手动转换旧格式到新格式
+    const result: PoolStatus = {
       ready_count: 0,
       creating_count: 0,
       reserved_count: 0,
       total_active: 0
     };
+    
+    for (const row of oldData) {
+      const count = Number(row.count) || 0;
+      if (row.status === 'ready') result.ready_count = count;
+      else if (row.status === 'creating') result.creating_count = count;
+      else if (row.status === 'reserved') result.reserved_count = count;
+    }
+    result.total_active = result.ready_count + result.creating_count + result.reserved_count;
+    return result;
   }
 
   if (!data || data.length === 0) {
@@ -54,7 +81,14 @@ async function getPoolStatus(
     };
   }
 
-  return data[0] as PoolStatus;
+  // v2 函数返回单行，直接使用
+  const row = data[0];
+  return {
+    ready_count: Number(row.ready_count) || 0,
+    creating_count: Number(row.creating_count) || 0,
+    reserved_count: Number(row.reserved_count) || 0,
+    total_active: Number(row.total_active) || 0
+  };
 }
 
 // --- 清理超时的 reserved 模板 ---
@@ -107,27 +141,46 @@ async function cleanupStuckCreating(
 
 // --- 触发创建新模板 ---
 async function triggerCreateTemplate(
-  supabaseUrl: string,
   templateKey: string
 ): Promise<boolean> {
   try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/create-precreated-template`, {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    // 检查环境变量是否存在
+    if (!supabaseUrl) {
+      console.error('SUPABASE_URL 环境变量未设置');
+      return false;
+    }
+    if (!anonKey) {
+      console.error('SUPABASE_ANON_KEY 环境变量未设置');
+      return false;
+    }
+    
+    const url = `${supabaseUrl}/functions/v1/create-precreated-template`;
+    console.log('调用 create-precreated-template:', url);
+    
+    // 使用 raw fetch 调用，同时设置 Authorization 和 apikey headers
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${anonKey}`,
+        'apikey': anonKey
       },
       body: JSON.stringify({ templateKey })
     });
 
+    console.log('create-precreated-template 响应状态:', response.status);
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error('触发创建模板失败:', error);
+      const errorText = await response.text();
+      console.error('触发创建模板失败:', response.status, errorText);
       return false;
     }
 
-    const result = await response.json();
-    console.log('触发创建模板成功:', result);
+    const data = await response.json();
+    console.log('触发创建模板成功:', data);
     return true;
   } catch (error) {
     console.error('触发创建模板出错:', error);
@@ -186,9 +239,10 @@ Deno.serve(async (req: Request) => {
     console.log('当前池状态:', poolStatus);
 
     // 4. 判断是否需要补充
+    // 允许并发创建，只要 creating_count < MAX_CONCURRENT_CREATING
     const needCreate = poolStatus.ready_count < MIN_POOL_SIZE && 
                        poolStatus.total_active < MAX_POOL_SIZE &&
-                       poolStatus.creating_count === 0;  // 避免重复创建
+                       poolStatus.creating_count < MAX_CONCURRENT_CREATING;
 
     if (!needCreate && !force) {
       return new Response(
@@ -210,14 +264,16 @@ Deno.serve(async (req: Request) => {
     // 5. 计算需要创建的数量
     const targetCount = MIN_POOL_SIZE - poolStatus.ready_count;
     const canCreate = MAX_POOL_SIZE - poolStatus.total_active;
-    const createCount = Math.min(targetCount, canCreate, 1);  // 单次最多创建 1 个
+    const availableSlots = MAX_CONCURRENT_CREATING - poolStatus.creating_count;
+    // 单次最多创建 5 个（受并发限制）
+    const createCount = Math.min(targetCount, canCreate, availableSlots, 5);
 
     if (createCount <= 0 && !force) {
       return new Response(
         JSON.stringify({
           success: true,
           action: 'none',
-          message: '已达到最大池容量或正在创建中',
+          message: '已达到最大池容量或并发创建上限',
           poolStatus,
           recoveredCount,
           cleanedCount
@@ -229,22 +285,30 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 6. 触发创建新模板（异步，不等待完成）
-    console.log(`触发创建 ${force ? 1 : createCount} 个新模板`);
+    // 6. 触发创建新模板
+    const actualCreateCount = force ? 1 : createCount;
+    console.log(`触发创建 ${actualCreateCount} 个新模板`);
     
-    // 使用 fire-and-forget 方式触发创建
-    // 不使用 await，让创建在后台进行
-    triggerCreateTemplate(supabaseUrl, templateKey);
+    // 并发触发多个创建请求，使用 await 确保请求真的发出
+    const createPromises: Promise<boolean>[] = [];
+    for (let i = 0; i < actualCreateCount; i++) {
+      createPromises.push(triggerCreateTemplate(templateKey));
+    }
+    
+    // 等待所有创建请求发出（不等待创建完成）
+    const results = await Promise.all(createPromises);
+    const successCount = results.filter(r => r).length;
 
     return new Response(
       JSON.stringify({
         success: true,
         action: 'create_triggered',
-        message: `已触发创建 1 个新模板`,
+        message: `已触发创建 ${successCount} 个新模板`,
         poolStatus,
         recoveredCount,
         cleanedCount,
-        createTriggered: 1
+        createTriggered: successCount,
+        createFailed: actualCreateCount - successCount
       }),
       {
         status: 200,
