@@ -326,6 +326,16 @@ class RealtimeClient {
           if (status === 'SUBSCRIBED') {
             this.connectionStatus = 'connected';
             this.config.onConnectionChange?.(true);
+            
+            // 订阅成功时重置重试计数
+            // 这样后续如果再次发生错误，会从初始重试次数重新开始计算
+            // 确保重试逻辑更符合长期运行场景，避免因历史错误导致订阅过早放弃
+            if (retryInfo.attempt > 0) {
+              console.log(`[RealtimeClient] 订阅 ${subscriptionId} 成功，重置重试计数 (之前: ${retryInfo.attempt})`);
+              retryInfo.attempt = 0;
+              retryInfo.handledTerminal = false;
+            }
+            
             // 广播给所有订阅此 channel 的订阅者
             const subs = currentChannelInfo?.subscriptions;
             if (subs) {
