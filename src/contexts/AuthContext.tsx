@@ -104,9 +104,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await refreshRealtimeAuth({ forceReconnect: isUserSwitch, ensureConnected: true });
         } else if (event === 'TOKEN_REFRESHED') {
           // Token 刷新：这是正常的后台行为，只需要更新 token，不需要重建连接
-          // refreshRealtimeAuth 会自动处理 token 更新（通过 setAuth）
-          console.log('[AuthContext] Token 刷新，仅更新认证信息');
-          await refreshRealtimeAuth({ forceReconnect: false, ensureConnected: true });
+          // setAuth 会自动将新 token 推送到已连接的 channels，无需 disconnect/connect
+          // 关键：使用 skipReconnectOnTokenChange 避免因 token 变化导致的重连，防止竞态条件
+          console.log('[AuthContext] Token 刷新，仅更新认证信息（不重连）');
+          await refreshRealtimeAuth({ 
+            forceReconnect: false, 
+            ensureConnected: true, 
+            skipReconnectOnTokenChange: true 
+          });
         }
 
         setSession(session);
