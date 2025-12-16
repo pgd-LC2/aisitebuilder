@@ -34,6 +34,9 @@ interface ChannelInfo {
 interface RetryInfo {
   timeoutId: ReturnType<typeof setTimeout> | null;
   cancelled: boolean;
+  attempt: number;
+  inFlight: boolean;
+  handledTerminal: boolean;
 }
 
 interface SubscriptionInfo<T> {
@@ -158,6 +161,25 @@ class RealtimeClient {
   }
 
   /**
+   * 判断错误是否不可重试（权限/RLS 错误）
+   */
+  private isNonRetryableError(error: Error | null): boolean {
+    if (!error) return false;
+    const message = error.message.toLowerCase();
+    const nonRetryablePatterns = [
+      'permission denied',
+      'forbidden',
+      'unauthorized',
+      '401',
+      '403',
+      'rls',
+      'policy',
+      'not allowed'
+    ];
+    return nonRetryablePatterns.some(pattern => message.includes(pattern));
+  }
+
+  /**
    * 生成唯一的订阅 ID
    */
   private generateSubscriptionId(): string {
@@ -214,8 +236,14 @@ class RealtimeClient {
       generation: subscriptionGeneration
     });
 
-    // 初始化 retry 信息占位（保留结构）
-    const retryInfo: RetryInfo = { timeoutId: null, cancelled: false };
+    // 初始化 retry 信息
+    const retryInfo: RetryInfo = { 
+      timeoutId: null, 
+      cancelled: false, 
+      attempt: 0, 
+      inFlight: false, 
+      handledTerminal: false 
+    };
     this.retryInfoMap.set(subscriptionId, retryInfo);
 
     // 每次订阅都创建新的频道，不复用旧频道
@@ -331,6 +359,21 @@ class RealtimeClient {
             
             const errorObj = err instanceof Error ? err : err ? new Error(String(err)) : null;
             
+            // 增强错误日志：打印详细的错误信息，便于区分 Token 问题、RLS 问题和网络问题
+            const errorDetails = {
+              status,
+              errorType: err?.constructor?.name ?? 'unknown',
+              errorMessage: errorObj?.message ?? String(err ?? 'no error'),
+              errorCode: (err as { code?: string | number } | null)?.code,
+              errorStatus: (err as { status?: number } | null)?.status,
+              channelKey: baseChannelKey,
+              generation: subscriptionGeneration,
+              currentGeneration: this.sessionGeneration,
+              isExpectedClose: this.isExpectedClose,
+              closeReason: this.isExpectedClose ? this.currentCloseReason : 'ERROR'
+            };
+            console.error(`[RealtimeClient] 频道错误详情:`, errorDetails);
+            
             // 确定关闭原因
             const closeReason: CloseReason = this.isExpectedClose 
               ? this.currentCloseReason 
@@ -361,6 +404,75 @@ class RealtimeClient {
                   console.error(`[RealtimeClient] 广播 ${status} 到订阅 ${subId} 时出错:`, e);
                 }
               });
+            }
+            
+            // 检查是否应该重试（仅在非预期关闭且为 ERROR 类型时重试）
+            const shouldRetry = !this.isExpectedClose && 
+                                closeReason === 'ERROR' && 
+                                !this.isNonRetryableError(errorObj);
+
+            if (shouldRetry && !retryInfo.cancelled && retryInfo.attempt < 3 && !retryInfo.handledTerminal) {
+              retryInfo.handledTerminal = true;
+              retryInfo.attempt += 1;
+              
+              // 指数退避 + 抖动
+              const baseDelay = 1000;
+              const exponentialDelay = baseDelay * Math.pow(2, retryInfo.attempt - 1);
+              const jitter = 0.8 + Math.random() * 0.4;
+              const delay = Math.floor(exponentialDelay * jitter);
+              
+              console.log(`[RealtimeClient] 频道 ${baseChannelKey} 将在 ${delay}ms 后重试 (第 ${retryInfo.attempt} 次)`);
+              
+              // 广播 RETRYING 状态给所有订阅者
+              subs?.forEach(subId => {
+                const info = this.subscriptions.get(subId);
+                if (info?.onStatusChange) {
+                  const retryMeta: StatusChangeMeta = {
+                    generation: info.generation,
+                    channelName: baseChannelKey,
+                    isExpectedClose: false
+                  };
+                  try {
+                    info.onStatusChange('RETRYING' as string, null, retryMeta);
+                  } catch (e) {
+                    console.error(`[RealtimeClient] 广播 RETRYING 到订阅 ${subId} 时出错:`, e);
+                  }
+                }
+              });
+              
+              // 先清理旧频道
+              if (currentChannelInfo) {
+                currentChannelInfo.closed = true;
+                currentChannelInfo.closeReason = closeReason;
+                supabase.removeChannel(currentChannelInfo.channel);
+                this.channels.delete(baseChannelKey);
+              }
+              
+              // 设置重试定时器
+              retryInfo.timeoutId = setTimeout(() => {
+                if (retryInfo.cancelled) {
+                  console.log(`[RealtimeClient] 订阅 ${subscriptionId} 重试已取消`);
+                  return;
+                }
+                if (!this.isGenerationValid(subscriptionGeneration)) {
+                  console.log(`[RealtimeClient] 订阅 ${subscriptionId} generation 已过期，跳过重试`);
+                  return;
+                }
+                if (retryInfo.inFlight) {
+                  console.log(`[RealtimeClient] 订阅 ${subscriptionId} 已有重试在进行中，跳过`);
+                  return;
+                }
+                
+                retryInfo.inFlight = true;
+                retryInfo.handledTerminal = false;
+                console.log(`[RealtimeClient] 开始重试订阅 ${subscriptionId}`);
+                
+                setupSubscription().finally(() => {
+                  retryInfo.inFlight = false;
+                });
+              }, delay);
+              
+              return;
             }
             
             // 关键修复：当频道进入错误状态时，从缓存中移除该频道

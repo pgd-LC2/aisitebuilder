@@ -23,9 +23,14 @@ const isRealtimeSocketConnected = (): boolean => {
   return socket.connectionState === 'open';
 };
 
-export const refreshRealtimeAuth = async (options?: { forceReconnect?: boolean; ensureConnected?: boolean }): Promise<void> => {
+export const refreshRealtimeAuth = async (options?: { 
+  forceReconnect?: boolean; 
+  ensureConnected?: boolean;
+  skipReconnectOnTokenChange?: boolean;
+}): Promise<void> => {
   const forceReconnect = options?.forceReconnect ?? false;
   const ensureConnected = options?.ensureConnected ?? false;
+  const skipReconnectOnTokenChange = options?.skipReconnectOnTokenChange ?? false;
 
   if (refreshPromise) {
     return refreshPromise;
@@ -39,13 +44,18 @@ export const refreshRealtimeAuth = async (options?: { forceReconnect?: boolean; 
     if (tokenChanged) {
       currentRealtimeToken = token;
       supabase.realtime.setAuth(token);
+      console.log('[supabase] Token 已更新，通过 setAuth 推送到现有连接');
     }
 
     const connected = isRealtimeSocketConnected();
-    const shouldReconnect = tokenChanged || forceReconnect;
+    
+    // 关键修改：TOKEN_REFRESHED 时跳过重连
+    // setAuth 会自动将新 token 推送到已连接的 channels，无需 disconnect/connect
+    const shouldReconnect = forceReconnect || (tokenChanged && !skipReconnectOnTokenChange);
     const shouldEnsureConnect = ensureConnected && !connected;
 
     if (shouldReconnect) {
+      console.log('[supabase] 执行 disconnect/connect');
       await supabase.realtime.disconnect();
     }
 
