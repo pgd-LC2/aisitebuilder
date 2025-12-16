@@ -99,12 +99,17 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
     const { data, error } = await fileService.getFilesByProject(projectId, versionId);
     if (!error && data) {
       setFiles(data);
-      if (data.length > 0 && !selectedFile) {
-        setSelectedFile(data[0]);
-      }
+      // 使用函数式更新来检查是否需要设置默认选中文件
+      // 这样可以避免将 selectedFile 加入依赖数组，防止选择文件时触发重新加载
+      setSelectedFile(prev => {
+        if (!prev && data.length > 0) {
+          return data[0];
+        }
+        return prev;
+      });
     }
     setLoading(false);
-  }, [projectId, versionId, selectedFile]);
+  }, [projectId, versionId]);
 
   const loadFileContent = useCallback(async (file: ProjectFile) => {
     setLoadingContent(true);
