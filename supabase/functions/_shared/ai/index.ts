@@ -49,6 +49,18 @@ export {
 
 // 工具执行器
 export { executeToolCall } from './tools/executor.ts';
+export type { ToolExecutionContext, ToolExecutionResult } from './tools/executor.ts';
+
+// AgentLoop - 统一的 Agent 循环抽象
+export {
+  runAgentLoop
+} from './core/agentLoop.ts';
+export type {
+  AgentLoopConfig,
+  AgentLoopContext,
+  AgentLoopProgress,
+  AgentLoopResult
+} from './core/agentLoop.ts';
 
 // 日志
 export {
