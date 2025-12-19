@@ -32,7 +32,13 @@ export {
 } from './llm/imageGenerator.ts';
 
 // 工具定义和能力矩阵
-export { TOOLS, getFilteredTools, getAllowedToolNames } from './tools/definitions.ts';
+export { 
+  TOOLS, 
+  getFilteredTools, 
+  getAllowedToolNames,
+  getFilteredToolsByMode,
+  getAllowedToolNamesByMode
+} from './tools/definitions.ts';
 
 // 文件操作
 export {
@@ -61,6 +67,12 @@ export type {
   AgentLoopProgress,
   AgentLoopResult
 } from './core/agentLoop.ts';
+
+// TaskRunner - 阶段化任务执行主干
+export {
+  TaskRunner,
+  createTaskRunner
+} from './core/taskRunner.ts';
 
 // 日志
 export {

@@ -100,10 +100,31 @@ export interface ParsedChatCompletionOutput {
 
 // --- Prompt Router 类型 ---
 
+/**
+ * @deprecated 使用 InteractionMode 替代 TaskType × WorkflowMode 双维度
+ * 保留用于向后兼容，将在未来版本移除
+ */
 export type TaskType = 'chat_reply' | 'build_site' | 'refactor_code' | 'debug';
+
 // 'chat' 层级专用于 chat_reply 任务，提供只读分析能力，不包含文件修改工具
 export type PromptLayer = 'core' | 'planner' | 'coder' | 'reviewer' | 'debugger' | 'chat';
+
+/**
+ * @deprecated 使用 InteractionMode 替代 TaskType × WorkflowMode 双维度
+ * 保留用于向后兼容，将在未来版本移除
+ */
 export type WorkflowMode = 'default' | 'planning' | 'build';
+
+/**
+ * 统一交互模式 - 替代 TaskType × WorkflowMode 双维度
+ * 
+ * | 模式   | 工具权限     | 用途                           |
+ * |--------|-------------|--------------------------------|
+ * | chat   | 只读工具     | 对话、问答、代码分析            |
+ * | plan   | 只读工具     | 需求澄清、方案规划              |
+ * | build  | 完整工具集   | 代码生成、文件修改、构建        |
+ */
+export type InteractionMode = 'chat' | 'plan' | 'build';
 
 export interface PromptRouterContext {
   taskType: TaskType;
@@ -218,3 +239,96 @@ export interface ProjectFilesContext {
 // --- Prompt 错误类型 ---
 
 export type PromptFetchErrorType = 'NOT_FOUND' | 'PERMISSION' | 'NETWORK_ERROR' | 'QUERY_ERROR';
+
+// --- TaskRunner 类型定义 ---
+
+/**
+ * TaskRunner 执行阶段
+ * 阶段按顺序执行：claim → load_context → assemble_prompt → agent_loop → final_response → write_result → cleanup
+ */
+export type TaskPhase = 
+  | 'claim'           // 抢占任务
+  | 'load_context'    // 加载上下文（聊天历史、文件内容等）
+  | 'assemble_prompt' // 组装系统提示词
+  | 'agent_loop'      // 执行 Agent 循环（调用 runAgentLoop）
+  | 'final_response'  // 生成最终响应（非流式）
+  | 'write_result'    // 写入结果（消息、任务状态）
+  | 'cleanup';        // 清理资源
+
+/**
+ * TaskRunner 配置
+ */
+export interface TaskRunnerConfig {
+  apiKey: string;
+  maxIterations?: number;
+}
+
+/**
+ * TaskRunner 上下文 - 贯穿整个任务执行过程
+ */
+export interface TaskRunnerContext {
+  taskId: string;
+  projectId: string;
+  mode: InteractionMode;
+  versionId: string;
+  bucket: string;
+  basePath: string;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * TaskRunner 阶段结果
+ */
+export interface TaskPhaseResult {
+  phase: TaskPhase;
+  success: boolean;
+  error?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * TaskRunner 最终结果
+ */
+export interface TaskRunnerResult {
+  success: boolean;
+  taskId: string;
+  phases: TaskPhaseResult[];
+  finalResponse?: string;
+  modifiedFiles?: string[];
+  generatedImages?: string[];
+  error?: string;
+}
+
+/**
+ * 从旧的 TaskType + WorkflowMode 映射到新的 InteractionMode
+ * 
+ * 映射规则：
+ * - chat_reply + default → 'chat'
+ * - chat_reply + planning → 'plan'
+ * - chat_reply + build → 'build'
+ * - build_site + * → 'build'
+ * - refactor_code + * → 'build'
+ * - debug + * → 'build'
+ */
+export function mapToInteractionMode(
+  taskType?: TaskType,
+  workflowMode?: WorkflowMode
+): InteractionMode {
+  // 如果没有任务类型，默认为 chat
+  if (!taskType) return 'chat';
+  
+  // build_site、refactor_code、debug 始终是 build 模式
+  if (taskType === 'build_site' || taskType === 'refactor_code' || taskType === 'debug') {
+    return 'build';
+  }
+  
+  // chat_reply 根据 workflowMode 决定
+  if (taskType === 'chat_reply') {
+    if (workflowMode === 'build') return 'build';
+    if (workflowMode === 'planning') return 'plan';
+    return 'chat';
+  }
+  
+  // 默认返回 chat
+  return 'chat';
+}
