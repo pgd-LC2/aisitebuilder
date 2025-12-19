@@ -24,7 +24,9 @@ import type {
   UseAgentEventsOptions,
   UseAgentEventsReturn,
   RealtimeSubscribeStatus,
-  StatusChangeMeta
+  StatusChangeMeta,
+  StreamingMessage,
+  DbAgentEvent
 } from '../types';
 
 // 初始状态
@@ -89,14 +91,15 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
  * Agent 事件 Hook
  */
 export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsReturn {
-  const { projectId, onTaskCompleted, onMessageReceived } = options;
+  const { projectId, onTaskCompleted, onMessageReceived, onStreamDelta, onStreamComplete } = options;
   const { authReady, authVersion } = useAuth();
   const client = getRealtimeClient();
   
-  const [state, dispatch] = useReducer(agentReducer, initialState);
-  const [isConnected, setIsConnected] = useState(false);
-  const [messageImages, setMessageImages] = useState<Record<string, string[]>>({});
-  const [imageBlobUrls, setImageBlobUrls] = useState<Record<string, string>>({});
+    const [state, dispatch] = useReducer(agentReducer, initialState);
+    const [isConnected, setIsConnected] = useState(false);
+    const [messageImages, setMessageImages] = useState<Record<string, string[]>>({});
+    const [imageBlobUrls, setImageBlobUrls] = useState<Record<string, string>>({});
+    const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   
   // 用于追踪加载版本，防止过期数据覆盖新数据
   const loadVersionRef = useRef(0);
@@ -116,11 +119,15 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   // 记录订阅创建时的 generation，用于忽略旧回调
   const subscriptionGenerationRef = useRef<number>(0);
   
-  // 使用 ref 存储回调，避免订阅循环
-  const onTaskCompletedRef = useRef(onTaskCompleted);
-  const onMessageReceivedRef = useRef(onMessageReceived);
-  onTaskCompletedRef.current = onTaskCompleted;
-  onMessageReceivedRef.current = onMessageReceived;
+    // 使用 ref 存储回调，避免订阅循环
+    const onTaskCompletedRef = useRef(onTaskCompleted);
+    const onMessageReceivedRef = useRef(onMessageReceived);
+    const onStreamDeltaRef = useRef(onStreamDelta);
+    const onStreamCompleteRef = useRef(onStreamComplete);
+    onTaskCompletedRef.current = onTaskCompleted;
+    onMessageReceivedRef.current = onMessageReceived;
+    onStreamDeltaRef.current = onStreamDelta;
+    onStreamCompleteRef.current = onStreamComplete;
 
   // 加载消息列表
   // opts.force: 强制刷新，忽略时间节流（用于 SUBSCRIBED catch-up）
@@ -206,12 +213,116 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     }
   }, [projectId]);
 
-  // 添加消息（使用 ref 访问最新的 onMessageReceived）
-  const appendMessage = useCallback((message: ChatMessage) => {
-    console.log('[useAgentEvents] 添加消息到状态:', message.id, message.role);
-    dispatch({ type: 'APPEND_MESSAGE', payload: message });
-    onMessageReceivedRef.current?.(message);
-  }, []);
+    // 添加消息（使用 ref 访问最新的 onMessageReceived）
+    const appendMessage = useCallback((message: ChatMessage) => {
+      console.log('[useAgentEvents] 添加消息到状态:', message.id, message.role);
+      dispatch({ type: 'APPEND_MESSAGE', payload: message });
+      onMessageReceivedRef.current?.(message);
+    }, []);
+
+    // 处理 agent_events 事件（流式输出支持）
+    const handleAgentEvent = useCallback((event: DbAgentEvent) => {
+      // 检查是否仍然挂载
+      if (!isMountedRef.current) {
+        console.log('[useAgentEvents] 组件已卸载，忽略 agent_event');
+        return;
+      }
+
+      const { type, payload } = event;
+      const kind = payload?.kind;
+
+      console.log('[useAgentEvents] 收到 agent_event:', event.id, type, kind);
+
+      // 处理 progress 类型事件
+      if (type === 'progress' && kind) {
+        switch (kind) {
+          case 'stream_delta': {
+            // 流式输出增量
+            const delta = payload.delta as string | undefined;
+            const messageId = payload.messageId as string | undefined;
+          
+            if (delta && messageId) {
+              console.log('[useAgentEvents] stream_delta:', messageId, delta.length, 'chars');
+            
+              // 更新流式消息状态
+              setStreamingMessage(prev => {
+                const now = Date.now();
+                if (prev && prev.messageId === messageId) {
+                  // 追加到现有消息
+                  return {
+                    ...prev,
+                    content: prev.content + delta,
+                    updatedAt: now
+                  };
+                } else {
+                  // 创建新的流式消息
+                  return {
+                    messageId,
+                    content: delta,
+                    isComplete: false,
+                    startedAt: now,
+                    updatedAt: now
+                  };
+                }
+              });
+            
+              // 调用回调
+              onStreamDeltaRef.current?.(delta, messageId);
+            }
+            break;
+          }
+        
+          case 'stream_complete': {
+            // 流式输出完成
+            const content = payload.content as string | undefined;
+            const messageId = payload.messageId as string | undefined;
+          
+            if (messageId) {
+              console.log('[useAgentEvents] stream_complete:', messageId, content?.length || 0, 'chars');
+            
+              // 标记流式消息完成
+              setStreamingMessage(prev => {
+                if (prev && prev.messageId === messageId) {
+                  return {
+                    ...prev,
+                    content: content || prev.content,
+                    isComplete: true,
+                    updatedAt: Date.now()
+                  };
+                }
+                return prev;
+              });
+            
+              // 调用回调
+              if (content) {
+                onStreamCompleteRef.current?.(content, messageId);
+              }
+            
+              // 延迟清除流式消息状态（给 UI 时间显示完成状态）
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setStreamingMessage(null);
+                }
+              }, 500);
+            }
+            break;
+          }
+        
+          case 'stage_enter':
+          case 'stage_exit':
+          case 'iteration_start':
+          case 'tool_start':
+          case 'tool_complete':
+          case 'thinking':
+            // 这些事件可以用于 UI 显示进度，暂时只记录日志
+            console.log(`[useAgentEvents] progress event: ${kind}`, payload);
+            break;
+        
+          default:
+            console.log('[useAgentEvents] 未知的 progress kind:', kind);
+        }
+      }
+    }, []);
 
   const handleStatusChange = useCallback(
     (status?: RealtimeSubscribeStatus, error?: Error | null, meta?: StatusChangeMeta) => {
@@ -405,32 +516,34 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     // 加载初始数据
     refreshMessages();
 
-    // 订阅事件 - 使用内联函数和 ref 避免依赖外部回调
-    const unsubscribe = subscribeAgentEvents({
-      projectId,
-      onTaskUpdate: handleTaskUpdateInternal,
-      onMessageCreated: (message: ChatMessage) => {
-        // 检查是否仍然挂载
-        if (!isMountedRef.current) return;
-        console.log('[useAgentEvents] 收到新消息事件:', message.id, message.role);
-        dispatch({ type: 'APPEND_MESSAGE', payload: message });
-        onMessageReceivedRef.current?.(message);
-      },
-      onError: (error) => {
-        // 检查是否仍然挂载
-        if (!isMountedRef.current) {
-          console.log('[useAgentEvents] 组件已卸载，忽略错误回调');
-          return;
-        }
-        console.error('[useAgentEvents] 订阅错误:', error);
-        dispatch({ type: 'SET_ERROR', payload: error.message });
-        setIsConnected(false);
-        // 注意：这里不再无条件调用 refreshMessages
-        // refreshMessages 已有并发保护和时间节流，会自动防止过于频繁的刷新
-        refreshMessages();
-      },
-      onStatusChange: handleStatusChange
-    });
+        // 订阅事件 - 使用内联函数和 ref 避免依赖外部回调
+        const unsubscribe = subscribeAgentEvents({
+          projectId,
+          onTaskUpdate: handleTaskUpdateInternal,
+          onMessageCreated: (message: ChatMessage) => {
+            // 检查是否仍然挂载
+            if (!isMountedRef.current) return;
+            console.log('[useAgentEvents] 收到新消息事件:', message.id, message.role);
+            dispatch({ type: 'APPEND_MESSAGE', payload: message });
+            onMessageReceivedRef.current?.(message);
+          },
+          // 订阅 agent_events 表以接收流式输出事件
+          onAgentEvent: handleAgentEvent,
+          onError: (error) => {
+            // 检查是否仍然挂载
+            if (!isMountedRef.current) {
+              console.log('[useAgentEvents] 组件已卸载，忽略错误回调');
+              return;
+            }
+            console.error('[useAgentEvents] 订阅错误:', error);
+            dispatch({ type: 'SET_ERROR', payload: error.message });
+            setIsConnected(false);
+            // 注意：这里不再无条件调用 refreshMessages
+            // refreshMessages 已有并发保护和时间节流，会自动防止过于频繁的刷新
+            refreshMessages();
+          },
+          onStatusChange: handleStatusChange
+        });
 
     return () => {
       console.log('[useAgentEvents] 清理订阅, projectId:', projectId);
@@ -439,7 +552,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
       unsubscribe();
       setIsConnected(false);
     };
-  }, [authReady, authVersion, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal, client]);
+  }, [authReady, authVersion, handleStatusChange, projectId, refreshMessages, handleTaskUpdateInternal, handleAgentEvent, client]);
 
   // 清理 blob URLs
   useEffect(() => {
@@ -450,17 +563,18 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     };
   }, [imageBlobUrls]);
 
-  return {
-    messages: state.messages,
-    currentTask: state.currentTask,
-    isProcessing: state.isProcessing,
-    isConnected,
-    lastError: state.lastError,
-    appendMessage,
-    refreshMessages,
-    messageImages,
-    imageBlobUrls
-  };
+    return {
+      messages: state.messages,
+      currentTask: state.currentTask,
+      isProcessing: state.isProcessing,
+      isConnected,
+      lastError: state.lastError,
+      appendMessage,
+      refreshMessages,
+      messageImages,
+      imageBlobUrls,
+      streamingMessage
+    };
 }
 
 export default useAgentEvents;
