@@ -3,7 +3,7 @@
  * 定义所有可用工具的 schema 和工具能力矩阵
  */
 
-import type { ToolDefinition, TaskType, WorkflowMode } from '../types.ts';
+import type { ToolDefinition, TaskType, WorkflowMode, InteractionMode } from '../types.ts';
 
 // --- 工具能力矩阵 ---
 // 定义不同任务类型和工作流模式下允许使用的工具
@@ -93,6 +93,7 @@ export function getAllowedToolNames(taskType: TaskType, workflowMode?: WorkflowM
 
 /**
  * 根据任务类型和工作流模式过滤工具定义列表
+ * @deprecated 使用 getFilteredToolsByMode 替代
  * @param taskType 任务类型
  * @param workflowMode 工作流模式（可选）
  * @returns 过滤后的工具定义数组
@@ -101,6 +102,52 @@ export function getFilteredTools(taskType: TaskType, workflowMode?: WorkflowMode
   const allowedNames = getAllowedToolNames(taskType, workflowMode);
   const filtered = TOOLS.filter(tool => allowedNames.includes(tool.function.name));
   console.log(`[ToolCapability] 任务类型: ${taskType}, 工作流模式: ${workflowMode || 'none'}, 过滤后工具数: ${filtered.length}/${TOOLS.length}`);
+  return filtered;
+}
+
+// --- 基于 InteractionMode 的工具能力矩阵 ---
+
+/**
+ * InteractionMode 工具能力矩阵
+ * 
+ * | 模式   | 允许的工具                    |
+ * |--------|------------------------------|
+ * | chat   | 只读工具                      |
+ * | plan   | 只读工具                      |
+ * | build  | 完整工具集                    |
+ */
+const MODE_TOOL_MATRIX: Record<InteractionMode, string[]> = {
+  'chat': READ_ONLY_TOOLS,
+  'plan': READ_ONLY_TOOLS,
+  'build': ALL_TOOLS
+};
+
+/**
+ * 根据 InteractionMode 获取允许使用的工具名称列表
+ * @param mode 交互模式
+ * @returns 允许使用的工具名称数组
+ */
+export function getAllowedToolNamesByMode(mode: InteractionMode): string[] {
+  const tools = MODE_TOOL_MATRIX[mode];
+  if (tools) {
+    console.log(`[ToolCapability] 模式: ${mode} -> ${tools.join(', ')}`);
+    return tools;
+  }
+  
+  // 默认回退到只读工具
+  console.log(`[ToolCapability] 未知模式: ${mode}, 回退到只读工具`);
+  return READ_ONLY_TOOLS;
+}
+
+/**
+ * 根据 InteractionMode 过滤工具定义列表
+ * @param mode 交互模式
+ * @returns 过滤后的工具定义数组
+ */
+export function getFilteredToolsByMode(mode: InteractionMode): ToolDefinition[] {
+  const allowedNames = getAllowedToolNamesByMode(mode);
+  const filtered = TOOLS.filter(tool => allowedNames.includes(tool.function.name));
+  console.log(`[ToolCapability] 模式: ${mode}, 过滤后工具数: ${filtered.length}/${TOOLS.length}`);
   return filtered;
 }
 
