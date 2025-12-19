@@ -9,21 +9,61 @@ export * from './config.ts';
 // 类型
 export * from './types.ts';
 
-// Prompt Router
+// Prompts 模块（路由、缓存、组装）
 export { 
-  routePrompts, 
+  // 路由
+  routePrompts,
+  routePromptsAsync,
+  routePromptLayers,
+  PROMPT_ROUTING_TABLE,
+  cleanupOldPromptVersions,
+  // 缓存
+  VERSION_CACHE_TTL,
+  promptCache,
+  extractVersion,
+  detectLatestVersions,
+  getVersionCache,
+  getLatestLayerKey,
+  getLatestWorkflowKey,
+  clearVersionCache,
+  clearPromptCache,
+  clearAllCaches,
+  // 组装
   assembleSystemPrompt, 
   getMultiplePrompts,
+  classifyPromptError,
+  // 默认提示词
   DEFAULT_PROMPTS,
-  PROMPT_ROUTING_TABLE,
-  LAYER_TO_PROMPT_PREFIX
-} from './prompts/router.ts';
+  LAYER_TO_PROMPT_PREFIX,
+  WORKFLOW_MODE_TO_PROMPT_PREFIX,
+  PROMPT_CORE_SYSTEM,
+  PROMPT_PLANNER,
+  PROMPT_CODER,
+  PROMPT_REVIEWER,
+  PROMPT_CHAT_ASSISTANT,
+  PROMPT_DEBUGGER,
+  PROMPT_WORKFLOW_DEFAULT,
+  PROMPT_WORKFLOW_PLANNING,
+  PROMPT_WORKFLOW_BUILD
+} from './prompts/index.ts';
 
 // LLM 客户端
 export { 
   parseChatCompletionOutput, 
   callOpenRouterChatCompletionsApi 
 } from './llm/client.ts';
+
+// 流式 LLM 客户端
+export {
+  callOpenRouterChatCompletionsApiStreaming,
+  callOpenRouterChatCompletionsApiFallback,
+  DEFAULT_STREAMING_CONFIG
+} from './llm/streamingClient.ts';
+export type {
+  StreamingConfig,
+  StreamingCallbacks,
+  StreamingResult
+} from './llm/streamingClient.ts';
 
 // 图片生成
 export { 
@@ -87,7 +127,15 @@ export {
   logAgentEvent,
   logFileEvent,
   logSelfRepairAttempt,
-  logSelfRepairFinalStatus
+  logSelfRepairFinalStatus,
+  logProgressEvent,
+  logStageEnter,
+  logStageExit,
+  logIterationStart,
+  logToolStart,
+  logToolComplete,
+  logStreamDelta,
+  logStreamComplete
 } from './logging/agentEvents.ts';
 
 // 自我修复

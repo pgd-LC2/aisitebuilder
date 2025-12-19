@@ -306,14 +306,42 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 // 订阅选项类型
 // ============================================
 
+// Progress 事件 kind 类型（与后端 ProgressEventKind 对应）
+export type ProgressEventKind =
+  | 'stage_enter'      // 阶段进入
+  | 'stage_exit'       // 阶段退出
+  | 'iteration_start'  // 迭代开始
+  | 'tool_start'       // 工具调用开始
+  | 'tool_complete'    // 工具调用完成
+  | 'thinking'         // AI 思考中
+  | 'stream_delta'     // 流式输出增量
+  | 'stream_complete'; // 流式输出完成
+
 // 数据库 agent_events 表记录类型
 export interface DbAgentEvent {
   id: string;
   task_id: string | null;
   project_id: string;
-  type: 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error';
-  payload: Record<string, unknown>;
+  type: 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error' | 'progress';
+  payload: DbAgentEventPayload;
   created_at: string;
+}
+
+// agent_events payload 类型
+export interface DbAgentEventPayload {
+  kind?: ProgressEventKind;
+  stage?: string;
+  iteration?: number;
+  toolName?: string;
+  args?: Record<string, unknown>;
+  result?: unknown;
+  success?: boolean;
+  duration?: number;
+  delta?: string;
+  content?: string;
+  messageId?: string;
+  totalLength?: number;
+  [key: string]: unknown;
 }
 
 // 数据库 file_events 表记录类型
@@ -364,6 +392,19 @@ export interface UseAgentEventsOptions {
   projectId: string | undefined;
   onTaskCompleted?: (task: AITask) => void;
   onMessageReceived?: (message: ChatMessage) => void;
+  /** 流式输出增量回调 */
+  onStreamDelta?: (delta: string, messageId: string) => void;
+  /** 流式输出完成回调 */
+  onStreamComplete?: (content: string, messageId: string) => void;
+}
+
+/** 流式消息状态 */
+export interface StreamingMessage {
+  messageId: string;
+  content: string;
+  isComplete: boolean;
+  startedAt: number;
+  updatedAt: number;
 }
 
 export interface UseAgentEventsReturn {
@@ -376,6 +417,8 @@ export interface UseAgentEventsReturn {
   refreshMessages: () => Promise<void>;
   messageImages: Record<string, string[]>;
   imageBlobUrls: Record<string, string>;
+  /** 当前流式消息（用于实时显示 token 级输出） */
+  streamingMessage: StreamingMessage | null;
 }
 
 export interface UseFileEventsOptions {

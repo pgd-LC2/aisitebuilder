@@ -68,6 +68,8 @@ export interface AgentLoopResult {
   generatedImages: string[];
   modifiedFiles: string[];
   error?: string;
+  messages?: ChatMessage[];
+  needsStreamingResponse?: boolean;
 }
 
 // --- AgentLoop 实现 ---
@@ -221,6 +223,7 @@ export async function runAgentLoop(
         }
       } else {
         // 没有工具调用，返回最终响应
+        // 注意：这里返回消息历史，以便 TaskRunner 可以使用流式调用生成最终响应
         finalResponse = assistantResponse.content || '';
         
         // 通知进度：完成
@@ -234,12 +237,16 @@ export async function runAgentLoop(
         
         console.log(`[AgentLoop] 循环完成，共 ${iteration} 次迭代`);
         
+        // 返回结果，包含消息历史以支持流式输出
+        // 如果 finalResponse 为空，说明需要流式生成最终响应
         return {
           success: true,
           finalResponse,
           iterations: iteration,
           generatedImages,
-          modifiedFiles
+          modifiedFiles,
+          messages: chatMessages,
+          needsStreamingResponse: false
         };
       }
     } catch (error) {

@@ -196,6 +196,40 @@ export interface MoveFileResult {
 
 export type AgentEventType = 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error';
 
+/**
+ * 进度事件 payload 中的 kind 字段
+ * 用于细分事件类型，保持 agent_events.type 不变
+ */
+export type ProgressEventKind = 
+  | 'stage_enter'       // 进入新阶段
+  | 'stage_exit'        // 退出阶段
+  | 'iteration_start'   // 开始新迭代
+  | 'tool_start'        // 开始执行工具
+  | 'tool_complete'     // 工具执行完成
+  | 'thinking'          // AI 正在思考
+  | 'stream_delta'      // 流式输出 chunk
+  | 'stream_complete';  // 流式输出完成
+
+/**
+ * 进度事件 payload
+ * 用于 UI 实时展示和重放
+ */
+export interface ProgressEventPayload {
+  kind: ProgressEventKind;
+  stage?: TaskPhase;
+  iteration?: number;
+  totalIterations?: number;
+  toolName?: string;
+  toolArgs?: Record<string, unknown>;
+  toolResult?: unknown;
+  toolSuccess?: boolean;
+  delta?: string;
+  seq?: number;
+  messageId?: string;
+  message?: string;
+  timestamp: string;
+}
+
 export interface AgentEventPayload {
   phase?: string;
   status?: string;
@@ -210,6 +244,7 @@ export interface AgentEventPayload {
   debuggerResponse?: unknown;
   message?: string;
   level?: string;
+  kind?: ProgressEventKind;
   [key: string]: unknown;
 }
 
