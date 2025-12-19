@@ -122,6 +122,10 @@ export const TOOLS: ToolDefinition[] = [
             type: 'string',
             description: '图片的宽高比',
             enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+          },
+          model: {
+            type: 'string',
+            description: '图片生成模型（可选）。如果不指定，将使用默认模型。可用模型: google/gemini-3-pro-image-preview, openai/dall-e-3, openai/dall-e-2'
           }
         },
         required: ['prompt']

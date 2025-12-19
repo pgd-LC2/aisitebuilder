@@ -15,27 +15,21 @@ import {
   MODEL_CONFIG,
   getFilteredTools,
   ChatMessage,
-  ToolContext,
   PromptRouterContext,
   TaskType,
   WorkflowMode,
   assembleSystemPrompt,
-  callOpenRouterChatCompletionsApi,
-  generateImage,
-  saveImageToStorage,
-  executeToolCall,
   writeBuildLog,
   writeAssistantMessage,
   updateTaskStatus,
   logAgentEvent,
   processTaskWithSelfRepair,
+  // AgentLoop - 统一的 Agent 循环
+  runAgentLoop,
+  AgentLoopConfig,
+  AgentLoopContext,
   // Subagent 系统
-  initializeBuiltinSubagents,
-  executeSubagent,
-  canSpawnSubagent,
-  SubagentContext,
-  SubagentTaskParams,
-  SubagentType
+  initializeBuiltinSubagents
 } from '../_shared/ai/index.ts';
 
 // 初始化内置 subagent
@@ -132,8 +126,6 @@ async function processTask(
     const bucket = projectFilesContext?.bucket || 'project-files';
     const basePath = projectFilesContext?.path || `${task.project_id}/${versionId}`;
     
-    const toolContext: ToolContext = { supabase, projectId: task.project_id, versionId, bucket, basePath };
-    
     const workflowMode = task.payload?.workflowMode as WorkflowMode | undefined;
     const routerContext: PromptRouterContext = {
       taskType: task.type as TaskType,
@@ -220,141 +212,56 @@ ${requirement}
     
     console.log(`调用 OpenRouter Chat Completions API, Model: ${model}, Msg Count: ${messages.length}`);
     
-    let iteration = 0;
-    let finalResponse = '';
-    const generatedImages: string[] = [];
-    const modifiedFiles: string[] = [];
-    const chatMessages: ChatMessage[] = messages.map(msg => ({ role: msg.role as 'system' | 'user' | 'assistant', content: msg.content }));
+    // 构建 AgentLoop 配置
+    const agentLoopConfig: AgentLoopConfig = {
+      model,
+      apiKey,
+      tools: getFilteredTools(task.type as TaskType, workflowMode),
+      toolChoice: task.type === 'chat_reply' ? 'auto' : 'required',
+      maxIterations: 50
+    };
     
-    while (true) {
-      iteration++;
-      console.log(`Agent 迭代 ${iteration}`);
-      await writeBuildLog(supabase, task.project_id, 'info', `Agent 执行中 (迭代 ${iteration})...`);
-      
-      // 根据任务类型动态设置 toolChoice
-      // - chat_reply: 使用 'auto'，允许模型选择是否调用工具
-      // - build_site, refactor_code: 使用 'required'，强制模型调用工具
-      const toolChoice = task.type === 'chat_reply' ? 'auto' : 'required';
-      
-      // 根据任务类型和工作流模式过滤工具列表
-      // chat_reply 任务在 default/planning 模式下只能使用只读工具
-      const filteredTools = getFilteredTools(task.type as TaskType, workflowMode);
-      const assistantResponse = await callOpenRouterChatCompletionsApi(chatMessages, apiKey, model, { tools: filteredTools, toolChoice });
-      
-      if (assistantResponse.tool_calls && assistantResponse.tool_calls.length > 0) {
-        chatMessages.push(assistantResponse.rawMessage);
-        
-        for (const toolCall of assistantResponse.tool_calls) {
-          const toolName = toolCall.name;
-          const args = JSON.parse(toolCall.arguments || '{}');
-          
-          console.log(`执行工具: ${toolName}`, args);
-          await writeBuildLog(supabase, task.project_id, 'info', `调用工具: ${toolName}`);
-          await logAgentEvent(supabase, task.id, task.project_id, 'tool_call', { toolName, toolArgs: args, status: 'started' });
-          
-          let toolOutput: string;
-          
-          if (toolName === 'generate_image') {
-            try {
-              const prompt = args.prompt;
-              const aspectRatio = args.aspect_ratio || '1:1';
-              await writeBuildLog(supabase, task.project_id, 'info', `正在生成图片: ${prompt}`);
-              const imageDataUrl = await generateImage(prompt, apiKey, aspectRatio);
-              const timestamp = Date.now();
-              const fileName = `generated_image_${timestamp}.png`;
-              const imagePath = await saveImageToStorage(supabase, task.project_id, versionId, imageDataUrl, fileName);
-              generatedImages.push(imagePath);
-              await writeBuildLog(supabase, task.project_id, 'success', `图片已生成并保存: ${imagePath}`);
-              toolOutput = JSON.stringify({ success: true, image_path: imagePath, file_name: fileName, message: '图片已成功生成并保存到项目文件夹' });
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              console.error('图片生成失败:', error);
-              await writeBuildLog(supabase, task.project_id, 'error', `图片生成失败: ${errorMessage}`);
-              toolOutput = JSON.stringify({ success: false, error: errorMessage });
-            }
-          } else if (toolName === 'spawn_subagent') {
-            // 处理 spawn_subagent 工具调用
-            const nestingLevel = (task.payload?.nestingLevel as number) || 0;
-            
-            if (!canSpawnSubagent(nestingLevel)) {
-              toolOutput = JSON.stringify({ 
-                success: false, 
-                error: `已达到最大嵌套层级 (1)，无法创建更多子代理` 
-              });
-            } else {
-              try {
-                const subagentType = args.type as SubagentType;
-                const instruction = args.instruction as string;
-                const targetFilesStr = args.target_files as string | undefined;
-                const targetFiles = targetFilesStr ? targetFilesStr.split(',').map((f: string) => f.trim()) : undefined;
-                
-                const subagentContext: SubagentContext = {
-                  supabase,
-                  apiKey,
-                  projectId: task.project_id,
-                  toolContext,
-                  projectFilesContext: projectFilesContext ? { bucket, path: basePath, versionId } : undefined,
-                  parentTaskId: task.id,
-                  nestingLevel
-                };
-                
-                const subagentParams: SubagentTaskParams = {
-                  type: subagentType,
-                  instruction,
-                  targetFiles
-                };
-                
-                await writeBuildLog(supabase, task.project_id, 'info', `正在创建子代理: ${subagentType}`);
-                const subagentResult = await executeSubagent(subagentContext, subagentParams);
-                
-                // 将子代理修改的文件添加到主任务的修改文件列表
-                modifiedFiles.push(...subagentResult.modifiedFiles);
-                
-                toolOutput = JSON.stringify({
-                  success: subagentResult.success,
-                  type: subagentResult.type,
-                  output: subagentResult.output,
-                  modified_files: subagentResult.modifiedFiles,
-                  execution_time_ms: subagentResult.executionTime,
-                  error: subagentResult.error
-                });
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error('子代理执行失败:', error);
-                await writeBuildLog(supabase, task.project_id, 'error', `子代理执行失败: ${errorMessage}`);
-                toolOutput = JSON.stringify({ success: false, error: errorMessage });
-              }
-            }
-          } else {
-            const { result } = await executeToolCall(toolName, args, toolContext);
-            const toolResult = result as { success: boolean; file_path?: string; error?: string };
-            if (!toolResult.success) {
-              const errorMsg = toolResult.error || '未知错误';
-              await writeBuildLog(supabase, task.project_id, 'error', `工具执行失败 [${toolName}]: ${errorMsg}`);
-              await logAgentEvent(supabase, task.id, task.project_id, 'tool_call', { toolName, toolArgs: args, status: 'failed', error: errorMsg });
-            }
-            if (toolName === 'write_file' && toolResult.success && toolResult.file_path) {
-              modifiedFiles.push(toolResult.file_path);
-            }
-            toolOutput = JSON.stringify(result);
-          }
-          
-          chatMessages.push({ role: 'tool', content: toolOutput, tool_call_id: toolCall.id });
-        }
-      } else {
-        finalResponse = assistantResponse.content || '';
-        break;
-      }
+    // 构建 AgentLoop 上下文
+    const agentLoopContext: AgentLoopContext = {
+      supabase,
+      projectId: task.project_id,
+      taskId: task.id,
+      versionId,
+      bucket,
+      basePath,
+      nestingLevel: (task.payload?.nestingLevel as number) || 0,
+      projectFilesContext: projectFilesContext ? { bucket, path: basePath, versionId } : undefined
+    };
+    
+    // 转换消息格式
+    const chatMessages: ChatMessage[] = messages.map(msg => ({ 
+      role: msg.role as 'system' | 'user' | 'assistant', 
+      content: msg.content 
+    }));
+    
+    // 运行统一的 Agent 循环
+    const loopResult = await runAgentLoop(chatMessages, agentLoopConfig, agentLoopContext);
+    
+    // 检查循环结果
+    if (!loopResult.success) {
+      throw new Error(loopResult.error || 'Agent 循环执行失败');
     }
     
-    const resultData: Record<string, unknown> = { text: finalResponse, model, processed_files: !!fileContextStr, generated_images: generatedImages, modified_files: modifiedFiles, iterations: iteration };
-    const messageId = await writeAssistantMessage(supabase, task.project_id, finalResponse);
+    const resultData: Record<string, unknown> = { 
+      text: loopResult.finalResponse, 
+      model, 
+      processed_files: !!fileContextStr, 
+      generated_images: loopResult.generatedImages, 
+      modified_files: loopResult.modifiedFiles, 
+      iterations: loopResult.iterations 
+    };
+    const messageId = await writeAssistantMessage(supabase, task.project_id, loopResult.finalResponse);
     if (!messageId) throw new Error('写入助手消息失败');
     resultData.messageId = messageId;
     
-    await writeBuildLog(supabase, task.project_id, 'success', `AI 任务处理完成 (${iteration} 次迭代, ${modifiedFiles.length} 个文件修改)`);
+    await writeBuildLog(supabase, task.project_id, 'success', `AI 任务处理完成 (${loopResult.iterations} 次迭代, ${loopResult.modifiedFiles.length} 个文件修改)`);
     await updateTaskStatus(supabase, task.id, 'completed', resultData);
-    await logAgentEvent(supabase, task.id, task.project_id, 'agent_phase', { phase: 'completed', status: 'completed', iterations: iteration, modifiedFilesCount: modifiedFiles.length, generatedImagesCount: generatedImages.length });
+    await logAgentEvent(supabase, task.id, task.project_id, 'agent_phase', { phase: 'completed', status: 'completed', iterations: loopResult.iterations, modifiedFilesCount: loopResult.modifiedFiles.length, generatedImagesCount: loopResult.generatedImages.length });
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
