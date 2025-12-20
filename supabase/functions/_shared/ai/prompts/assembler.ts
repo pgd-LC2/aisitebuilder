@@ -2,15 +2,15 @@
  * Prompt Assembler 模块
  * 负责组装完整的 system prompt
  * 
- * 包含：
- * - 批量获取提示词
- * - 组装完整的 system prompt
+ * 设计原则：
+ * - 数据库不可用 = 系统不可用（立即失败）
+ * - 不提供硬编码默认值回退
+ * - 所有提示词必须从数据库获取
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { CACHE_TTL } from '../config.ts';
 import type { PromptRouterContext, PromptFetchErrorType } from '../types.ts';
-import { DEFAULT_PROMPTS } from './layers.ts';
 import { promptCache, getLatestWorkflowKey } from './cache.ts';
 import { routePromptsAsync } from './router.ts';
 
@@ -37,7 +37,8 @@ export function classifyPromptError(error: { code?: string; message?: string; de
 /**
  * 批量获取多个提示词
  * 优先从缓存获取，缓存未命中则从数据库获取
- * 数据库获取失败则使用默认值
+ * 
+ * 设计原则：数据库不可用时直接抛出错误，不使用默认值回退
  */
 export async function getMultiplePrompts(
   supabase: ReturnType<typeof createClient>,
@@ -58,52 +59,37 @@ export async function getMultiplePrompts(
 
   if (keysToFetch.length > 0) {
     console.log(`[PromptAssembler] 从数据库获取提示词: ${keysToFetch.join(', ')}`);
-    try {
-      const { data, error } = await supabase
-        .from('prompts')
-        .select('key, content')
-        .in('key', keysToFetch)
-        .eq('is_active', true);
+    
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('key, content')
+      .in('key', keysToFetch)
+      .eq('is_active', true);
 
-      if (error) {
-        const errorType = classifyPromptError(error);
-        console.error(`[PromptAssembler] ${errorType} 批量获取提示词失败:`, {
-          errorType,
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          keys: keysToFetch
-        });
-        for (const key of keysToFetch) {
-          console.log(`[PromptAssembler] Fallback (${errorType}): ${key} 使用默认值`);
-          result[key] = DEFAULT_PROMPTS[key] || '';
-        }
-      } else {
-        const fetchedKeys = new Set<string>();
-        for (const item of data || []) {
-          result[item.key] = item.content;
-          promptCache.set(item.key, { content: item.content, timestamp: Date.now() });
-          fetchedKeys.add(item.key);
-          console.log(`[PromptAssembler] 成功加载: ${item.key} (len=${item.content.length}) source=supabase`);
-        }
-        for (const key of keysToFetch) {
-          if (!fetchedKeys.has(key)) {
-            console.log(`[PromptAssembler] Fallback (NOT_FOUND): ${key} 数据库中不存在，使用默认值`);
-            result[key] = DEFAULT_PROMPTS[key] || '';
-          }
-        }
-      }
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      console.error(`[PromptAssembler] NETWORK_ERROR 批量获取提示词异常:`, {
-        errorType: 'NETWORK_ERROR',
-        message: errorMessage,
+    if (error) {
+      const errorType = classifyPromptError(error);
+      console.error(`[PromptAssembler] ${errorType} 批量获取提示词失败:`, {
+        errorType,
+        code: error.code,
+        message: error.message,
+        details: error.details,
         keys: keysToFetch
       });
-      for (const key of keysToFetch) {
-        console.log(`[PromptAssembler] Fallback (NETWORK_ERROR): ${key} 使用默认值`);
-        result[key] = DEFAULT_PROMPTS[key] || '';
-      }
+      throw new Error(`提示词获取失败 (${errorType}): ${error.message}. 请检查数据库连接和 prompts 表配置。`);
+    }
+    
+    const fetchedKeys = new Set<string>();
+    for (const item of data || []) {
+      result[item.key] = item.content;
+      promptCache.set(item.key, { content: item.content, timestamp: Date.now() });
+      fetchedKeys.add(item.key);
+      console.log(`[PromptAssembler] 成功加载: ${item.key} (len=${item.content.length}) source=supabase`);
+    }
+    
+    const missingKeys = keysToFetch.filter(key => !fetchedKeys.has(key));
+    if (missingKeys.length > 0) {
+      console.error(`[PromptAssembler] 提示词缺失:`, { missingKeys });
+      throw new Error(`提示词缺失: ${missingKeys.join(', ')}. 请确保这些提示词已在数据库中配置并激活。`);
     }
   }
 
@@ -142,20 +128,11 @@ export async function assembleSystemPrompt(
   
   const prompts = await getMultiplePrompts(supabase, promptKeys);
   
-  let loadedFromDb = 0;
-  let fallbackCount = 0;
-  for (const key of promptKeys) {
-    if (prompts[key] && prompts[key] !== DEFAULT_PROMPTS[key]) {
-      loadedFromDb++;
-    } else {
-      fallbackCount++;
-    }
-  }
-  console.log(`[PromptAssembler] 加载统计: ${loadedFromDb}/${promptKeys.length} 从数据库加载, ${fallbackCount} 使用默认值`);
+  console.log(`[PromptAssembler] 加载统计: ${promptKeys.length}/${promptKeys.length} 从数据库加载`);
   
   const assembledPrompt = promptKeys
-    .map(key => prompts[key] || DEFAULT_PROMPTS[key] || '')
-    .filter(p => p.length > 0)
+    .map(key => prompts[key])
+    .filter(p => p && p.length > 0)
     .join('\n\n---\n\n');
   
   if (fileContext) {

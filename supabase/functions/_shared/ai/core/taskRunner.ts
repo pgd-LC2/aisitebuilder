@@ -28,12 +28,11 @@ import type {
 import { MODEL_CONFIG } from '../config.ts';
 import { runAgentLoop, type AgentLoopConfig, type AgentLoopContext } from './agentLoop.ts';
 import { getFilteredToolsByMode } from '../tools/definitions.ts';
-import { assembleSystemPrompt } from '../prompts/router.ts';
+import { assembleSystemPrompt } from '../prompts/assembler.ts';
 import { writeBuildLog, writeAssistantMessage, updateTaskStatus } from '../logging/buildLog.ts';
 import { logAgentEvent, logStageEnter, logStageExit } from '../logging/agentEvents.ts';
 import { 
   callOpenRouterChatCompletionsApiStreaming,
-  callOpenRouterChatCompletionsApiFallback,
   DEFAULT_STREAMING_CONFIG
 } from '../llm/streamingClient.ts';
 
@@ -292,8 +291,9 @@ export class TaskRunner {
   /**
    * 阶段 5: 处理最终响应
    * 
-   * 两段式实现：
-   * - 如果 agent_loop 已经返回了 finalResponse，直接使用（非流式回退）
+   * 设计原则：
+   * - 流式输出失败 = 任务失败（不做非流式回退）
+   * - 如果 agent_loop 已经返回了 finalResponse，直接使用
    * - 如果启用流式输出且有消息历史，使用流式调用生成最终响应
    */
   private async processFinalResponse(): Promise<Record<string, unknown>> {
@@ -306,20 +306,10 @@ export class TaskRunner {
     const { taskType } = this.mapModeToLegacy(mode, payload);
     const model = MODEL_CONFIG[taskType] || MODEL_CONFIG.default;
     
-    // 如果已经有 finalResponse 且不需要流式输出，直接使用
-    if (this.loopResult.finalResponse && !this.useStreaming) {
-      this.streamedResponse = this.loopResult.finalResponse;
-      return {
-        responseLength: this.streamedResponse.length,
-        hasContent: this.streamedResponse.length > 0,
-        streaming: false
-      };
-    }
-    
-    // 如果已经有 finalResponse，作为非流式回退
+    // 如果已经有 finalResponse，直接使用（agent_loop 已经生成了响应）
     if (this.loopResult.finalResponse) {
       this.streamedResponse = this.loopResult.finalResponse;
-      console.log('[TaskRunner] 使用非流式回退响应');
+      console.log('[TaskRunner] 使用 agent_loop 生成的响应');
       return {
         responseLength: this.streamedResponse.length,
         hasContent: this.streamedResponse.length > 0,
@@ -338,75 +328,44 @@ export class TaskRunner {
     await logStageEnter(this.supabase, taskId, projectId, 'final_response', '开始流式生成最终响应');
     await writeBuildLog(this.supabase, projectId, 'info', '正在生成最终响应 (流式)...');
     
-    try {
-      // 使用流式调用生成最终响应（禁止 tool_calls）
-      const streamResult = await callOpenRouterChatCompletionsApiStreaming(
-        this.loopResult.messages,
-        apiKey,
-        model,
-        this.supabase,
-        taskId,
-        projectId,
-        this.streamingMessageId,
-        {
-          onDelta: (delta, seq) => {
-            console.log(`[TaskRunner] 流式 delta #${seq}: ${delta.length} 字符`);
-          },
-          onComplete: (fullContent) => {
-            console.log(`[TaskRunner] 流式完成: ${fullContent.length} 字符`);
-          },
-          onError: (error) => {
-            console.error('[TaskRunner] 流式错误:', error.message);
-          }
+    // 使用流式调用生成最终响应（禁止 tool_calls）
+    const streamResult = await callOpenRouterChatCompletionsApiStreaming(
+      this.loopResult.messages,
+      apiKey,
+      model,
+      this.supabase,
+      taskId,
+      projectId,
+      this.streamingMessageId,
+      {
+        onDelta: (delta, seq) => {
+          console.log(`[TaskRunner] 流式 delta #${seq}: ${delta.length} 字符`);
         },
-        DEFAULT_STREAMING_CONFIG
-      );
-      
-      if (streamResult.error) {
-        // 流式输出失败，尝试非流式回退
-        console.warn('[TaskRunner] 流式输出失败，尝试非流式回退');
-        const fallbackResult = await callOpenRouterChatCompletionsApiFallback(
-          this.loopResult.messages,
-          apiKey,
-          model
-        );
-        this.streamedResponse = fallbackResult.content;
-      } else {
-        this.streamedResponse = streamResult.content;
-      }
-      
-      await logStageExit(this.supabase, taskId, projectId, 'final_response', '流式响应生成完成');
-      
-      return {
-        responseLength: this.streamedResponse.length,
-        hasContent: this.streamedResponse.length > 0,
-        streaming: true,
-        messageId: this.streamingMessageId
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[TaskRunner] 流式响应生成失败:', errorMessage);
-      
-      // 尝试非流式回退
-      try {
-        const fallbackResult = await callOpenRouterChatCompletionsApiFallback(
-          this.loopResult.messages,
-          apiKey,
-          model
-        );
-        this.streamedResponse = fallbackResult.content;
-        
-        return {
-          responseLength: this.streamedResponse.length,
-          hasContent: this.streamedResponse.length > 0,
-          streaming: false,
-          fallback: true
-        };
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (_fallbackError) {
-        throw new Error(`流式和非流式响应都失败: ${errorMessage}`);
-      }
+        onComplete: (fullContent) => {
+          console.log(`[TaskRunner] 流式完成: ${fullContent.length} 字符`);
+        },
+        onError: (error) => {
+          console.error('[TaskRunner] 流式错误:', error.message);
+        }
+      },
+      DEFAULT_STREAMING_CONFIG
+    );
+    
+    // 流式输出失败 = 任务失败（不做非流式回退）
+    if (streamResult.error) {
+      throw new Error(`流式响应生成失败: ${streamResult.error.message}`);
     }
+    
+    this.streamedResponse = streamResult.content;
+    
+    await logStageExit(this.supabase, taskId, projectId, 'final_response', '流式响应生成完成');
+    
+    return {
+      responseLength: this.streamedResponse.length,
+      hasContent: this.streamedResponse.length > 0,
+      streaming: true,
+      messageId: this.streamingMessageId
+    };
   }
 
   /**

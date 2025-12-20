@@ -15,7 +15,6 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import type { TaskType, PromptLayer, PromptRouterContext } from '../types.ts';
-import { LAYER_TO_PROMPT_PREFIX } from './layers.ts';
 import { getLatestLayerKey, extractVersion } from './cache.ts';
 
 // --- 路由配置 ---
@@ -80,14 +79,6 @@ export async function routePromptsAsync(
   }
   
   return keys;
-}
-
-/**
- * @deprecated 使用 routePromptsAsync 代替，此函数使用 v1 作为默认版本
- */
-export function routePrompts(context: PromptRouterContext): string[] {
-  const layers = routePromptLayers(context);
-  return layers.map(layer => `${LAYER_TO_PROMPT_PREFIX[layer]}.v1`);
 }
 
 /**

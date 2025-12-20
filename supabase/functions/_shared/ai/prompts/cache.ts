@@ -112,6 +112,8 @@ export async function getVersionCache(
 
 /**
  * 获取层级的最新提示词 key
+ * 
+ * 设计原则：找不到版本时直接抛出错误，不使用 .v1 默认值回退
  */
 export async function getLatestLayerKey(
   supabase: ReturnType<typeof createClient>,
@@ -124,14 +126,14 @@ export async function getLatestLayerKey(
     return latestKey;
   }
   
-  // 如果没有找到，返回 v1 作为默认值
-  const defaultKey = `${LAYER_TO_PROMPT_PREFIX[layer]}.v1`;
-  console.log(`[PromptCache] 层级 ${layer} 未找到最新版本，使用默认值: ${defaultKey}`);
-  return defaultKey;
+  const prefix = LAYER_TO_PROMPT_PREFIX[layer];
+  throw new Error(`提示词版本缺失: 层级 "${layer}" (前缀: ${prefix}) 在数据库中没有任何活跃版本。请确保已在 prompts 表中配置该层级的提示词。`);
 }
 
 /**
  * 获取工作流模式的最新提示词 key
+ * 
+ * 设计原则：找不到版本时直接抛出错误，不使用 .v1 默认值回退
  */
 export async function getLatestWorkflowKey(
   supabase: ReturnType<typeof createClient>,
@@ -144,10 +146,8 @@ export async function getLatestWorkflowKey(
     return latestKey;
   }
   
-  // 如果没有找到，返回 v1 作为默认值
-  const defaultKey = `${WORKFLOW_MODE_TO_PROMPT_PREFIX[mode]}.v1`;
-  console.log(`[PromptCache] 工作流 ${mode} 未找到最新版本，使用默认值: ${defaultKey}`);
-  return defaultKey;
+  const prefix = WORKFLOW_MODE_TO_PROMPT_PREFIX[mode];
+  throw new Error(`提示词版本缺失: 工作流模式 "${mode}" (前缀: ${prefix}) 在数据库中没有任何活跃版本。请确保已在 prompts 表中配置该工作流的提示词。`);
 }
 
 /**
