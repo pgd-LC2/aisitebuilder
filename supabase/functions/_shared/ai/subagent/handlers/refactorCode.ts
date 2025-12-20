@@ -10,7 +10,7 @@ import type {
   SubagentConfig
 } from '../types.ts';
 import { registerSubagent } from '../registry.ts';
-import { assembleSystemPrompt } from '../../prompts/router.ts';
+import { assembleSystemPrompt } from '../../prompts/assembler.ts';
 import { callOpenRouterChatCompletionsApi } from '../../llm/client.ts';
 import { executeToolCall } from '../../tools/executor.ts';
 import { TOOLS } from '../../tools/definitions.ts';

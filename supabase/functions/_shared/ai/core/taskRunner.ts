@@ -28,7 +28,7 @@ import type {
 import { MODEL_CONFIG } from '../config.ts';
 import { runAgentLoop, type AgentLoopConfig, type AgentLoopContext } from './agentLoop.ts';
 import { getFilteredToolsByMode } from '../tools/definitions.ts';
-import { assembleSystemPrompt } from '../prompts/router.ts';
+import { assembleSystemPrompt } from '../prompts/assembler.ts';
 import { writeBuildLog, writeAssistantMessage, updateTaskStatus } from '../logging/buildLog.ts';
 import { logAgentEvent, logStageEnter, logStageExit } from '../logging/agentEvents.ts';
 import { 
