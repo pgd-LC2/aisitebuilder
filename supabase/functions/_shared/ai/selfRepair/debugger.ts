@@ -12,7 +12,7 @@ import type {
   PromptRouterContext,
   ChatMessage
 } from '../types.ts';
-import { assembleSystemPrompt } from '../prompts/router.ts';
+import { assembleSystemPrompt } from '../prompts/assembler.ts';
 import { callOpenRouterChatCompletionsApi } from '../llm/client.ts';
 import { handleGetProjectStructure } from '../tools/fileOperations.ts';
 
