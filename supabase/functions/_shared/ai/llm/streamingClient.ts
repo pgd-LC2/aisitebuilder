@@ -7,7 +7,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { OPENROUTER_API_URL, OPENROUTER_REFERER, OPENROUTER_TITLE } from '../config.ts';
+import { OPENROUTER_API_URL, OPENROUTER_REFERER, OPENROUTER_TITLE, DEBUG_LLM } from '../config.ts';
 import type { ChatMessage } from '../types.ts';
 import { logStreamDelta, logStreamComplete } from '../logging/agentEvents.ts';
 
@@ -109,12 +109,14 @@ export async function callOpenRouterChatCompletionsApiStreaming(
     stream: true
   };
   
-  console.log('[StreamingClient] 开始流式请求:', {
-    model,
-    messageCount: messages.length,
-    taskId,
-    messageId
-  });
+  if (DEBUG_LLM) {
+    console.log('[StreamingClient] 开始流式请求:', {
+      model,
+      messageCount: messages.length,
+      taskId,
+      messageId
+    });
+  }
   
   let response: Response;
   try {
@@ -238,11 +240,13 @@ export async function callOpenRouterChatCompletionsApiStreaming(
     
     callbacks?.onComplete?.(fullContent);
     
-    console.log('[StreamingClient] 流式输出完成:', {
-      contentLength: fullContent.length,
-      totalChunks: seq,
-      finishReason
-    });
+    if (DEBUG_LLM) {
+      console.log('[StreamingClient] 流式输出完成:', {
+        contentLength: fullContent.length,
+        totalChunks: seq,
+        finishReason
+      });
+    }
     
     return { content: fullContent, finishReason };
     
@@ -259,45 +263,4 @@ export async function callOpenRouterChatCompletionsApiStreaming(
     callbacks?.onError?.(err);
     return { content: fullContent, finishReason, error: err };
   }
-}
-
-/**
- * 非流式回退方法
- * 当流式输出出现问题时使用
- */
-export async function callOpenRouterChatCompletionsApiFallback(
-  messages: ChatMessage[],
-  apiKey: string,
-  model: string
-): Promise<StreamingResult> {
-  const requestBody = {
-    model: model,
-    messages: messages,
-    max_tokens: 16000,
-    stream: false
-  };
-  
-  console.log('[StreamingClient] 使用非流式回退');
-  
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': OPENROUTER_REFERER,
-      'X-Title': OPENROUTER_TITLE
-    },
-    body: JSON.stringify(requestBody)
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenRouter API 错误: ${response.status} - ${errorText}`);
-  }
-  
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
-  const finishReason = data.choices?.[0]?.finish_reason || null;
-  
-  return { content, finishReason };
 }

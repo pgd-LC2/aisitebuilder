@@ -111,8 +111,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'misc',
     patterns: [/.*/],
-    description: '其他错误',
-    repairable: true
+    description: '其他错误 - 未知错误默认不可修复',
+    repairable: false
   }
 ];
 

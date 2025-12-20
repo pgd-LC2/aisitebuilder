@@ -1,12 +1,15 @@
 /**
  * AI Agent 工具定义模块
  * 定义所有可用工具的 schema 和工具能力矩阵
+ * 
+ * 设计原则：
+ * - 工具权限由 InteractionMode 决定，不再使用 TaskType + WorkflowMode 组合
+ * - 简化为三种模式：chat（只读）、plan（只读）、build（完整工具集）
  */
 
-import type { ToolDefinition, TaskType, WorkflowMode, InteractionMode } from '../types.ts';
+import type { ToolDefinition, InteractionMode } from '../types.ts';
 
-// --- 工具能力矩阵 ---
-// 定义不同任务类型和工作流模式下允许使用的工具
+// --- 工具分类 ---
 
 // 只读工具：用于分析和查看代码，不会修改任何文件
 const READ_ONLY_TOOLS = ['list_files', 'read_file', 'search_files', 'get_project_structure'];
@@ -19,91 +22,6 @@ const SPECIAL_TOOLS = ['generate_image', 'spawn_subagent'];
 
 // 完整工具集：所有可用工具
 const ALL_TOOLS = [...READ_ONLY_TOOLS, ...WRITE_TOOLS, ...SPECIAL_TOOLS];
-
-/**
- * 工具能力矩阵
- * 定义每种 (taskType, workflowMode) 组合允许使用的工具
- * 
- * | 任务类型      | 工作流模式  | 允许的工具                    |
- * |--------------|------------|------------------------------|
- * | chat_reply   | default    | 只读工具                      |
- * | chat_reply   | planning   | 只读工具                      |
- * | chat_reply   | build      | 完整工具集（特殊情况）         |
- * | build_site   | *          | 完整工具集                    |
- * | refactor_code| *          | 完整工具集                    |
- * | debug        | *          | 完整工具集                    |
- */
-type ToolCapabilityKey = `${TaskType}:${WorkflowMode}` | TaskType;
-
-const TOOL_CAPABILITY_MATRIX: Record<ToolCapabilityKey, string[]> = {
-  // chat_reply 任务默认只有只读能力
-  'chat_reply:default': READ_ONLY_TOOLS,
-  'chat_reply:planning': READ_ONLY_TOOLS,
-  // chat_reply + build 模式允许完整工具集（用户明确要求构建时）
-  'chat_reply:build': ALL_TOOLS,
-  // chat_reply 默认（无工作流模式时）只有只读能力
-  'chat_reply': READ_ONLY_TOOLS,
-  
-  // build_site 任务始终有完整工具能力
-  'build_site:default': ALL_TOOLS,
-  'build_site:planning': ALL_TOOLS,
-  'build_site:build': ALL_TOOLS,
-  'build_site': ALL_TOOLS,
-  
-  // refactor_code 任务始终有完整工具能力
-  'refactor_code:default': ALL_TOOLS,
-  'refactor_code:planning': ALL_TOOLS,
-  'refactor_code:build': ALL_TOOLS,
-  'refactor_code': ALL_TOOLS,
-  
-  // debug 任务始终有完整工具能力
-  'debug:default': ALL_TOOLS,
-  'debug:planning': ALL_TOOLS,
-  'debug:build': ALL_TOOLS,
-  'debug': ALL_TOOLS,
-};
-
-/**
- * 获取指定任务类型和工作流模式下允许使用的工具名称列表
- * @param taskType 任务类型
- * @param workflowMode 工作流模式（可选）
- * @returns 允许使用的工具名称数组
- */
-export function getAllowedToolNames(taskType: TaskType, workflowMode?: WorkflowMode): string[] {
-  // 优先使用精确匹配 (taskType:workflowMode)
-  if (workflowMode) {
-    const key = `${taskType}:${workflowMode}` as ToolCapabilityKey;
-    if (TOOL_CAPABILITY_MATRIX[key]) {
-      console.log(`[ToolCapability] 使用精确匹配: ${key} -> ${TOOL_CAPABILITY_MATRIX[key].join(', ')}`);
-      return TOOL_CAPABILITY_MATRIX[key];
-    }
-  }
-  
-  // 回退到任务类型默认值
-  const defaultKey = taskType as ToolCapabilityKey;
-  if (TOOL_CAPABILITY_MATRIX[defaultKey]) {
-    console.log(`[ToolCapability] 使用默认匹配: ${defaultKey} -> ${TOOL_CAPABILITY_MATRIX[defaultKey].join(', ')}`);
-    return TOOL_CAPABILITY_MATRIX[defaultKey];
-  }
-  
-  // 最终回退：返回只读工具（最安全的选择）
-  console.log(`[ToolCapability] 未找到匹配，回退到只读工具`);
-  return READ_ONLY_TOOLS;
-}
-
-/**
- * 根据任务类型和工作流模式过滤工具定义列表
- * @deprecated 使用 getFilteredToolsByMode 替代
- * @param taskType 任务类型
- * @param workflowMode 工作流模式（可选）
- * @returns 过滤后的工具定义数组
- */
-export function getFilteredTools(taskType: TaskType, workflowMode?: WorkflowMode): ToolDefinition[] {
-  const allowedNames = getAllowedToolNames(taskType, workflowMode);
-  const filtered = TOOLS.filter(tool => allowedNames.includes(tool.function.name));
-  console.log(`[ToolCapability] 任务类型: ${taskType}, 工作流模式: ${workflowMode || 'none'}, 过滤后工具数: ${filtered.length}/${TOOLS.length}`);
-  return filtered;
-}
 
 // --- 基于 InteractionMode 的工具能力矩阵 ---
 

@@ -3,7 +3,7 @@
  * 负责与 OpenRouter API 交互
  */
 
-import { OPENROUTER_API_URL, OPENROUTER_REFERER, OPENROUTER_TITLE } from '../config.ts';
+import { OPENROUTER_API_URL, OPENROUTER_REFERER, OPENROUTER_TITLE, DEBUG_LLM } from '../config.ts';
 import type { ChatMessage, CallOpenRouterOptions, ParsedChatCompletionOutput } from '../types.ts';
 
 // 解析 Chat Completions API 输出
@@ -59,7 +59,9 @@ export async function callOpenRouterChatCompletionsApi(
     requestBody.tool_choice = toolChoice;
   }
   
-  console.log('Chat Completions API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
+  if (DEBUG_LLM) {
+    console.log('Chat Completions API Request:', JSON.stringify(requestBody, null, 2).substring(0, 2000));
+  }
   
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
@@ -78,7 +80,9 @@ export async function callOpenRouterChatCompletionsApi(
   }
   
   const data = await response.json();
-  console.log('Chat Completions API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
+  if (DEBUG_LLM) {
+    console.log('Chat Completions API Response:', JSON.stringify(data, null, 2).substring(0, 2000));
+  }
   
   return parseChatCompletionOutput(data);
 }

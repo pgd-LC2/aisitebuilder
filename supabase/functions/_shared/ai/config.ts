@@ -31,3 +31,6 @@ export const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
 export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const OPENROUTER_REFERER = 'https://aisitebuilder.app';
 export const OPENROUTER_TITLE = 'AI Site Builder';
+
+// LLM 调试日志开关（仅在 DEBUG_LLM=true 时输出详细的 request/response 日志）
+export const DEBUG_LLM = Deno.env.get('DEBUG_LLM') === 'true';

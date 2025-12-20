@@ -12,7 +12,6 @@ export * from './types.ts';
 // Prompts 模块（路由、缓存、组装）
 export { 
   // 路由
-  routePrompts,
   routePromptsAsync,
   routePromptLayers,
   PROMPT_ROUTING_TABLE,
@@ -32,19 +31,9 @@ export {
   assembleSystemPrompt, 
   getMultiplePrompts,
   classifyPromptError,
-  // 默认提示词
-  DEFAULT_PROMPTS,
+  // 层级映射
   LAYER_TO_PROMPT_PREFIX,
-  WORKFLOW_MODE_TO_PROMPT_PREFIX,
-  PROMPT_CORE_SYSTEM,
-  PROMPT_PLANNER,
-  PROMPT_CODER,
-  PROMPT_REVIEWER,
-  PROMPT_CHAT_ASSISTANT,
-  PROMPT_DEBUGGER,
-  PROMPT_WORKFLOW_DEFAULT,
-  PROMPT_WORKFLOW_PLANNING,
-  PROMPT_WORKFLOW_BUILD
+  WORKFLOW_MODE_TO_PROMPT_PREFIX
 } from './prompts/index.ts';
 
 // LLM 客户端
@@ -56,7 +45,6 @@ export {
 // 流式 LLM 客户端
 export {
   callOpenRouterChatCompletionsApiStreaming,
-  callOpenRouterChatCompletionsApiFallback,
   DEFAULT_STREAMING_CONFIG
 } from './llm/streamingClient.ts';
 export type {
@@ -71,11 +59,9 @@ export {
   saveImageToStorage 
 } from './llm/imageGenerator.ts';
 
-// 工具定义和能力矩阵
+// 工具定义和能力矩阵（基于 InteractionMode）
 export { 
   TOOLS, 
-  getFilteredTools, 
-  getAllowedToolNames,
   getFilteredToolsByMode,
   getAllowedToolNamesByMode
 } from './tools/definitions.ts';
@@ -149,7 +135,6 @@ export {
 
 export {
   applyRepairSuggestions,
-  runVerificationCommands,
   processTaskWithSelfRepair
 } from './selfRepair/loop.ts';
 
