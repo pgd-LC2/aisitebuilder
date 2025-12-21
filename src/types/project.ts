@@ -89,7 +89,15 @@ export interface ProjectFilesContext {
   versionNumber?: number;
 }
 
-export type AITaskType = 'chat_reply' | 'build_site' | 'refactor_code';
+/**
+ * AI 任务类型（统一交互模式）
+ * - chat: 对话/问答/只读分析（只读工具）
+ * - plan: 需求澄清/方案规划（只读工具，输出 [IMPLEMENT_READY]）
+ * - build: 代码生成/文件修改/构建/自我调试（完整工具集）
+ * 
+ * @deprecated 旧类型 'chat_reply' | 'build_site' | 'refactor_code' 已被统一
+ */
+export type AITaskType = 'chat' | 'plan' | 'build';
 export type AITaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface AITask {

@@ -1,6 +1,11 @@
 /**
- * Prompt Router 模块 v2
+ * Prompt Router 模块 v3
  * 负责根据任务类型和上下文路由到正确的提示词层级
+ * 
+ * v3 改进：
+ * - 统一交互模式：新增 routePromptByMode 函数，支持 chat/plan/build 三种模式
+ * - 每种模式只加载一个提示词，不再使用多层拼装
+ * - 保留旧的多层路由逻辑用于向后兼容
  * 
  * v2 改进：
  * - 智能版本检测：自动检测并使用最新版本的提示词
@@ -14,8 +19,8 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
-import type { TaskType, PromptLayer, PromptRouterContext } from '../types.ts';
-import { getLatestLayerKey, extractVersion } from './cache.ts';
+import type { TaskType, PromptLayer, PromptRouterContext, InteractionMode } from '../types.ts';
+import { getLatestLayerKey, getLatestModeKey, extractVersion } from './cache.ts';
 
 // --- 路由配置 ---
 
@@ -65,6 +70,8 @@ export function routePromptLayers(context: PromptRouterContext): PromptLayer[] {
 
 /**
  * 根据上下文动态获取最新版本的提示词 key 列表
+ * 
+ * @deprecated 使用 routePromptByMode 替代，新架构每种模式只加载一个提示词
  */
 export async function routePromptsAsync(
   supabase: ReturnType<typeof createClient>,
@@ -79,6 +86,24 @@ export async function routePromptsAsync(
   }
   
   return keys;
+}
+
+/**
+ * 根据统一交互模式获取提示词 key（v3 架构）
+ * 
+ * 每种模式只加载一个提示词，不再使用多层拼装：
+ * - chat: 只读分析能力
+ * - plan: 需求澄清和方案规划
+ * - build: 完整实现能力
+ */
+export async function routePromptByMode(
+  supabase: ReturnType<typeof createClient>,
+  mode: InteractionMode
+): Promise<string> {
+  console.log(`[PromptRouter] 使用 v3 架构，加载模式 "${mode}" 的提示词`);
+  const key = await getLatestModeKey(supabase, mode);
+  console.log(`[PromptRouter] 模式 "${mode}" 使用提示词: ${key}`);
+  return key;
 }
 
 /**

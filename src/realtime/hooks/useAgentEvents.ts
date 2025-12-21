@@ -397,8 +397,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
     console.log('[useAgentEvents] 任务更新:', task.id, task.status, 'result:', task.result);
 
-    if (task.type !== 'chat_reply') {
-      console.log('[useAgentEvents] 非 chat_reply 任务，跳过');
+    // 只处理 chat 和 plan 类型的任务，build 任务走另外的流程
+    if (task.type !== 'chat' && task.type !== 'plan') {
+      console.log('[useAgentEvents] 非 chat/plan 任务，跳过');
       return;
     }
 

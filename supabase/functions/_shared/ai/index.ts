@@ -11,7 +11,12 @@ export * from './types.ts';
 
 // Prompts 模块（路由、缓存、组装）
 export { 
-  // 路由
+  // v3 架构：统一交互模式
+  MODE_TO_PROMPT_PREFIX,
+  getLatestModeKey,
+  routePromptByMode,
+  assembleSystemPromptByMode,
+  // 路由（向后兼容）
   routePromptsAsync,
   routePromptLayers,
   PROMPT_ROUTING_TABLE,
@@ -27,11 +32,11 @@ export {
   clearVersionCache,
   clearPromptCache,
   clearAllCaches,
-  // 组装
+  // 组装（向后兼容）
   assembleSystemPrompt, 
   getMultiplePrompts,
   classifyPromptError,
-  // 层级映射
+  // 层级映射（向后兼容）
   LAYER_TO_PROMPT_PREFIX,
   WORKFLOW_MODE_TO_PROMPT_PREFIX
 } from './prompts/index.ts';

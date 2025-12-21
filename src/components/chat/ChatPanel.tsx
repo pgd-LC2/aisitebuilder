@@ -156,12 +156,15 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
     });
   }, [isConnected, messages, scrollToMessageBottom]);
 
-  const getTaskTypeFromMode = useCallback((): 'chat_reply' | 'build_site' | 'refactor_code' => {
+  const getTaskTypeFromMode = useCallback((): 'chat' | 'plan' | 'build' => {
     if (isBuildMode) {
-      return 'build_site';
+      return 'build';
     }
-    return 'chat_reply';
-  }, [isBuildMode]);
+    if (isPlanningMode) {
+      return 'plan';
+    }
+    return 'chat';
+  }, [isBuildMode, isPlanningMode]);
 
   const handleSend = async (inputMode: InputMode) => {
     if (!input.trim() || !projectId) return;
@@ -180,7 +183,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       effectiveWorkflowMode = 'build';
     }
 
-    const taskType = inputMode === 'build' ? 'build_site' : getTaskTypeFromMode();
+    const taskType = inputMode === 'build' ? 'build' : getTaskTypeFromMode();
     console.log('发送消息:', messageContent, '模式:', mode, 'inputMode:', inputMode, 'effectiveWorkflowMode:', effectiveWorkflowMode, '任务类型:', taskType, '时间:', new Date().toISOString());
     
     const { data: userMsg, error } = await messageService.addMessage(
@@ -216,8 +219,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         workflowMode: effectiveWorkflowMode
       };
       
-      // 如果是 build_site 模式且有 planSummary，添加到 payload
-      if (taskType === 'build_site' && planSummary) {
+      // 如果是 build 模式且有 planSummary，添加到 payload
+      if (taskType === 'build' && planSummary) {
         taskPayload.requirement = planSummary.requirement;
         taskPayload.planSummary = {
           requirement: planSummary.requirement,
@@ -307,7 +310,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       `用户输入: ${implementMessage}`
     );
 
-    // 创建 build_site 任务
+    // 创建 build 任务
     if (userMsg && clickedPlanSummary) {
       const taskPayload: Record<string, unknown> = {
         messageId: userMsg.id,
@@ -325,7 +328,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       
       const { data: task, error: taskError } = await aiTaskService.addTask(
         projectId,
-        'build_site',
+        'build',
         taskPayload
       );
 

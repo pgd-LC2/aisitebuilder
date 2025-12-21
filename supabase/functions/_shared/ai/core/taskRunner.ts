@@ -28,7 +28,7 @@ import type {
 import { MODEL_CONFIG } from '../config.ts';
 import { runAgentLoop, type AgentLoopConfig, type AgentLoopContext } from './agentLoop.ts';
 import { getFilteredToolsByMode } from '../tools/definitions.ts';
-import { assembleSystemPrompt } from '../prompts/assembler.ts';
+import { assembleSystemPrompt, assembleSystemPromptByMode } from '../prompts/assembler.ts';
 import { writeBuildLog, writeAssistantMessage, updateTaskStatus } from '../logging/buildLog.ts';
 import { logAgentEvent, logStageEnter, logStageExit } from '../logging/agentEvents.ts';
 import { 
@@ -196,44 +196,74 @@ export class TaskRunner {
 
   /**
    * 阶段 3: 组装提示词
+   * 
+   * v3 架构：使用 assembleSystemPromptByMode 直接根据 InteractionMode 加载单一提示词
+   * 向后兼容：如果 v3 提示词不存在，回退到旧的多层架构
    */
   private async assemblePrompt(): Promise<Record<string, unknown>> {
     const { projectId, mode, payload } = this.context;
     
-    await writeBuildLog(this.supabase, projectId, 'info', '正在加载提示词 (PromptRouter)...');
-    
-    // 将 InteractionMode 映射回旧的 TaskType 和 WorkflowMode（兼容现有 PromptRouter）
-    const { taskType, workflowMode } = this.mapModeToLegacy(mode, payload);
-    
-    const routerContext: PromptRouterContext = {
-      taskType,
-      hasError: !!payload?.errorInfo,
-      errorInfo: payload?.errorInfo as string | undefined,
-      isNewProject: !this.fileContextStr || this.fileContextStr.length < 100,
-      workflowMode
-    };
+    await writeBuildLog(this.supabase, projectId, 'info', '正在加载提示词...');
     
     const fileContextSection = this.fileContextStr 
       ? `\n\n## 当前项目文件参考\n${this.fileContextStr}` 
       : '';
     
-    this.systemPrompt = await assembleSystemPrompt(
-      this.supabase, 
-      routerContext, 
-      fileContextSection
-    );
-    
-    // 将系统提示词插入到消息列表开头
-    this.chatMessages = [
-      { role: 'system', content: this.systemPrompt },
-      ...this.chatMessages.filter(m => m.role !== 'system')
-    ];
-    
-    return {
-      promptLength: this.systemPrompt.length,
-      taskType,
-      workflowMode
-    };
+    // 尝试使用 v3 架构（单模式提示词）
+    try {
+      console.log(`[TaskRunner] 尝试使用 v3 架构加载模式 "${mode}" 的提示词`);
+      this.systemPrompt = await assembleSystemPromptByMode(
+        this.supabase, 
+        mode, 
+        fileContextSection
+      );
+      
+      // 将系统提示词插入到消息列表开头
+      this.chatMessages = [
+        { role: 'system', content: this.systemPrompt },
+        ...this.chatMessages.filter(m => m.role !== 'system')
+      ];
+      
+      console.log(`[TaskRunner] v3 架构提示词加载成功，长度: ${this.systemPrompt.length}`);
+      
+      return {
+        promptLength: this.systemPrompt.length,
+        mode,
+        architecture: 'v3'
+      };
+    } catch (v3Error) {
+      // v3 提示词不存在，回退到旧的多层架构
+      console.log(`[TaskRunner] v3 架构提示词不可用，回退到旧架构: ${v3Error instanceof Error ? v3Error.message : String(v3Error)}`);
+      
+      const { taskType, workflowMode } = this.mapModeToLegacy(mode, payload);
+      
+      const routerContext: PromptRouterContext = {
+        taskType,
+        hasError: !!payload?.errorInfo,
+        errorInfo: payload?.errorInfo as string | undefined,
+        isNewProject: !this.fileContextStr || this.fileContextStr.length < 100,
+        workflowMode
+      };
+      
+      this.systemPrompt = await assembleSystemPrompt(
+        this.supabase, 
+        routerContext, 
+        fileContextSection
+      );
+      
+      // 将系统提示词插入到消息列表开头
+      this.chatMessages = [
+        { role: 'system', content: this.systemPrompt },
+        ...this.chatMessages.filter(m => m.role !== 'system')
+      ];
+      
+      return {
+        promptLength: this.systemPrompt.length,
+        taskType,
+        workflowMode,
+        architecture: 'legacy'
+      };
+    }
   }
 
   /**
