@@ -440,10 +440,28 @@ SET metadata = metadata - 'selfRepairStatus' - 'selfRepairAttempt'
 WHERE metadata ? 'selfRepairStatus' OR metadata ? 'selfRepairAttempt';
 ```
 
-### 6.3 迁移执行
+### 6.3 `ai_tasks.mode` 字段处理
 
-使用MCP执行迁移
-用CLI部署edgefuction
+**重要**：`ai_tasks.mode` 字段目前不填写，为以后的功能做准备。
+
+**要求**：
+1. 后端代码不应主动填写 `mode` 字段
+2. 前端代码不应主动填写 `mode` 字段
+3. 字段位置应调整到 `type` 字段右边（如需调整表结构）
+
+**原因**：
+- 当前 `mode` 字段的使用存在混乱（前端写 `type`，后端用 `mapToInteractionMode` 推断）
+- 保留该字段为空，等待后续统一设计
+- 避免产生不一致的历史数据
+
+**代码修改**：
+- 移除所有主动写入 `mode` 字段的代码
+- 后端使用 `mapToInteractionMode(task.type)` 推断模式（已有逻辑）
+
+### 6.4 迁移执行
+
+使用 MCP 执行迁移
+用 CLI 部署 Edge Function
 
 ---
 
