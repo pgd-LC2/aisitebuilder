@@ -30,7 +30,7 @@ ALTER TABLE agent_events REPLICA IDENTITY FULL;
 ### 数据库事件类型约束
 
 ```sql
-CHECK (type IN ('agent_phase', 'tool_call', 'file_update', 'self_repair', 'log', 'error'))
+CHECK (type IN ('agent_phase', 'tool_call', 'file_update', 'log', 'error'))
 ```
 
 ### 数据库记录示例
@@ -72,7 +72,6 @@ type AgentEventType =
   | 'agent_phase'      // Agent 阶段变化（Planner/Coder/Reviewer/Debugger）
   | 'tool_call'        // 工具调用
   | 'file_update'      // 文件操作（create/update/delete/move）
-  | 'self_repair'      // 自修复尝试
   | 'log'              // 通用日志
   | 'error';           // 错误事件
 ```
@@ -148,27 +147,6 @@ interface FileUpdateEvent extends BaseAgentEvent {
 }
 ```
 
-### 3.4 self_repair - 自修复事件
-
-表示 Agent 进入自修复循环。
-
-```typescript
-interface SelfRepairEvent extends BaseAgentEvent {
-  type: 'self_repair';
-  payload: {
-    attemptNumber: number;       // 尝试次数（1-3）
-    maxAttempts: number;         // 最大尝试次数
-    trigger: string;             // 触发原因
-    errorType?: string;          // 错误类型
-    errorMessage?: string;       // 错误信息
-    suggestion?: string;         // 修复建议
-    result: 'pending' | 'success' | 'failed';
-  };
-}
-```
-
-### 3.5 log - 通用日志事件
-
 用于未分类的日志信息。
 
 ```typescript
@@ -182,7 +160,7 @@ interface LogEvent extends BaseAgentEvent {
 }
 ```
 
-### 3.6 error - 错误事件
+### 3.5 error - 错误事件
 
 表示发生了错误。
 
@@ -205,7 +183,6 @@ type AgentEvent =
   | AgentPhaseEvent
   | ToolCallEvent
   | FileUpdateEvent
-  | SelfRepairEvent
   | LogEvent
   | ErrorEvent;
 ```
@@ -303,7 +280,6 @@ interface MoveFileResult {
   - `move_file`: 使用专门的移动图标，显示 "from → to"
 - `file_update`: 显示为文件操作子项
   - `op=move`: 显示 "移动 from → to"
-- `self_repair`: 显示为警告节点，带尝试次数
 - `error`: 显示为错误节点，红色高亮
 
 ### 7.2 FileTree 同步
@@ -332,7 +308,6 @@ interface MoveFileResult {
 ```
 
 解析映射：
-- `[SelfRepairLoop]` → `self_repair` 事件
 - `[move]` / `[rename]` → `file_update` 事件 (op=move)
 - 未识别的日志 → `log` 事件
 

@@ -15,11 +15,11 @@
 
 ### 支持的任务类型
 
-| 任务类型 | Prompt 组合 | 自我修复 | 用途 |
-|---------|------------|---------|------|
-| `chat_reply` | Core 层 | 跳过 | 轻量级对话/问答 |
-| `build_site` | Core + Planner + Coder + Reviewer | 启用（最多 3 次） | 构建/修改网站 |
-| `refactor_code` | Core + Coder + Reviewer | 启用（最多 3 次） | 代码重构 |
+| 任务类型 | Prompt 组合 | 用途 |
+|---------|------------|------|
+| `chat_reply` | Core 层 | 轻量级对话/问答 |
+| `build_site` | Core + Planner + Coder + Reviewer | 构建/修改网站 |
+| `refactor_code` | Core + Coder + Reviewer | 代码重构 |
 
 ### 任务类型的 Prompt 路由
 
@@ -32,14 +32,6 @@ export const PROMPT_ROUTING_TABLE: Record<TaskType, PromptLayer[]> = {
   'debug': ['core', 'debugger']
 };
 ```
-
-### 自我修复循环
-
-`build_site` 和 `refactor_code` 任务支持自我修复循环（Self-Repair Loop）：
-
-- 当任务执行失败时，系统会自动调用 Debugger 层诊断错误
-- 最多重试 3 次（`SELF_REPAIR_MAX = 3`）
-- `chat_reply` 任务跳过自我修复循环，直接返回结果
 
 ## 三、工作流模式 (Workflow Mode)
 
@@ -141,7 +133,7 @@ AI 输出 [IMPLEMENT_READY]   显示"开始实现"按钮          (无后端调�
 |------|------|
 | `supabase/functions/process-ai-tasks/index.ts` | AI 任务处理主逻辑 |
 | `supabase/functions/_shared/ai/prompts/router.ts` | Prompt 路由器 |
-| `supabase/functions/_shared/ai/selfRepair/loop.ts` | 自我修复循环 |
+| `supabase/functions/_shared/ai/build/buildTaskHandler.ts` | Build 模式任务处理 |
 
 ### 数据库
 

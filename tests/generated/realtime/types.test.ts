@@ -20,7 +20,6 @@ import {
   AgentPhaseEvent,
   ToolCallEvent,
   FileUpdateEvent,
-  SelfRepairEvent,
   LogEvent,
   ErrorEvent,
   TimelineEvent,
@@ -252,7 +251,6 @@ describe('TimelineEventType enum', () => {
     'agent_phase',
     'tool_call',
     'file_update',
-    'self_repair',
     'log',
     'error',
   ];
@@ -364,32 +362,6 @@ describe('FileUpdateEvent', () => {
   }));
 });
 
-describe('SelfRepairEvent', () => {
-  const event: SelfRepairEvent = {
-    id: 'event-5',
-    type: 'self_repair',
-    timestamp: new Date().toISOString(),
-    taskId: 'task-5',
-    projectId: 'proj-5',
-    payload: {
-      attemptNumber: 1,
-      maxAttempts: 3,
-      trigger: 'error',
-      errorType: 'TypeError',
-      errorMessage: 'undefined is not a function',
-      suggestion: 'Check imports',
-      result: 'pending',
-    },
-  };
-  expect(event).toEqual(expect.objectContaining({
-    type: 'self_repair',
-    payload: expect.objectContaining({
-      attemptNumber: 1,
-      result: 'pending',
-    }),
-  }));
-});
-
 describe('LogEvent', () => {
   const event: LogEvent = {
     id: 'event-6',
@@ -474,7 +446,6 @@ describe('TimelineState', () => {
     phases: [],
     tools: [],
     files: [],
-    repairs: [],
     logs: [],
     errors: [],
     currentPhase: null,
@@ -523,7 +494,6 @@ describe('UseTimelineEventsReturn', () => {
     phases: [],
     tools: [],
     files: [],
-    repairs: [],
     logs: [],
     errors: [],
     currentPhase: null,

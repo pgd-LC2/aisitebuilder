@@ -109,16 +109,12 @@ export {
 export {
   writeBuildLog,
   writeAssistantMessage,
-  updateTaskStatus,
-  logSelfRepairAttemptToBuildLog,
-  logSelfRepairFinalStatusToBuildLog
+  updateTaskStatus
 } from './logging/buildLog.ts';
 
 export {
   logAgentEvent,
   logFileEvent,
-  logSelfRepairAttempt,
-  logSelfRepairFinalStatus,
   logProgressEvent,
   logStageEnter,
   logStageExit,
@@ -129,36 +125,6 @@ export {
   logStreamComplete
 } from './logging/agentEvents.ts';
 
-// 自我修复
-export {
-  isRepairableError,
-  classifyError,
-  collectErrorContext,
-  parseDebuggerOutput,
-  invokeDebugger
-} from './selfRepair/debugger.ts';
-
-export {
-  applyRepairSuggestions,
-  processTaskWithSelfRepair
-} from './selfRepair/loop.ts';
-
-// Subagent 系统
-export type {
-  SubagentType,
-  SubagentConfig,
-  SubagentContext,
-  SubagentTaskParams,
-  SubagentResult
-} from './subagent/index.ts';
-
-export {
-  MAX_NESTING_LEVEL,
-  executeSubagent,
-  canSpawnSubagent,
-  getAvailableSubagentTypes,
-  initializeBuiltinSubagents,
-  registerSubagent,
-  hasSubagent,
-  getRegisteredSubagentTypes
-} from './subagent/index.ts';
+// Build 模块
+export { handleBuildTask, BUILD_CONFIG } from './build/index.ts';
+export type { BuildTaskInput, BuildTaskResult } from './build/index.ts';

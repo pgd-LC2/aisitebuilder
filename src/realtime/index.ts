@@ -23,7 +23,6 @@ export type {
   AgentPhaseEvent,
   ToolCallEvent,
   FileUpdateEvent,
-  SelfRepairEvent,
   LogEvent,
   ErrorEvent,
   TimelineEvent,

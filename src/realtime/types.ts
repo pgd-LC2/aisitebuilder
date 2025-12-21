@@ -88,7 +88,6 @@ export type TimelineEventType =
   | 'agent_phase'      // Agent 阶段变化（Planner/Coder/Reviewer/Debugger）
   | 'tool_call'        // 工具调用
   | 'file_update'      // 文件操作（create/update/delete/move）
-  | 'self_repair'      // 自修复尝试
   | 'log'              // 通用日志
   | 'error';           // 错误事件
 
@@ -139,19 +138,6 @@ export interface FileUpdateEvent extends BaseTimelineEvent {
   };
 }
 
-export interface SelfRepairEvent extends BaseTimelineEvent {
-  type: 'self_repair';
-  payload: {
-    attemptNumber: number;
-    maxAttempts: number;
-    trigger: string;
-    errorType?: string;
-    errorMessage?: string;
-    suggestion?: string;
-    result: 'pending' | 'success' | 'failed';
-  };
-}
-
 export interface LogEvent extends BaseTimelineEvent {
   type: 'log';
   payload: {
@@ -175,7 +161,6 @@ export type TimelineEvent =
   | AgentPhaseEvent
   | ToolCallEvent
   | FileUpdateEvent
-  | SelfRepairEvent
   | LogEvent
   | ErrorEvent;
 
@@ -185,7 +170,6 @@ export interface TimelineState {
   phases: AgentPhaseEvent[];
   tools: ToolCallEvent[];
   files: FileUpdateEvent[];
-  repairs: SelfRepairEvent[];
   logs: LogEvent[];
   errors: ErrorEvent[];
   currentPhase: AgentPhase | null;
@@ -209,7 +193,6 @@ export interface UseTimelineEventsReturn {
   phases: AgentPhaseEvent[];
   tools: ToolCallEvent[];
   files: FileUpdateEvent[];
-  repairs: SelfRepairEvent[];
   logs: LogEvent[];
   errors: ErrorEvent[];
   currentPhase: AgentPhase | null;
@@ -322,7 +305,7 @@ export interface DbAgentEvent {
   id: string;
   task_id: string | null;
   project_id: string;
-  type: 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error' | 'progress';
+  type: 'agent_phase' | 'tool_call' | 'file_update' | 'log' | 'error' | 'progress';
   payload: DbAgentEventPayload;
   created_at: string;
 }

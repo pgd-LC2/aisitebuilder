@@ -5,10 +5,9 @@
  * 这是所有工具执行的唯一入口，包括：
  * - 文件操作工具 (list_files, read_file, write_file, delete_file, move_file, search_files, get_project_structure)
  * - 图片生成工具 (generate_image)
- * - 子代理工具 (spawn_subagent)
  */
 
-import type { ToolContext, ProjectFilesContext } from '../types.ts';
+import type { ToolContext } from '../types.ts';
 import {
   handleListFiles,
   handleReadFile,
@@ -19,13 +18,6 @@ import {
   handleGetProjectStructure
 } from './fileOperations.ts';
 import { generateImage, saveImageToStorage } from '../llm/imageGenerator.ts';
-import { 
-  executeSubagent, 
-  canSpawnSubagent,
-  type SubagentContext,
-  type SubagentTaskParams,
-  type SubagentType
-} from '../subagent/index.ts';
 import { writeBuildLog } from '../logging/buildLog.ts';
 import { IMAGE_MODEL } from '../config.ts';
 
@@ -38,8 +30,6 @@ import { IMAGE_MODEL } from '../config.ts';
 export interface ToolExecutionContext extends ToolContext {
   apiKey: string;
   taskId?: string;
-  nestingLevel?: number;
-  projectFilesContext?: ProjectFilesContext;
 }
 
 /**
@@ -134,91 +124,6 @@ async function handleGenerateImage(
   }
 }
 
-/**
- * 处理 spawn_subagent 工具调用
- */
-async function handleSpawnSubagent(
-  args: { type: string; instruction: string; target_files?: string },
-  ctx: ToolExecutionContext
-): Promise<ToolExecutionResult> {
-  const { supabase, projectId, taskId, apiKey, bucket, basePath, versionId, nestingLevel = 0, projectFilesContext } = ctx;
-  
-  // 检查嵌套层级
-  if (!canSpawnSubagent(nestingLevel)) {
-    return {
-      success: false,
-      result: {
-        success: false,
-        error: `已达到最大嵌套层级 (1)，无法创建更多子代理`
-      }
-    };
-  }
-  
-  try {
-    const subagentType = args.type as SubagentType;
-    const instruction = args.instruction;
-    const targetFilesStr = args.target_files;
-    const targetFiles = targetFilesStr ? targetFilesStr.split(',').map((f: string) => f.trim()) : undefined;
-    
-    // 构建子代理上下文
-    const toolContext: ToolContext = {
-      supabase,
-      projectId,
-      versionId,
-      bucket,
-      basePath
-    };
-    
-    const subagentContext: SubagentContext = {
-      supabase,
-      apiKey,
-      projectId,
-      toolContext,
-      projectFilesContext: projectFilesContext || { bucket, path: basePath, versionId },
-      parentTaskId: taskId || '',
-      nestingLevel
-    };
-    
-    const subagentParams: SubagentTaskParams = {
-      type: subagentType,
-      instruction,
-      targetFiles
-    };
-    
-    await writeBuildLog(supabase, projectId, 'info', `正在创建子代理: ${subagentType}`);
-    
-    // 执行子代理
-    const subagentResult = await executeSubagent(subagentContext, subagentParams);
-    
-    return {
-      success: subagentResult.success,
-      result: {
-        success: subagentResult.success,
-        type: subagentResult.type,
-        output: subagentResult.output,
-        modified_files: subagentResult.modifiedFiles,
-        execution_time_ms: subagentResult.executionTime,
-        error: subagentResult.error
-      },
-      sideEffects: {
-        modifiedFiles: subagentResult.modifiedFiles
-      }
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('[ToolExecutor] 子代理执行失败:', error);
-    await writeBuildLog(supabase, projectId, 'error', `子代理执行失败: ${errorMessage}`);
-    
-    return {
-      success: false,
-      result: {
-        success: false,
-        error: errorMessage
-      }
-    };
-  }
-}
-
 // --- 主执行函数 ---
 
 /**
@@ -297,13 +202,6 @@ export async function executeToolCall(
     case 'generate_image':
       return await handleGenerateImage(
         args as { prompt: string; aspect_ratio?: string; model?: string },
-        ctx
-      );
-    
-    // 子代理工具
-    case 'spawn_subagent':
-      return await handleSpawnSubagent(
-        args as { type: string; instruction: string; target_files?: string },
         ctx
       );
     

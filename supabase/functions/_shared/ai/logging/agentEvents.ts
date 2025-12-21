@@ -72,41 +72,6 @@ export async function logFileEvent(
   }
 }
 
-// 记录自我修复尝试事件
-export async function logSelfRepairAttempt(
-  supabase: ReturnType<typeof createClient>,
-  taskId: string,
-  projectId: string,
-  attemptNumber: number,
-  repairApplied: boolean,
-  errorType: string,
-  rootCause?: string
-): Promise<void> {
-  await logAgentEvent(supabase, taskId, projectId, 'self_repair', {
-    status: 'attempt_completed',
-    attemptNumber,
-    repairApplied,
-    errorType,
-    rootCause
-  });
-}
-
-// 记录自我修复最终状态事件
-export async function logSelfRepairFinalStatus(
-  supabase: ReturnType<typeof createClient>,
-  taskId: string,
-  projectId: string,
-  status: string,
-  totalAttempts: number,
-  finalError?: string
-): Promise<void> {
-  await logAgentEvent(supabase, taskId, projectId, 'self_repair', {
-    status: `loop_${status}`,
-    totalAttempts,
-    message: finalError
-  });
-}
-
 /**
  * 记录进度事件（用于 UI 实时展示和重放）
  * 

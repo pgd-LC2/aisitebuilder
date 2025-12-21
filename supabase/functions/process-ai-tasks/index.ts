@@ -27,14 +27,9 @@ import {
   // 日志
   writeBuildLog,
   updateTaskStatus,
-  // 自我修复（保留用于兼容，chat_reply 跳过）
-  processTaskWithSelfRepair,
-  // Subagent 系统
-  initializeBuiltinSubagents
+  // Build 模块
+  handleBuildTask
 } from '../_shared/ai/index.ts';
-
-// 初始化内置 subagent
-initializeBuiltinSubagents();
 
 // --- 数据库操作函数 ---
 
@@ -72,51 +67,6 @@ async function claimTask(pgClient: Client, projectId?: string) {
     mode?: string;
   }>(query, params);
   return result.rows[0] || null;
-}
-
-// --- 旧版任务处理函数（用于 selfRepair 兼容） ---
-
-/**
- * @deprecated 保留用于 selfRepair 兼容，新任务应使用 TaskRunner
- */
-async function processTaskLegacy(
-  task: { id: string; type: string; project_id: string; payload?: Record<string, unknown>; attempts: number; max_attempts: number; mode?: string },
-  supabase: ReturnType<typeof createClient>,
-  apiKey: string,
-  projectFilesContext?: { bucket: string; path: string; versionId?: string }
-) {
-  // 确定交互模式
-  const mode = task.mode 
-    ? (task.mode as 'chat' | 'plan' | 'build')
-    : mapToInteractionMode(
-        task.type as TaskType,
-        task.payload?.workflowMode as WorkflowMode | undefined
-      );
-  
-  const versionId = projectFilesContext?.versionId || 'default';
-  const bucket = projectFilesContext?.bucket || 'project-files';
-  const basePath = projectFilesContext?.path || `${task.project_id}/${versionId}`;
-  
-  // 创建 TaskRunner 并执行
-  const runner = createTaskRunner(
-    supabase,
-    { apiKey, maxIterations: 50 },
-    {
-      taskId: task.id,
-      projectId: task.project_id,
-      mode,
-      versionId,
-      bucket,
-      basePath,
-      payload: { ...task.payload, type: task.type }
-    }
-  );
-  
-  const result = await runner.run();
-  
-  if (!result.success) {
-    throw new Error(result.error || 'TaskRunner 执行失败');
-  }
 }
 
 // --- 主服务入口 ---
@@ -211,25 +161,33 @@ Deno.serve(async (req) => {
         );
       }
       
-      // build 模式走自我修复循环（保持向后兼容）
-      const selfRepairResult = await processTaskWithSelfRepair(
-        task, 
-        supabase, 
-        openrouterApiKey, 
-        projectFilesContext, 
-        processTaskLegacy
-      );
+      // build 模式使用 handleBuildTask
+      const buildResult = await handleBuildTask({
+        task: {
+          id: task.id,
+          type: task.type,
+          project_id: task.project_id,
+          payload: task.payload,
+          attempts: task.attempts,
+          max_attempts: task.max_attempts
+        },
+        supabase,
+        apiKey: openrouterApiKey,
+        projectFilesContext
+      });
+      
+      if (!buildResult.success) {
+        await updateTaskStatus(supabase, task.id, 'failed', undefined, buildResult.error);
+        await writeBuildLog(supabase, task.project_id, 'error', `AI 任务处理失败: ${buildResult.error}`);
+      }
       
       return new Response(
         JSON.stringify({
-          success: selfRepairResult.status === 'completed' || selfRepairResult.status === 'recovered',
+          success: buildResult.success,
           taskId: task.id,
-          message: selfRepairResult.status === 'recovered' 
-            ? `任务在 ${selfRepairResult.totalAttempts} 次尝试后成功完成（已自动修复）`
-            : selfRepairResult.status === 'completed' 
-              ? '任务处理完成' 
-              : `任务处理失败: ${selfRepairResult.finalError}`,
-          selfRepairResult,
+          message: buildResult.success ? '任务处理完成' : `任务处理失败: ${buildResult.error}`,
+          modifiedFiles: buildResult.modifiedFiles,
+          generatedImages: buildResult.generatedImages,
           mode
         }), 
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
