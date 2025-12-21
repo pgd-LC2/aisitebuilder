@@ -680,36 +680,29 @@ rg -l "self_repair|SelfRepair" tests/
 
 ---
 
-## 附录 A：当前 type/mode 兼容性问题
+## 附录 A：任务类型统一说明
 
-> **注意**：在实施本重构之前，建议先修复以下兼容性问题。
+> **注意**：系统已统一为 InteractionMode 单维度架构。
 
-### 问题描述
+### 当前状态
 
-前端 `aiTaskService.addTask()` 写入 `type='build'`（新格式），但不写 `mode` 字段。后端 `mapToInteractionMode()` 只识别旧的 TaskType 值（`'chat_reply' | 'build_site' | 'refactor_code' | 'debug'`），不识别新值（`'chat' | 'plan' | 'build'`）。
+系统已完成从旧的 `TaskType × WorkflowMode` 双维度到新的 `InteractionMode` 单维度的迁移：
 
-### 影响
+- 数据库 `ai_tasks.type` 字段现在只接受三种值：`'chat' | 'plan' | 'build'`
+- 旧的 `TaskType`（`chat_reply`、`build_site`、`refactor_code`、`debug`）已被标记为 `@deprecated`
+- `mapToInteractionMode()` 函数用于向后兼容，将旧类型映射到新类型
 
-当 `type='build'` 时，`mapToInteractionMode('build')` 返回 `'chat'`，导致 build 任务被当作 chat 模式处理。
+### 映射规则
 
-### 建议修复
+| 旧类型 | 新类型 |
+|--------|--------|
+| `chat_reply` + `default` | `chat` |
+| `chat_reply` + `planning` | `plan` |
+| `chat_reply` + `build` | `build` |
+| `build_site` / `refactor_code` / `debug` | `build` |
 
-在 `types.ts` 的 `mapToInteractionMode()` 函数中添加对新 type 值的识别：
+### 数据库约束
 
-```typescript
-export function mapToInteractionMode(
-  taskType?: TaskType | InteractionMode,  // 扩展类型
-  workflowMode?: WorkflowMode
-): InteractionMode {
-  if (!taskType) return 'chat';
-
-  // 新增：直接识别新的 InteractionMode 值
-  if (taskType === 'chat' || taskType === 'plan' || taskType === 'build') {
-    return taskType;
-  }
-
-  // 原有逻辑...
-}
+```sql
+CHECK (type IN ('chat', 'plan', 'build'))
 ```
-
-或者修改前端同时写入 `mode` 字段。

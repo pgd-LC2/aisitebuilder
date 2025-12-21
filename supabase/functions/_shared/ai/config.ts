@@ -1,6 +1,6 @@
 /**
  * AI 模块配置与常量
- * 包含 CORS 配置、模型配置、自我修复循环配置等
+ * 包含 CORS 配置、模型配置等
  */
 
 // CORS 配置
@@ -20,9 +20,6 @@ export const MODEL_CONFIG: Record<string, string> = {
 
 // 图片生成模型
 export const IMAGE_MODEL = 'google/gemini-3-pro-image-preview';
-
-// 自我修复循环配置
-export const SELF_REPAIR_MAX = 3; // 最大修复尝试次数
 
 // 提示词缓存 TTL
 export const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存

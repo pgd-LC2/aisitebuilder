@@ -31,10 +31,9 @@
 
 | 任务类型 | 组合方式 |
 |----------|----------|
-| `chat_reply` | System Core + (Planner/Coder/Debugger 按需) |
-| `build_site` | System Core + Planner + Coder + Reviewer |
-| `refactor_code` | System Core + Coder + Reviewer |
-| `debug_error` | System Core + Debugger |
+| `chat` | 专用 chat 模式提示词（只读分析能力） |
+| `plan` | 专用 plan 模式提示词（需求澄清和方案规划） |
+| `build` | 专用 build 模式提示词（完整实现能力） |
 
 ---
 
@@ -575,24 +574,11 @@ interface PromptRouter {
   combinePrompts(prompts: string[]): string;
 }
 
-// 路由规则
+// 路由规则（v3 架构：每种模式加载一个专用提示词）
 const PROMPT_ROUTES = {
-  'chat_reply': ['core.system.base.v1'],
-  'build_site': [
-    'core.system.base.v1',
-    'planner.web.structure.v1',
-    'coder.web.implement.v1',
-    'reviewer.quality.check.v1'
-  ],
-  'refactor_code': [
-    'core.system.base.v1',
-    'coder.web.implement.v1',
-    'reviewer.quality.check.v1'
-  ],
-  'debug_error': [
-    'core.system.base.v1',
-    'debugger.error.diagnose.v1'
-  ]
+  'chat': ['mode.chat.v1'],   // 只读分析能力
+  'plan': ['mode.plan.v1'],   // 需求澄清和方案规划
+  'build': ['mode.build.v1']  // 完整实现能力
 };
 ```
 
@@ -657,7 +643,7 @@ interface PromptRecord {
 ```typescript
 interface TaskContext {
   taskId: string;
-  taskType: 'chat_reply' | 'build_site' | 'refactor_code' | 'debug_error';
+  taskType: 'chat' | 'plan' | 'build';  // 统一交互模式
   projectId: string;
   versionId: string;
   

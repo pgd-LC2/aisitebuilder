@@ -16,7 +16,6 @@ import type {
   AgentPhaseEvent,
   ToolCallEvent,
   FileUpdateEvent,
-  SelfRepairEvent,
   LogEvent,
   ErrorEvent,
   AgentPhase,
@@ -32,7 +31,6 @@ const initialState: TimelineState = {
   phases: [],
   tools: [],
   files: [],
-  repairs: [],
   logs: [],
   errors: [],
   currentPhase: null,
@@ -64,9 +62,6 @@ function timelineReducer(state: TimelineState, action: TimelineAction): Timeline
         case 'file_update':
           newState.files = [...state.files, event as FileUpdateEvent].slice(-MAX_EVENTS_DEFAULT);
           break;
-        case 'self_repair':
-          newState.repairs = [...state.repairs, event as SelfRepairEvent].slice(-MAX_EVENTS_DEFAULT);
-          break;
         case 'log':
           newState.logs = [...state.logs, event as LogEvent].slice(-MAX_EVENTS_DEFAULT);
           break;
@@ -85,7 +80,6 @@ function timelineReducer(state: TimelineState, action: TimelineAction): Timeline
         phases: events.filter((e): e is AgentPhaseEvent => e.type === 'agent_phase'),
         tools: events.filter((e): e is ToolCallEvent => e.type === 'tool_call'),
         files: events.filter((e): e is FileUpdateEvent => e.type === 'file_update'),
-        repairs: events.filter((e): e is SelfRepairEvent => e.type === 'self_repair'),
         logs: events.filter((e): e is LogEvent => e.type === 'log'),
         errors: events.filter((e): e is ErrorEvent => e.type === 'error'),
         currentPhase: findCurrentPhase(events),
@@ -186,36 +180,6 @@ function parseDbAgentEventToTimelineEvent(dbEvent: DbAgentEvent): TimelineEvent 
       };
     }
 
-    case 'self_repair': {
-      const attemptNumber = (payload.attemptNumber as number) || 1;
-      const maxAttempts = (payload.maxAttempts as number) || 3;
-      const status = payload.status as string;
-      
-      let result: 'pending' | 'success' | 'failed' = 'pending';
-      if (status === 'success' || status === 'completed') {
-        result = 'success';
-      } else if (status === 'failed' || status === 'error') {
-        result = 'failed';
-      }
-      
-      return {
-        id,
-        type: 'self_repair',
-        timestamp,
-        taskId,
-        projectId: project_id,
-        payload: {
-          attemptNumber,
-          maxAttempts,
-          trigger: payload.errorType as string || '',
-          errorType: payload.errorType as string,
-          errorMessage: payload.errorMessage as string,
-          suggestion: payload.rootCause as string,
-          result,
-        },
-      };
-    }
-
     case 'error': {
       return {
         id,
@@ -308,7 +272,6 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
   const limitedPhases = state.phases.slice(-maxEvents);
   const limitedTools = state.tools.slice(-maxEvents);
   const limitedFiles = state.files.slice(-maxEvents);
-  const limitedRepairs = state.repairs.slice(-maxEvents);
   const limitedLogs = state.logs.slice(-maxEvents);
   const limitedErrors = state.errors.slice(-maxEvents);
 
@@ -317,7 +280,6 @@ export function useTimelineEvents(options: UseTimelineEventsOptions): UseTimelin
     phases: limitedPhases,
     tools: limitedTools,
     files: limitedFiles,
-    repairs: limitedRepairs,
     logs: limitedLogs,
     errors: limitedErrors,
     currentPhase: state.currentPhase,

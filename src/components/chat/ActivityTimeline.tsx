@@ -26,7 +26,6 @@ import {
   Image,
   Loader2,
   MessageCircle,
-  RefreshCw,
   AlertTriangle,
 } from 'lucide-react';
 import { useTimelineEvents } from '../../realtime';
@@ -34,7 +33,6 @@ import type {
   AgentPhaseEvent,
   ToolCallEvent,
   FileUpdateEvent,
-  SelfRepairEvent,
   ErrorEvent,
   AgentPhase,
 } from '../../realtime/types';
@@ -157,36 +155,6 @@ function BoltPlanItem({
   );
 }
 
-// Bolt 风格的自修复项
-function BoltRepairItem({ event }: { event: SelfRepairEvent }) {
-  const isSuccess = event.payload.result === 'success';
-  const isFailed = event.payload.result === 'failed';
-  const isPending = event.payload.result === 'pending';
-  
-  return (
-    <div className={`flex items-start gap-2 py-2 px-3 rounded-lg ${
-      isSuccess ? 'bg-green-50' : isFailed ? 'bg-red-50' : 'bg-yellow-50'
-    }`}>
-      <RefreshCw className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
-        isSuccess ? 'text-green-500' : isFailed ? 'text-red-500' : 'text-yellow-500'
-      } ${isPending ? 'animate-spin' : ''}`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium ${
-            isSuccess ? 'text-green-700' : isFailed ? 'text-red-700' : 'text-yellow-700'
-          }`}>
-            自修复 {event.payload.attemptNumber}/{event.payload.maxAttempts}
-          </span>
-        </div>
-        <p className="text-xs text-gray-600 mt-0.5">{event.payload.trigger}</p>
-        {event.payload.errorMessage && (
-          <p className="text-xs text-red-600 mt-0.5 truncate">{event.payload.errorMessage}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Bolt 风格的错误项
 function BoltErrorItem({ event }: { event: ErrorEvent }) {
   return (
@@ -204,7 +172,7 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
   const [isExpanded, setIsExpanded] = useState(true);
   const timelineEndRef = useRef<HTMLDivElement>(null);
 
-  const { events, phases, tools, files, repairs, errors, currentPhase, isConnected } = useTimelineEvents({
+  const { events, phases, tools, files, errors, currentPhase, isConnected } = useTimelineEvents({
     projectId,
     taskId,
     maxEvents,
@@ -342,15 +310,6 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
                   event={action}
                   onFileSelect={onFileSelect}
                 />
-              ))}
-            </div>
-          )}
-          
-          {/* 自修复事件 */}
-          {repairs.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-gray-100">
-              {repairs.map((repair) => (
-                <BoltRepairItem key={repair.id} event={repair} />
               ))}
             </div>
           )}

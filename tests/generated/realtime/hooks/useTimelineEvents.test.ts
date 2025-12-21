@@ -11,7 +11,6 @@ import type {
   AgentPhaseEvent,
   ToolCallEvent,
   FileUpdateEvent,
-  SelfRepairEvent,
   LogEvent,
   ErrorEvent,
   AgentPhase,
@@ -31,7 +30,6 @@ const createTestComponent = (options: { projectId?: string; maxEvents?: number }
       phases,
       tools,
       files,
-      repairs,
       logs,
       errors,
       currentPhase,
@@ -50,7 +48,6 @@ const createTestComponent = (options: { projectId?: string; maxEvents?: number }
         <pre data-testid="phases">{JSON.stringify(phases)}</pre>
         <pre data-testid="tools">{JSON.stringify(tools)}</pre>
         <pre data-testid="files">{JSON.stringify(files)}</pre>
-        <pre data-testid="repairs">{JSON.stringify(repairs)}</pre>
         <pre data-testid="logs">{JSON.stringify(logs)}</pre>
         <pre data-testid="errors">{JSON.stringify(errors)}</pre>
         <pre data-testid="currentPhase">{JSON.stringify(currentPhase)}</pre>
@@ -66,7 +63,6 @@ const createTestComponent = (options: { projectId?: string; maxEvents?: number }
     getPhases: () => screen.getByTestId('phases').textContent,
     getTools: () => screen.getByTestId('tools').textContent,
     getFiles: () => screen.getByTestId('files').textContent,
-    getRepairs: () => screen.getByTestId('repairs').textContent,
     getLogs: () => screen.getByTestId('logs').textContent,
     getErrors: () => screen.getByTestId('errors').textContent,
     getCurrentPhase: () => screen.getByTestId('currentPhase').textContent,
@@ -141,7 +137,6 @@ describe('useTimelineEvents Hook', () => {
       getPhases,
       getTools,
       getFiles,
-      getRepairs,
       getLogs,
       getErrors,
       getCurrentPhase,
@@ -209,7 +204,6 @@ describe('useTimelineEvents Hook', () => {
       getPhases,
       getTools,
       getFiles,
-      getRepairs,
       getLogs,
       getErrors,
       getCurrentPhase,
@@ -283,25 +277,6 @@ describe('useTimelineEvents Hook', () => {
     act(() => onAgentEvent(fileUpdate));
     expect(getFiles()).toContain('file_update');
 
-    // self_repair
-    const selfRepair: DbAgentEvent = {
-      id: 'selfRepair',
-      task_id: '',
-      project_id: '',
-      type: 'self_repair',
-      payload: {
-        attemptNumber: 2,
-        maxAttempts: 3,
-        status: 'failed',
-        errorType: 'TypeError',
-        errorMessage: 'undefined is not a function',
-        rootCause: 'missing import',
-      },
-      created_at: new Date().toISOString(),
-    };
-    act(() => onAgentEvent(selfRepair));
-    expect(getRepairs()).toContain('self_repair');
-
     // error
     const errorEvent: DbAgentEvent = {
       id: 'errorEvent',
@@ -349,7 +324,6 @@ describe('useTimelineEvents Hook', () => {
       getPhases,
       getTools,
       getFiles,
-      getRepairs,
       getLogs,
       getErrors,
     } = createTestComponent({ projectId: 'proj4', maxEvents: 3 });
@@ -414,7 +388,6 @@ describe('useTimelineEvents Hook', () => {
       getPhases,
       getTools,
       getFiles,
-      getRepairs,
       getLogs,
       getErrors,
       getCurrentPhase,
@@ -442,7 +415,6 @@ describe('useTimelineEvents Hook', () => {
     expect(getPhases()).toBe('[]');
     expect(getTools()).toBe('[]');
     expect(getFiles()).toBe('[]');
-    expect(getRepairs()).toBe('[]');
     expect(getLogs()).toBe('[]');
     expect(getErrors()).toBe('[]');
     expect(getCurrentPhase()).toBe('null');

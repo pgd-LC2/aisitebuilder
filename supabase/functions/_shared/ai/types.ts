@@ -5,53 +5,6 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
-// --- 自我修复循环类型定义 ---
-
-export interface ErrorContext {
-  errorType: string;
-  errorMessage: string;
-  errorStack?: string;
-  failedCommand?: string;
-  failedOutput?: string;
-  recentFileChanges: string[];
-  projectStructure?: string;
-}
-
-export interface FileModification {
-  path: string;
-  action: 'create' | 'modify' | 'delete';
-  content?: string;
-}
-
-export interface DebuggerSuggestion {
-  rootCause: string;
-  errorCategory: string;
-  fileModifications: FileModification[];
-  verificationCommands: string[];
-}
-
-export interface VerificationResult {
-  command: string;
-  success: boolean;
-  output: string;
-}
-
-export interface RepairAttempt {
-  attemptNumber: number;
-  errorContext: ErrorContext;
-  debuggerResponse?: DebuggerSuggestion;
-  repairApplied: boolean;
-  verificationResult?: VerificationResult;
-  timestamp: string;
-}
-
-export interface SelfRepairLoopResult {
-  status: 'completed' | 'recovered' | 'failed_after_repair' | 'failed';
-  totalAttempts: number;
-  repairHistory: RepairAttempt[];
-  finalError?: string;
-}
-
 // --- 工具上下文类型 ---
 
 export interface ToolContext {
@@ -194,7 +147,7 @@ export interface MoveFileResult {
 
 // --- Agent 事件类型 ---
 
-export type AgentEventType = 'agent_phase' | 'tool_call' | 'file_update' | 'self_repair' | 'log' | 'error';
+export type AgentEventType = 'agent_phase' | 'tool_call' | 'file_update' | 'log' | 'error';
 
 /**
  * 进度事件 payload 中的 kind 字段

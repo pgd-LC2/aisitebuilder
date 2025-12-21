@@ -27,13 +27,6 @@ type MockPhase = {
   payload: { phase: string; action: 'enter' | 'exit'; summary?: string };
 };
 
-type MockRepair = {
-  id: string;
-  timestamp: string;
-  type: 'self_repair';
-  payload: { attemptNumber: number; maxAttempts: number; result: 'success' | 'failed' | 'pending'; trigger: string; errorMessage?: string };
-};
-
 type MockError = {
   id: string;
   timestamp: string;
@@ -59,7 +52,6 @@ describe('ActivityTimeline', () => {
       phases: [],
       tools: [],
       files: [],
-      repairs: [],
       errors: [],
       currentPhase: undefined,
       isConnected: true,
@@ -100,7 +92,6 @@ describe('ActivityTimeline', () => {
       phases,
       tools,
       files,
-      repairs: [],
       errors: [],
       currentPhase: 'planner',
       isConnected: true,
@@ -128,7 +119,6 @@ describe('ActivityTimeline', () => {
       phases: [],
       tools,
       files: [],
-      repairs: [],
       errors: [],
       currentPhase: undefined,
       isConnected: true,
@@ -164,7 +154,6 @@ describe('ActivityTimeline', () => {
       phases: [],
       tools: [],
       files,
-      repairs: [],
       errors: [],
       currentPhase: undefined,
       isConnected: true,
@@ -206,7 +195,6 @@ describe('ActivityTimeline', () => {
       phases,
       tools,
       files: [],
-      repairs: [],
       errors: [],
       currentPhase: 'coder',
       isConnected: true,
@@ -236,7 +224,6 @@ describe('ActivityTimeline', () => {
       phases: [],
       tools,
       files: [],
-      repairs: [],
       errors: [],
       currentPhase: undefined,
       isConnected: true,
@@ -247,15 +234,7 @@ describe('ActivityTimeline', () => {
     expect(screen.getByText('Searched')).toBeInTheDocument();
   });
 
-  it('renders repair and error items', () => {
-    const repairs: MockRepair[] = [
-      {
-        id: 'repair-1',
-        timestamp: new Date().toISOString(),
-        type: 'self_repair',
-        payload: { attemptNumber: 1, maxAttempts: 3, result: 'failed', trigger: 'auto', errorMessage: 'Something went wrong' },
-      },
-    ];
+  it('renders error items', () => {
     const errors: MockError[] = [
       {
         id: 'error-1',
@@ -270,7 +249,6 @@ describe('ActivityTimeline', () => {
       phases: [],
       tools: [],
       files: [],
-      repairs,
       errors,
       currentPhase: undefined,
       isConnected: true,
@@ -278,8 +256,6 @@ describe('ActivityTimeline', () => {
 
     render(<ActivityTimeline {...defaultProps} />);
 
-    expect(screen.getByText('自修复 1/3')).toBeInTheDocument();
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     expect(screen.getByText('RuntimeError')).toBeInTheDocument();
     expect(screen.getByText('Unexpected token')).toBeInTheDocument();
   });
@@ -312,7 +288,6 @@ describe('ActivityTimeline', () => {
         phases: [],
         tools,
         files: [],
-        repairs: [],
         errors: [],
         currentPhase: undefined,
         isConnected: true,
