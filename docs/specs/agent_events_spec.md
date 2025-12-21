@@ -44,7 +44,7 @@ CHECK (type IN ('agent_phase', 'tool_call', 'file_update', 'log', 'error'))
   "payload": {
     "phase": "started",
     "status": "running",
-    "taskType": "build_site",
+    "taskType": "build",
     "model": "google/gemini-3-pro-preview"
   },
   "created_at": "2025-11-29T14:00:00.000Z"

@@ -1,60 +1,34 @@
-# AI Site Builder 任务与工作流架构
+# AI Site Builder 任务架构
 
-本文档详细说明了 AI Site Builder 项目中任务类型和工作流模式的设计架构，帮助新加入的工程师快速理解系统的核心概念。
+本文档详细说明了 AI Site Builder 项目中任务类型的设计架构，帮助新加入的工程师快速理解系统的核心概念。
 
-## 一、系统架构概述
+## 一、统一交互模式 (InteractionMode)
 
-当前系统存在**两个独立的维度**，理解这两个维度是掌握系统设计的关键：
+系统使用**统一交互模式**来决定 AI 的行为和工具权限。所有任务都通过 `ai_tasks.type` 字段标识，只有三种类型：
 
-1. **任务类型 (Task Type)**：后端执行策略，决定如何处理 AI 任务
-2. **工作流模式 (Workflow Mode)**：前端行为约束，控制 AI 的行为边界
+| 模式 | 工具权限 | 用途 |
+|------|---------|------|
+| `chat` | 只读工具 | 对话、问答、代码分析 |
+| `plan` | 只读工具 | 需求澄清、方案规划 |
+| `build` | 完整工具集 | 代码生成、文件修改、构建 |
 
-## 二、任务类型 (Task Type)
+### 数据库约束
 
-任务类型定义在 `ai_tasks` 表的 `type` 字段，决定后端如何处理任务。
-
-### 支持的任务类型
-
-| 任务类型 | Prompt 组合 | 用途 |
-|---------|------------|------|
-| `chat_reply` | Core 层 | 轻量级对话/问答 |
-| `build_site` | Core + Planner + Coder + Reviewer | 构建/修改网站 |
-| `refactor_code` | Core + Coder + Reviewer | 代码重构 |
-
-### 任务类型的 Prompt 路由
-
-```typescript
-// 位置：supabase/functions/_shared/ai/prompts/router.ts
-export const PROMPT_ROUTING_TABLE: Record<TaskType, PromptLayer[]> = {
-  'chat_reply': ['core'],
-  'build_site': ['core', 'planner', 'coder', 'reviewer'],
-  'refactor_code': ['core', 'coder', 'reviewer'],
-  'debug': ['core', 'debugger']
-};
+```sql
+-- ai_tasks.type 字段约束
+CHECK (type IN ('chat', 'plan', 'build'))
 ```
 
-## 三、工作流模式 (Workflow Mode)
+## 二、各模式详解
 
-工作流模式定义在 `prompts` 表的 `workflow.*` 提示词，约束 AI 的行为边界。
-
-### 支持的工作流模式
-
-| 工作流模式 | 提示词 Key | AI 角色 | 工具权限 |
-|-----------|-----------|--------|---------|
-| `default` | `workflow.default.v1` | 代码库分析专家 | 只读（read_file, list_files 等） |
-| `planning` | `workflow.planning.v1` | 高级软件架构师 | 只读 + 输出 `[IMPLEMENT_READY]` 标记 |
-| `build` | `workflow.build.v1` | 资深全栈工程师 | 完整权限（包括 write_file） |
-
-### 工作流模式详解
-
-#### 1. 默认模式 (default)
+### 1. Chat 模式
 
 - **角色**：代码库分析专家
 - **允许操作**：`read_file`、`list_files`、`search_files`、`get_project_structure`
 - **禁止操作**：`write_file`、`delete_file`、`move_file`
 - **用户引导**：如果用户要求修改代码，引导他们点击 **Plan** 按钮
 
-#### 2. 规划模式 (planning)
+### 2. Plan 模式
 
 - **角色**：高级软件架构师
 - **核心原则**：不写任何代码，通过多轮对话理解需求
@@ -71,60 +45,61 @@ export const PROMPT_ROUTING_TABLE: Record<TaskType, PromptLayer[]> = {
 [/IMPLEMENT_READY]
 ```
 
-#### 3. 构建模式 (build)
+### 3. Build 模式
 
 - **角色**：资深全栈工程师
 - **核心原则**：严格按照已批准的计划执行
 - **工具权限**：完整权限（包括 `write_file`、`delete_file`、`move_file`）
 - **执行流程**：确认计划 → 按步骤执行 → 先读后写 → 完整输出
 
-## 四、五层 Prompt 架构
+## 三、Prompt 架构
 
-这是**任务层**的 Prompt，与工作流模式不同，用于组装 AI 的系统提示词。
+系统使用 v3 Prompt 架构，每种模式加载一个专用提示词：
 
-| Prompt Key | 层级 | 职责 |
-|-----------|------|------|
-| `core.system.base.v1` | Core | 角色定义、核心原则、工具能力 |
-| `planner.web.structure.v1` | Planner | 任务拆解、文件结构规划 |
-| `coder.web.implement.v1` | Coder | 逐文件实现代码 |
-| `reviewer.quality.check.v1` | Reviewer | 质量检查 |
-| `debugger.error.diagnosis.v1` | Debugger | 错误诊断、自我修复 |
+| 模式 | Prompt Key | 职责 |
+|------|-----------|------|
+| `chat` | `mode.chat.v*` | 只读分析能力 |
+| `plan` | `mode.plan.v*` | 需求澄清和方案规划 |
+| `build` | `mode.build.v*` | 完整实现能力 |
 
-### 动态规则
+### Prompt 路由
 
-- **新项目**：强制插入 Planner + Reviewer 层
-- **存在错误**：自动触发 Debugger 层插入
+```typescript
+// 位置：supabase/functions/_shared/ai/prompts/router.ts
+export async function routePromptByMode(
+  supabase: SupabaseClient,
+  mode: InteractionMode  // 'chat' | 'plan' | 'build'
+): Promise<string> {
+  const key = await getLatestModeKey(supabase, mode);
+  return key;
+}
+```
 
-## 五、前端到后端的映射关系
+## 四、前端到后端的映射关系
 
 ```
 用户操作                    前端状态                    后端任务
 ─────────────────────────────────────────────────────────────────
-普通聊天                    mode=default               type=chat_reply
-                           workflowMode=default        + workflow.default.v1
+普通聊天                    workflowMode=default       type='chat'
 
-点击 Plan 按钮              mode=planning              type=chat_reply
-                           workflowMode=planning       + workflow.planning.v1
+点击 Plan 按钮              workflowMode=planning      type='plan'
 
 AI 输出 [IMPLEMENT_READY]   显示"开始实现"按钮          (无后端调用)
 
-点击"开始实现"              mode=build                 (仅切换前端状态)
-                           workflowMode=build
+点击"开始实现"              workflowMode=build         (仅切换前端状态)
 
-在构建模式下发送消息         mode=build                 type=build_site
-                           workflowMode=build          + workflow.build.v1
-                                                       + Core+Planner+Coder+Reviewer
+在构建模式下发送消息         workflowMode=build         type='build'
 ```
 
-## 六、关键代码位置
+## 五、关键代码位置
 
 ### 前端
 
 | 文件 | 职责 |
 |------|------|
 | `src/contexts/WorkflowContext.tsx` | 工作流状态管理（default/planning/build） |
-| `src/components/ChatPanel.tsx` | 聊天界面，任务创建入口 |
-| `src/components/ImplementationTrigger.tsx` | "开始实现"按钮组件 |
+| `src/components/chat/ChatPanel.tsx` | 聊天界面，任务创建入口 |
+| `src/components/chat/ImplementationTrigger.tsx` | "开始实现"按钮组件 |
 | `src/types/project.ts` | 类型定义（WorkflowMode、PlanSummary 等） |
 
 ### 后端
@@ -134,32 +109,36 @@ AI 输出 [IMPLEMENT_READY]   显示"开始实现"按钮          (无后端调�
 | `supabase/functions/process-ai-tasks/index.ts` | AI 任务处理主逻辑 |
 | `supabase/functions/_shared/ai/prompts/router.ts` | Prompt 路由器 |
 | `supabase/functions/_shared/ai/build/buildTaskHandler.ts` | Build 模式任务处理 |
+| `supabase/functions/_shared/ai/types.ts` | 类型定义（InteractionMode 等） |
 
 ### 数据库
 
 | 表 | 职责 |
 |---|------|
-| `ai_tasks` | AI 任务队列，包含 type、payload（含 workflowMode）、status 等字段 |
-| `prompts` | Prompt 库，按 category 分为 system、task、workflow 三类 |
+| `ai_tasks` | AI 任务队列，包含 type（chat/plan/build）、payload、status 等字段 |
+| `prompts` | Prompt 库，按 category 分为 system、task、mode 三类 |
 | `chat_messages` | 聊天记录，用于构建对话上下文 |
 
-## 七、常见问题
+## 六、常见问题
 
-### Q1: 两个"Plan"有什么区别？
+### Q1: 前端的 WorkflowMode 和后端的 type 有什么关系？
 
-1. **工作流的"规划模式"**（`workflow.planning.v1`）：前端 Plan 按钮触发的工作流状态
-2. **任务层的"Planner 层"**（`planner.web.structure.v1`）：后端 Prompt 组合中的规划层
+前端使用 `WorkflowMode`（default/planning/build）来控制 UI 状态和用户交互。当用户发送消息时，前端会根据当前 WorkflowMode 设置后端任务的 `type` 字段：
+- `default` → `type='chat'`
+- `planning` → `type='plan'`
+- `build` → `type='build'`
 
 ### Q2: 为什么"开始实现"按钮点击后还需要发送消息？
 
-"开始实现"按钮只是切换前端状态（调用 `enterBuildMode(planSummary)`），并不会立即创建 AI 任务。用户需要在构建模式下发送一条消息才能真正触发 `build_site` 任务。
+"开始实现"按钮只是切换前端状态（调用 `enterBuildMode(planSummary)`），并不会立即创建 AI 任务。用户需要在构建模式下发送一条消息才能真正触发 `build` 任务。
 
 ### Q3: 工具权限是如何限制的？
 
-当前工具权限仅靠 Prompt 约束，所有任务都传入完整的 TOOLS 列表。`default` 和 `planning` 模式禁止写文件完全依赖 Prompt 约束，没有 API 层面的硬限制。
+工具权限通过 `TOOL_CAPABILITY_MATRIX` 配置，根据任务类型（chat/plan/build）过滤可用工具：
+- `chat` 和 `plan` 模式只能使用只读工具
+- `build` 模式可以使用所有工具
 
-## 八、相关文档
+## 七、相关文档
 
 - [Prompt 系统规范](./prompt_spec.md)
-- [process-ai-tasks 重构方案](./process-ai-tasks-refactor.md)
 - [Agent 事件流规范](./agent_events_spec.md)

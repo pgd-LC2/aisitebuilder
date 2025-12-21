@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
 
 1. `process-ai-tasks/index.ts` 行数不超过 300 行
 2. 所有共享模块可被正确导入
-3. 现有功能全部正常工作（chat_reply、build_site、refactor_code）
+3. 现有功能全部正常工作（chat、plan、build）
 4. 自我修复循环正常运行
 5. 构建日志和事件记录正常
 6. 无性能回归（响应时间增加不超过 10%）
