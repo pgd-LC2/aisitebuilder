@@ -2,6 +2,10 @@
  * Prompt Assembler 模块
  * 负责组装完整的 system prompt
  * 
+ * v3 架构：
+ * - 新增 assembleSystemPromptByMode：根据统一交互模式组装提示词
+ * - 每种模式只加载一个提示词，不再使用多层拼装
+ * 
  * 设计原则：
  * - 数据库不可用 = 系统不可用（立即失败）
  * - 不提供硬编码默认值回退
@@ -10,9 +14,9 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { CACHE_TTL } from '../config.ts';
-import type { PromptRouterContext, PromptFetchErrorType } from '../types.ts';
+import type { PromptRouterContext, PromptFetchErrorType, InteractionMode } from '../types.ts';
 import { promptCache, getLatestWorkflowKey } from './cache.ts';
-import { routePromptsAsync } from './router.ts';
+import { routePromptsAsync, routePromptByMode } from './router.ts';
 
 // --- 错误分类函数 ---
 
@@ -140,4 +144,40 @@ export async function assembleSystemPrompt(
   }
   
   return assembledPrompt;
+}
+
+/**
+ * 根据统一交互模式组装 system prompt（v3 架构）
+ * 
+ * 每种模式只加载一个提示词，不再使用多层拼装：
+ * - chat: 只读分析能力
+ * - plan: 需求澄清和方案规划
+ * - build: 完整实现能力
+ * 
+ * @param supabase Supabase 客户端
+ * @param mode 统一交互模式
+ * @param fileContext 可选的文件上下文
+ */
+export async function assembleSystemPromptByMode(
+  supabase: ReturnType<typeof createClient>,
+  mode: InteractionMode,
+  fileContext?: string
+): Promise<string> {
+  console.log(`[PromptAssembler] 使用 v3 架构，组装模式 "${mode}" 的提示词`);
+  
+  // 获取该模式对应的提示词 key
+  const promptKey = await routePromptByMode(supabase, mode);
+  
+  // 获取提示词内容
+  const prompts = await getMultiplePrompts(supabase, [promptKey]);
+  const promptContent = prompts[promptKey];
+  
+  console.log(`[PromptAssembler] 模式 "${mode}" 提示词加载完成: ${promptKey} (len=${promptContent.length})`);
+  
+  // 如果有文件上下文，附加到提示词后面
+  if (fileContext) {
+    return promptContent + '\n\n---\n\n' + fileContext;
+  }
+  
+  return promptContent;
 }
