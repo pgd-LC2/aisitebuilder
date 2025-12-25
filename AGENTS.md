@@ -35,6 +35,16 @@
 
 首次使用需链接项目：`supabase link --project-ref bsiukgyvrfkanuhjkxuh`
 
+**重要规则**：修改 `supabase/` 目录下的任何文件后，必须自动执行部署操作，无需等待用户提醒。GitHub 没有设置自动同步，因此必须手动部署。
+
+### 修改后端文件后的必做清单
+
+修改 `supabase/` 文件夹后，必须按以下顺序执行：
+
+1. **运行迁移 SQL**：使用 MCP `execute_sql` 工具执行新的迁移文件
+2. **部署 Edge Functions**：使用 `supabase functions deploy` 部署修改的函数
+3. **验证部署**：使用 `supabase functions list` 确认部署成功
+
 ### Edge Functions
 
 ```bash
