@@ -139,6 +139,7 @@ export class TaskRunner {
 
   /**
    * 执行单个阶段
+   * 自动在阶段进入和退出时记录进度事件
    */
   private async executePhase(
     phase: TaskPhase, 
@@ -146,6 +147,15 @@ export class TaskRunner {
   ): Promise<void> {
     this.currentPhase = phase;
     console.log(`[TaskRunner] 进入阶段: ${phase}`);
+    
+    // 记录阶段进入事件
+    await logStageEnter(
+      this.supabase, 
+      this.context.taskId, 
+      this.context.projectId, 
+      phase, 
+      `开始执行阶段: ${phase}`
+    );
     
     try {
       const data = await executor();
@@ -155,6 +165,15 @@ export class TaskRunner {
         data
       });
       console.log(`[TaskRunner] 阶段完成: ${phase}`);
+      
+      // 记录阶段退出事件
+      await logStageExit(
+        this.supabase, 
+        this.context.taskId, 
+        this.context.projectId, 
+        phase, 
+        `阶段完成: ${phase}`
+      );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[TaskRunner] 阶段失败: ${phase}`, error);
@@ -163,6 +182,16 @@ export class TaskRunner {
         success: false,
         error: errorMessage
       });
+      
+      // 记录阶段退出事件（失败）
+      await logStageExit(
+        this.supabase, 
+        this.context.taskId, 
+        this.context.projectId, 
+        phase, 
+        `阶段失败: ${phase} - ${errorMessage}`
+      );
+      
       throw error;
     }
   }

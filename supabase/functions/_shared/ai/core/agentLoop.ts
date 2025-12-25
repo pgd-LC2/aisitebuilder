@@ -17,9 +17,30 @@ import type {
 import { callOpenRouterChatCompletionsApi } from '../llm/client.ts';
 import { executeToolCall, type ToolExecutionContext, type ToolExecutionResult } from '../tools/executor.ts';
 import { writeBuildLog } from '../logging/buildLog.ts';
-import { logAgentEvent } from '../logging/agentEvents.ts';
+import { logIterationStart, logToolStart, logToolComplete } from '../logging/agentEvents.ts';
 
 // --- AgentLoop 类型定义 ---
+
+/**
+ * 工具重试跟踪
+ */
+interface ToolRetryTracker {
+  toolName: string;
+  argsHash: string;
+  attempts: number;
+  lastError: string;
+}
+
+/**
+ * 结构化工具错误
+ */
+interface StructuredToolError {
+  toolName: string;
+  errorType: 'INVALID_ARGS' | 'EXECUTION_FAILED' | 'TIMEOUT' | 'PERMISSION_DENIED' | 'NOT_FOUND' | 'UNKNOWN';
+  errorMessage: string;
+  suggestion?: string;
+  retryable: boolean;
+}
 
 /**
  * AgentLoop 配置
@@ -30,6 +51,7 @@ export interface AgentLoopConfig {
   tools: ToolDefinition[];
   toolChoice: 'auto' | 'required' | 'none';
   maxIterations: number;
+  maxToolRetries?: number;
 }
 
 /**
@@ -72,6 +94,108 @@ export interface AgentLoopResult {
   needsStreamingResponse?: boolean;
 }
 
+// --- 辅助函数 ---
+
+/**
+ * 生成参数哈希用于重试跟踪
+ */
+function hashArgs(args: Record<string, unknown>): string {
+  return JSON.stringify(args);
+}
+
+/**
+ * 分类工具错误
+ */
+function classifyToolError(toolName: string, error: string): StructuredToolError {
+  const errorLower = error.toLowerCase();
+  
+  if (errorLower.includes('not found') || errorLower.includes('不存在')) {
+    return {
+      toolName,
+      errorType: 'NOT_FOUND',
+      errorMessage: error,
+      suggestion: `文件或资源不存在。请先使用 list_files 或 get_project_structure 确认路径是否正确。`,
+      retryable: false
+    };
+  }
+  
+  if (errorLower.includes('permission') || errorLower.includes('权限')) {
+    return {
+      toolName,
+      errorType: 'PERMISSION_DENIED',
+      errorMessage: error,
+      suggestion: `权限不足。请检查是否有访问该资源的权限。`,
+      retryable: false
+    };
+  }
+  
+  if (errorLower.includes('invalid') || errorLower.includes('参数错误') || errorLower.includes('无效')) {
+    return {
+      toolName,
+      errorType: 'INVALID_ARGS',
+      errorMessage: error,
+      suggestion: `参数无效。请检查参数格式和值是否正确。`,
+      retryable: true
+    };
+  }
+  
+  if (errorLower.includes('timeout') || errorLower.includes('超时')) {
+    return {
+      toolName,
+      errorType: 'TIMEOUT',
+      errorMessage: error,
+      suggestion: `操作超时。可以尝试重试，或者减少操作的数据量。`,
+      retryable: true
+    };
+  }
+  
+  return {
+    toolName,
+    errorType: 'EXECUTION_FAILED',
+    errorMessage: error,
+    suggestion: `工具执行失败。请检查参数是否正确，或尝试使用其他方法。`,
+    retryable: true
+  };
+}
+
+/**
+ * 格式化结构化错误为 LLM 可理解的消息
+ */
+function formatStructuredError(error: StructuredToolError, retryInfo?: { attempts: number; maxRetries: number }): string {
+  let message = `[工具错误] ${error.toolName}\n`;
+  message += `错误类型: ${error.errorType}\n`;
+  message += `错误信息: ${error.errorMessage}\n`;
+  
+  if (error.suggestion) {
+    message += `建议: ${error.suggestion}\n`;
+  }
+  
+  if (retryInfo) {
+    if (error.retryable && retryInfo.attempts < retryInfo.maxRetries) {
+      message += `状态: 可重试 (${retryInfo.attempts}/${retryInfo.maxRetries} 次尝试)\n`;
+    } else if (!error.retryable) {
+      message += `状态: 不可重试，请尝试其他方法\n`;
+    } else {
+      message += `状态: 已达到最大重试次数，请尝试其他方法\n`;
+    }
+  }
+  
+  return message;
+}
+
+/**
+ * 检查是否应该重试工具调用
+ */
+function shouldRetryTool(
+  tracker: ToolRetryTracker | undefined,
+  error: StructuredToolError,
+  maxRetries: number
+): boolean {
+  if (!error.retryable) return false;
+  if (!tracker) return true;
+  return tracker.attempts < maxRetries;
+}
+
 // --- AgentLoop 实现 ---
 
 /**
@@ -89,17 +213,18 @@ export async function runAgentLoop(
   context: AgentLoopContext,
   onProgress?: (progress: AgentLoopProgress) => void | Promise<void>
 ): Promise<AgentLoopResult> {
-  const { model, apiKey, tools, toolChoice, maxIterations } = config;
+  const { model, apiKey, tools, toolChoice, maxIterations, maxToolRetries = 2 } = config;
   const { supabase, projectId, taskId, versionId, bucket, basePath, nestingLevel, projectFilesContext } = context;
   
   const chatMessages: ChatMessage[] = [...messages];
   const generatedImages: string[] = [];
   const modifiedFiles: string[] = [];
+  const toolRetryTrackers: Map<string, ToolRetryTracker> = new Map();
   
   let iteration = 0;
   let finalResponse = '';
   
-  console.log(`[AgentLoop] 开始循环, 模型: ${model}, 最大迭代: ${maxIterations}`);
+  console.log(`[AgentLoop] 开始循环, 模型: ${model}, 最大迭代: ${maxIterations}, 最大工具重试: ${maxToolRetries}`);
   
   // 构建工具执行上下文
   const toolExecutionContext: ToolExecutionContext = {
@@ -117,6 +242,9 @@ export async function runAgentLoop(
   while (iteration < maxIterations) {
     iteration++;
     console.log(`[AgentLoop] 迭代 ${iteration}/${maxIterations}`);
+    
+    // 记录迭代开始事件
+    await logIterationStart(supabase, taskId, projectId, iteration, maxIterations);
     
     // 通知进度：LLM 调用
     if (onProgress) {
@@ -168,18 +296,18 @@ export async function runAgentLoop(
           }
           
           await writeBuildLog(supabase, projectId, 'info', `调用工具: ${toolName}`);
-          await logAgentEvent(supabase, taskId, projectId, 'tool_call', { 
-            toolName, 
-            toolArgs: args, 
-            status: 'started' 
-          });
+          
+          // 记录工具开始事件
+          await logToolStart(supabase, taskId, projectId, toolName, args);
           
           // 执行工具
+          const startTime = Date.now();
           const toolResult: ToolExecutionResult = await executeToolCall(
             toolName, 
             args, 
             toolExecutionContext
           );
+          const duration = Date.now() - startTime;
           
           // 处理工具执行结果
           if (!toolResult.success) {
@@ -187,13 +315,48 @@ export async function runAgentLoop(
               ? (toolResult.result as { error?: string }).error || '未知错误'
               : '未知错误';
             await writeBuildLog(supabase, projectId, 'error', `工具执行失败 [${toolName}]: ${errorMsg}`);
-            await logAgentEvent(supabase, taskId, projectId, 'tool_call', { 
-              toolName, 
-              toolArgs: args, 
-              status: 'failed', 
-              error: errorMsg 
+            
+            // 结构化错误处理
+            const argsHash = hashArgs(args);
+            const trackerKey = `${toolName}:${argsHash}`;
+            const existingTracker = toolRetryTrackers.get(trackerKey);
+            const structuredError = classifyToolError(toolName, errorMsg);
+            
+            // 更新重试跟踪器
+            if (existingTracker) {
+              existingTracker.attempts++;
+              existingTracker.lastError = errorMsg;
+            } else {
+              toolRetryTrackers.set(trackerKey, {
+                toolName,
+                argsHash,
+                attempts: 1,
+                lastError: errorMsg
+              });
+            }
+            
+            const tracker = toolRetryTrackers.get(trackerKey);
+            const canRetry = shouldRetryTool(tracker, structuredError, maxToolRetries);
+            
+            // 格式化结构化错误消息
+            const structuredErrorMessage = formatStructuredError(structuredError, {
+              attempts: tracker?.attempts || 1,
+              maxRetries: maxToolRetries
             });
+            
+            console.log(`[AgentLoop] 工具错误: ${structuredError.errorType}, 可重试: ${canRetry}`);
+            
+            // 将结构化错误信息作为工具结果返回给 LLM
+            toolResult.result = {
+              success: false,
+              error: errorMsg,
+              structuredError: structuredErrorMessage,
+              canRetry
+            };
           }
+          
+          // 记录工具完成事件（包含执行时间）
+          await logToolComplete(supabase, taskId, projectId, toolName, toolResult.result, toolResult.success, duration);
           
           // 收集副作用
           if (toolResult.sideEffects) {

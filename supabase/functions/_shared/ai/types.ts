@@ -38,7 +38,7 @@ export interface ChatMessage {
 
 export interface CallOpenRouterOptions {
   tools?: ToolDefinition[] | null;
-  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
 }
 
 export interface ParsedChatCompletionOutput {
@@ -127,17 +127,29 @@ export interface WriteFileResult extends FileOperationResult {
 
 export interface SearchFilesResult extends FileOperationResult {
   results?: Array<{ file: string; matches: string[] }>;
+  metadata?: {
+    totalFiles: number;
+    totalMatches: number;
+    truncated: boolean;
+  };
 }
 
 export interface FileTreeNode {
   name: string;
   type: 'file' | 'directory';
+  path?: string;
   size?: number;
   children?: FileTreeNode[];
 }
 
 export interface GetProjectStructureResult extends FileOperationResult {
   structure?: FileTreeNode[];
+  metadata?: {
+    totalFiles: number;
+    totalDirectories: number;
+    maxDepth: number;
+    truncated: boolean;
+  };
 }
 
 export interface MoveFileResult {
@@ -147,7 +159,7 @@ export interface MoveFileResult {
 
 // --- Agent 事件类型 ---
 
-export type AgentEventType = 'agent_phase' | 'tool_call' | 'file_update' | 'log' | 'error';
+export type AgentEventType = 'progress' | 'tool_call' | 'file_update' | 'log' | 'error';
 
 /**
  * 进度事件 payload 中的 kind 字段
@@ -288,9 +300,14 @@ export interface TaskRunnerResult {
 }
 
 /**
- * 从旧的 TaskType + WorkflowMode 映射到新的 InteractionMode
+ * @deprecated mapToInteractionMode 已废弃
  * 
- * 映射规则：
+ * 任务分发现在直接使用 ai_tasks.type 字段（chat/plan/build）
+ * 不再需要从 TaskType + WorkflowMode 映射
+ * 
+ * 此函数保留用于向后兼容，但不应在新代码中使用
+ * 
+ * 映射规则（仅供参考）：
  * - chat_reply + default → 'chat'
  * - chat_reply + planning → 'plan'
  * - chat_reply + build → 'build'

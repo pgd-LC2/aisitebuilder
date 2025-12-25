@@ -7,3 +7,15 @@
 export { handleBuildTask } from './buildTaskHandler.ts';
 export type { BuildTaskInput, BuildTaskResult } from './types.ts';
 export { BUILD_CONFIG } from './buildConfig.ts';
+
+export { 
+  buildEnhancedContext, 
+  formatFileTreeForPrompt 
+} from './buildContextBuilder.ts';
+export type { 
+  BuildContext, 
+  BuildContextOptions, 
+  FileTreeSummary, 
+  PlanSummary,
+  ProjectType 
+} from './buildContextBuilder.ts';

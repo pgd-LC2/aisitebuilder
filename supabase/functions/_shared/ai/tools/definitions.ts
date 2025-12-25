@@ -173,17 +173,29 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'search_files',
-      description: '在项目文件中搜索包含指定关键词的内容。用于定位相关代码。',
+      description: '在项目文件中搜索包含指定关键词或正则表达式的内容。支持递归搜索子目录。用于定位相关代码。',
       parameters: {
         type: 'object',
         properties: {
           keyword: {
             type: 'string',
-            description: '要搜索的关键词'
+            description: '要搜索的关键词或正则表达式模式'
           },
           file_extension: {
             type: 'string',
             description: '限制搜索的文件扩展名，如 .ts, .html 等（可选）'
+          },
+          recursive: {
+            type: 'boolean',
+            description: '是否递归搜索子目录（默认 true）'
+          },
+          use_regex: {
+            type: 'boolean',
+            description: '是否将 keyword 作为正则表达式处理（默认 false）'
+          },
+          max_results: {
+            type: 'number',
+            description: '最大返回结果数（默认 50）'
           }
         },
         required: ['keyword']
@@ -194,10 +206,25 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_project_structure',
-      description: '获取完整的项目文件树结构。用于全局了解项目组成。',
+      description: '获取项目文件树结构。支持递归遍历、深度限制和文件过滤。用于全局了解项目组成。',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          depth: {
+            type: 'number',
+            description: '递归深度限制（默认 3，最大 10）。0 表示只列出根目录。'
+          },
+          include_patterns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '包含的文件模式列表，如 ["*.ts", "*.tsx", "src/**"]。留空表示包含所有文件。'
+          },
+          exclude_patterns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '排除的文件/目录模式列表，如 ["node_modules", "*.log"]。默认排除 node_modules、.git 等。'
+          }
+        },
         required: []
       }
     }

@@ -21,9 +21,7 @@ import {
   // TaskRunner - 阶段化任务执行主干
   createTaskRunner,
   // 类型
-  mapToInteractionMode,
-  TaskType,
-  WorkflowMode,
+  type InteractionMode,
   // 日志
   writeBuildLog,
   updateTaskStatus,
@@ -35,7 +33,9 @@ import {
 
 /**
  * 抢占任务 - 使用 FOR UPDATE SKIP LOCKED 实现原子抢占
- * 支持新的 mode 字段，同时兼容旧的 type + payload.workflowMode
+ * 
+ * 任务分发基于 task.type 字段（chat/plan/build）
+ * mode 字段已废弃，不再使用
  */
 async function claimTask(pgClient: Client, projectId?: string) {
   let query = `
@@ -55,7 +55,7 @@ async function claimTask(pgClient: Client, projectId?: string) {
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, type, project_id, payload, attempts, max_attempts, mode;
+    RETURNING id, type, project_id, payload, attempts, max_attempts;
   `;
   const result = await pgClient.queryObject<{
     id: string;
@@ -64,7 +64,6 @@ async function claimTask(pgClient: Client, projectId?: string) {
     payload: Record<string, unknown>;
     attempts: number;
     max_attempts: number;
-    mode?: string;
   }>(query, params);
   return result.rows[0] || null;
 }
@@ -111,15 +110,14 @@ Deno.serve(async (req) => {
         );
       }
       
-      console.log(`[ProcessAITasks] 成功抢占任务: ${task.id}, 类型: ${task.type}, 模式: ${task.mode || '(从 type+workflowMode 推断)'}`);
+      console.log(`[ProcessAITasks] 成功抢占任务: ${task.id}, 类型: ${task.type}`);
       
-      // 确定交互模式
-      const mode = task.mode 
-        ? (task.mode as 'chat' | 'plan' | 'build')
-        : mapToInteractionMode(
-            task.type as TaskType,
-            task.payload?.workflowMode as WorkflowMode | undefined
-          );
+      // 确定交互模式 - 直接使用 task.type（chat/plan/build）
+      // 验证 type 是否为有效的 InteractionMode
+      const validModes: InteractionMode[] = ['chat', 'plan', 'build'];
+      const mode: InteractionMode = validModes.includes(task.type as InteractionMode) 
+        ? (task.type as InteractionMode)
+        : 'chat'; // 默认回退到 chat 模式
       
       // chat/plan 模式不走自我修复循环，直接使用 TaskRunner
       if (mode === 'chat' || mode === 'plan') {

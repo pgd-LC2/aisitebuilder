@@ -438,37 +438,125 @@ export async function handleMoveFile(
   }
 }
 
-// 搜索文件
+// 递归收集所有文件路径
+async function collectFilesRecursively(
+  ctx: ToolContext,
+  dirPath: string,
+  fileExtension: string | undefined,
+  textExtensions: string[],
+  maxFiles: number
+): Promise<string[]> {
+  const files: string[] = [];
+  
+  const { data: items, error } = await ctx.supabase.storage
+    .from(ctx.bucket)
+    .list(dirPath, {
+      limit: 100,
+      sortBy: { column: 'name', order: 'asc' }
+    });
+  
+  if (error || !items) return files;
+  
+  for (const item of items) {
+    if (files.length >= maxFiles) break;
+    
+    const itemPath = `${dirPath}/${item.name}`.replace(/\/+/g, '/');
+    
+    if (item.id) {
+      const hasTextExt = textExtensions.some(ext => item.name.endsWith(ext));
+      if (fileExtension) {
+        if (item.name.endsWith(fileExtension)) {
+          files.push(itemPath);
+        }
+      } else if (hasTextExt) {
+        files.push(itemPath);
+      }
+    } else {
+      const subFiles = await collectFilesRecursively(
+        ctx, 
+        itemPath, 
+        fileExtension, 
+        textExtensions, 
+        maxFiles - files.length
+      );
+      files.push(...subFiles);
+    }
+  }
+  
+  return files;
+}
+
+// 搜索文件（增强版：支持递归搜索和正则表达式）
 export async function handleSearchFiles(
   ctx: ToolContext, 
-  args: { keyword: string; file_extension?: string }
+  args: { 
+    keyword: string; 
+    file_extension?: string;
+    recursive?: boolean;
+    use_regex?: boolean;
+    max_results?: number;
+  }
 ): Promise<SearchFilesResult> {
   try {
-    const { data: fileList, error: listError } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .list(ctx.basePath, {
-        limit: 50,
-        sortBy: { column: 'name', order: 'asc' }
-      });
+    const recursive = args.recursive !== false;
+    const useRegex = args.use_regex === true;
+    const maxResults = Math.min(args.max_results || 50, 100);
     
-    if (listError) {
-      return { success: false, error: `搜索文件失败: ${listError.message}` };
+    console.log(`[SearchFiles] 开始搜索, keyword="${args.keyword}", recursive=${recursive}, useRegex=${useRegex}`);
+    
+    const textExtensions = ['.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.txt', '.vue', '.svelte'];
+    
+    let filesToSearch: string[];
+    
+    if (recursive) {
+      filesToSearch = await collectFilesRecursively(
+        ctx,
+        ctx.basePath,
+        args.file_extension,
+        textExtensions,
+        200
+      );
+    } else {
+      const { data: fileList, error: listError } = await ctx.supabase.storage
+        .from(ctx.bucket)
+        .list(ctx.basePath, {
+          limit: 100,
+          sortBy: { column: 'name', order: 'asc' }
+        });
+      
+      if (listError) {
+        return { success: false, error: `搜索文件失败: ${listError.message}` };
+      }
+      
+      filesToSearch = (fileList || [])
+        .filter(f => {
+          if (!f.id) return false;
+          const hasTextExt = textExtensions.some(ext => f.name.endsWith(ext));
+          if (args.file_extension) {
+            return f.name.endsWith(args.file_extension);
+          }
+          return hasTextExt;
+        })
+        .map(f => `${ctx.basePath}/${f.name}`.replace(/\/+/g, '/'));
     }
     
-    const textExtensions = ['.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.txt'];
-    const filesToSearch = (fileList || []).filter(f => {
-      if (!f.id) return false;
-      const hasTextExt = textExtensions.some(ext => f.name.endsWith(ext));
-      if (args.file_extension) {
-        return f.name.endsWith(args.file_extension);
-      }
-      return hasTextExt;
-    });
+    console.log(`[SearchFiles] 找到 ${filesToSearch.length} 个文件待搜索`);
     
     const results: Array<{ file: string; matches: string[] }> = [];
+    let totalMatches = 0;
     
-    for (const file of filesToSearch) {
-      const filePath = `${ctx.basePath}/${file.name}`.replace(/\/+/g, '/');
+    let searchPattern: RegExp | null = null;
+    if (useRegex) {
+      try {
+        searchPattern = new RegExp(args.keyword, 'gi');
+      } catch {
+        return { success: false, error: `无效的正则表达式: ${args.keyword}` };
+      }
+    }
+    
+    for (const filePath of filesToSearch) {
+      if (totalMatches >= maxResults) break;
+      
       const { data, error } = await ctx.supabase.storage
         .from(ctx.bucket)
         .download(filePath);
@@ -480,49 +568,189 @@ export async function handleSearchFiles(
       const matchingLines: string[] = [];
       
       lines.forEach((line, index) => {
-        if (line.toLowerCase().includes(args.keyword.toLowerCase())) {
-          matchingLines.push(`Line ${index + 1}: ${line.trim().substring(0, 100)}`);
+        if (totalMatches >= maxResults) return;
+        
+        let isMatch = false;
+        if (useRegex && searchPattern) {
+          searchPattern.lastIndex = 0;
+          isMatch = searchPattern.test(line);
+        } else {
+          isMatch = line.toLowerCase().includes(args.keyword.toLowerCase());
+        }
+        
+        if (isMatch) {
+          matchingLines.push(`Line ${index + 1}: ${line.trim().substring(0, 150)}`);
+          totalMatches++;
         }
       });
       
       if (matchingLines.length > 0) {
+        const relativePath = filePath.replace(ctx.basePath + '/', '');
         results.push({
-          file: file.name,
-          matches: matchingLines.slice(0, 5)
+          file: relativePath,
+          matches: matchingLines.slice(0, 10)
         });
       }
     }
     
-    return { success: true, results };
+    console.log(`[SearchFiles] 搜索完成, 找到 ${results.length} 个文件, ${totalMatches} 处匹配`);
+    
+    return { 
+      success: true, 
+      results,
+      metadata: {
+        totalFiles: filesToSearch.length,
+        totalMatches,
+        truncated: totalMatches >= maxResults
+      }
+    };
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     return { success: false, error: `搜索文件异常: ${errorMessage}` };
   }
 }
 
-// 获取项目结构
+// 默认排除的目录和文件模式
+const DEFAULT_EXCLUDE_PATTERNS = [
+  'node_modules', '.git', 'dist', 'build', 
+  '.next', '.nuxt', '.cache', 'coverage',
+  '*.lock', '*.log', '.DS_Store'
+];
+
+// 检查路径是否匹配模式
+function matchesPatternForStructure(path: string, patterns: string[]): boolean {
+  const fileName = path.split('/').pop() || '';
+  
+  for (const pattern of patterns) {
+    if (pattern.startsWith('*.')) {
+      const ext = pattern.slice(1);
+      if (fileName.endsWith(ext)) return true;
+    } else if (pattern.endsWith('/**')) {
+      const dir = pattern.slice(0, -3);
+      if (path.startsWith(dir + '/') || path === dir) return true;
+    } else if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+      if (regex.test(fileName) || regex.test(path)) return true;
+    } else {
+      if (fileName === pattern || path === pattern || path.includes('/' + pattern + '/')) return true;
+    }
+  }
+  
+  return false;
+}
+
+// 递归获取项目结构
+async function getProjectStructureRecursive(
+  ctx: ToolContext,
+  relativePath: string,
+  currentDepth: number,
+  maxDepth: number,
+  includePatterns: string[],
+  excludePatterns: string[],
+  stats: { totalFiles: number; totalDirs: number; maxFiles: number }
+): Promise<FileTreeNode[]> {
+  if (currentDepth > maxDepth || stats.totalFiles >= stats.maxFiles) {
+    return [];
+  }
+
+  const fullPath = relativePath 
+    ? `${ctx.basePath}/${relativePath}`.replace(/\/+/g, '/')
+    : ctx.basePath;
+
+  const { data: items, error } = await ctx.supabase.storage
+    .from(ctx.bucket)
+    .list(fullPath, {
+      limit: 100,
+      sortBy: { column: 'name', order: 'asc' }
+    });
+
+  if (error || !items) {
+    console.error(`[GetProjectStructure] 列出目录失败: ${fullPath}`, error);
+    return [];
+  }
+
+  const nodes: FileTreeNode[] = [];
+
+  for (const item of items) {
+    if (stats.totalFiles >= stats.maxFiles) break;
+
+    const itemPath = relativePath ? `${relativePath}/${item.name}` : item.name;
+    
+    if (matchesPatternForStructure(itemPath, excludePatterns)) continue;
+
+    if (item.id) {
+      if (includePatterns.length === 0 || matchesPatternForStructure(itemPath, includePatterns)) {
+        stats.totalFiles++;
+        nodes.push({
+          name: item.name,
+          type: 'file',
+          path: itemPath,
+          size: item.metadata?.size as number | undefined
+        });
+      }
+    } else {
+      stats.totalDirs++;
+      const children = await getProjectStructureRecursive(
+        ctx,
+        itemPath,
+        currentDepth + 1,
+        maxDepth,
+        includePatterns,
+        excludePatterns,
+        stats
+      );
+      nodes.push({
+        name: item.name,
+        type: 'directory',
+        path: itemPath,
+        children
+      });
+    }
+  }
+
+  return nodes;
+}
+
+// 获取项目结构（增强版：支持递归、深度限制、文件过滤）
 export async function handleGetProjectStructure(
-  ctx: ToolContext
+  ctx: ToolContext,
+  args?: { 
+    depth?: number; 
+    include_patterns?: string[]; 
+    exclude_patterns?: string[];
+  }
 ): Promise<GetProjectStructureResult> {
   try {
-    const { data: fileList, error } = await ctx.supabase.storage
-      .from(ctx.bucket)
-      .list(ctx.basePath, {
-        limit: 200,
-        sortBy: { column: 'name', order: 'asc' }
-      });
+    const maxDepth = Math.min(Math.max(args?.depth ?? 3, 0), 10);
+    const includePatterns = args?.include_patterns || [];
+    const excludePatterns = args?.exclude_patterns || DEFAULT_EXCLUDE_PATTERNS;
     
-    if (error) {
-      return { success: false, error: `获取项目结构失败: ${error.message}` };
-    }
+    console.log(`[GetProjectStructure] 开始获取项目结构, depth=${maxDepth}, include=${includePatterns.join(',')}, exclude=${excludePatterns.join(',')}`);
     
-    const structure: FileTreeNode[] = (fileList || []).map(f => ({
-      name: f.name,
-      type: f.id ? 'file' as const : 'directory' as const,
-      size: f.metadata?.size
-    }));
+    const stats = { totalFiles: 0, totalDirs: 0, maxFiles: 500 };
     
-    return { success: true, structure };
+    const structure = await getProjectStructureRecursive(
+      ctx,
+      '',
+      0,
+      maxDepth,
+      includePatterns,
+      excludePatterns,
+      stats
+    );
+    
+    console.log(`[GetProjectStructure] 完成, 文件数=${stats.totalFiles}, 目录数=${stats.totalDirs}`);
+    
+    return { 
+      success: true, 
+      structure,
+      metadata: {
+        totalFiles: stats.totalFiles,
+        totalDirectories: stats.totalDirs,
+        maxDepth,
+        truncated: stats.totalFiles >= stats.maxFiles
+      }
+    };
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     return { success: false, error: `获取项目结构异常: ${errorMessage}` };

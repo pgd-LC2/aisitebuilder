@@ -36,4 +36,6 @@ export interface BuildTaskResult {
   modifiedFiles?: string[];
   generatedImages?: string[];
   error?: string;
+  repairAttempts?: number;
+  totalIterationsUsed?: number;
 }
