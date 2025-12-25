@@ -56,7 +56,14 @@ export async function callOpenRouterChatCompletionsApi(
   
   if (tools) {
     requestBody.tools = tools;
-    requestBody.tool_choice = toolChoice;
+    // 运行时降级处理：某些模型可能不支持 'required'，降级为 'auto'
+    // 参考：https://openrouter.ai/docs/guides/features/tool-calling
+    if (toolChoice === 'required') {
+      console.log('[LLM] tool_choice: required 可能不被支持，降级为 auto');
+      requestBody.tool_choice = 'auto';
+    } else {
+      requestBody.tool_choice = toolChoice;
+    }
   }
   
   if (DEBUG_LLM) {

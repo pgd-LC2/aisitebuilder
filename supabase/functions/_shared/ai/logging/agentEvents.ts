@@ -96,7 +96,7 @@ export async function logProgressEvent(
     ...data
   };
   
-  await logAgentEvent(supabase, taskId, projectId, 'agent_phase', payload as AgentEventPayload);
+  await logAgentEvent(supabase, taskId, projectId, 'progress', payload as AgentEventPayload);
 }
 
 /**
@@ -172,12 +172,14 @@ export async function logToolComplete(
   projectId: string,
   toolName: string,
   toolResult?: unknown,
-  toolSuccess?: boolean
+  toolSuccess?: boolean,
+  durationMs?: number
 ): Promise<void> {
   await logProgressEvent(supabase, taskId, projectId, 'tool_complete', {
     toolName,
     toolResult,
-    toolSuccess
+    toolSuccess,
+    durationMs
   });
 }
 
