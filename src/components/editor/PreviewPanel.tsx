@@ -710,8 +710,8 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
     previewStatus === 'unsupported';
 
   return (
-    <div className="flex flex-col h-full bg-gray-100">
-      <div className="px-4 py-2 bg-white border-b border-gray-200">
+    <div className="flex flex-col h-full bg-muted">
+      <div className="px-4 py-2 bg-background border-b border-border">
         <div className="flex items-center justify-between">
           <ToggleGroup type="single" value={panelMode} onValueChange={(value) => value && setPanelMode(value as PanelMode)}>
             <ToggleGroupItem value="preview" aria-label="预览" className="text-xs gap-2">
@@ -767,7 +767,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden bg-gray-100">
+      <div className="flex-1 overflow-hidden bg-muted">
         <AnimatePresence mode="wait">
           {panelMode === 'preview' ? (
             <motion.div
@@ -784,7 +784,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
                     key={previewUrl}
                     layout
                     src={previewUrl}
-                    className="w-full h-full bg-white rounded-lg shadow-sm border border-gray-200"
+                    className="w-full h-full bg-background rounded-lg shadow-sm border border-border"
                     title="网站预览"
                     sandbox="allow-scripts allow-same-origin"
                     initial={{ opacity: 0.7, scale: 0.98 }}
@@ -877,11 +877,11 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
   const currentStepIndex = progressSteps.findIndex(step => !step.done);
 
   return (
-    <div className="h-full bg-gradient-to-br from-blue-50 via-white to-purple-50 rounded-lg border border-dashed border-gray-200 flex items-center justify-center p-6">
+    <div className="h-full bg-muted rounded-lg border border-dashed border-border flex items-center justify-center p-6">
       <div className="w-full max-w-3xl space-y-6">
         {/* 主状态显示区 - 小白友好 */}
         <div className="text-center space-y-4">
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 mx-auto rounded-full bg-blue-50 text-blue-700 text-xs sm:text-sm font-medium max-w-full">
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 mx-auto rounded-full bg-primary/10 text-primary text-xs sm:text-sm font-medium max-w-full">
             <Loader2 className={`w-4 h-4 flex-shrink-0 ${shouldShowMiniGame ? 'animate-spin' : ''}`} />
             <span className="whitespace-normal break-words text-center max-w-[16rem] sm:max-w-[20rem]">
               {projectName ? `正在为「${projectName}」准备预览` : '正在准备预览环境'}
@@ -890,8 +890,8 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
           
           {/* 状态标题和副标题 */}
           <div className="space-y-1">
-            <h3 className="text-lg font-medium text-gray-900">{statusConfig.title}</h3>
-            <p className="text-gray-600 text-sm">{statusConfig.subtitle}</p>
+            <h3 className="text-lg font-medium text-foreground">{statusConfig.title}</h3>
+            <p className="text-muted-foreground text-sm">{statusConfig.subtitle}</p>
           </div>
 
           {/* 友好提示 - 小白能看懂 */}
@@ -903,12 +903,12 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
 
           {/* 预估时间和已用时间 */}
           {(statusConfig.estimatedTime || elapsedTime > 0) && shouldShowMiniGame && (
-            <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
               {statusConfig.estimatedTime && (
-                <span className="px-2 py-1 bg-gray-100 rounded">{statusConfig.estimatedTime}</span>
+                <span className="px-2 py-1 bg-muted rounded">{statusConfig.estimatedTime}</span>
               )}
               {elapsedTime > 0 && (
-                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                <span className="px-2 py-1 bg-primary/10 text-primary rounded">
                   已用时: {formatElapsedTime(elapsedTime)}
                 </span>
               )}
@@ -924,8 +924,8 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
                     step.done 
                       ? 'bg-green-100 text-green-700' 
                       : index === currentStepIndex 
-                        ? 'bg-blue-100 text-blue-700 animate-pulse' 
-                        : 'bg-gray-100 text-gray-400'
+                        ? 'bg-primary/10 text-primary animate-pulse' 
+                        : 'bg-muted text-muted-foreground'
                   }`}>
                     {step.done ? (
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -939,7 +939,7 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
                     <span>{step.label}</span>
                   </div>
                   {index < progressSteps.length - 1 && (
-                    <div className={`w-8 h-0.5 mx-1 ${step.done ? 'bg-green-300' : 'bg-gray-200'}`} />
+                    <div className={`w-8 h-0.5 mx-1 ${step.done ? 'bg-green-300' : 'bg-border'}`} />
                   )}
                 </div>
               ))}
@@ -961,15 +961,15 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
             <LoadingMiniGame />
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-inner p-6 text-center">
+          <div className="bg-background rounded-2xl shadow-inner p-6 text-center">
             {status === 'idle' && (
-              <p className="text-sm text-gray-600">请选择一个项目并启动预览，即可开始编辑体验。</p>
+              <p className="text-sm text-muted-foreground">请选择一个项目并启动预览，即可开始编辑体验。</p>
             )}
             {isError && !error && (
-              <p className="text-sm text-gray-600">预览发生未知错误，请尝试刷新或重启预览。</p>
+              <p className="text-sm text-muted-foreground">预览发生未知错误，请尝试刷新或重启预览。</p>
             )}
             {isUnsupported && !error && (
-              <p className="text-sm text-gray-600">请在启用 HTTPS 或 localhost 的跨源隔离环境下打开。</p>
+              <p className="text-sm text-muted-foreground">请在启用 HTTPS 或 localhost 的跨源隔离环境下打开。</p>
             )}
           </div>
         )}
@@ -979,7 +979,7 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
           <div className="space-y-2">
             <button
               onClick={() => setShowDetailedLogs(!showDetailedLogs)}
-              className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 transition-colors mx-auto"
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
             >
               <span>{showDetailedLogs ? '收起' : '展开'}技术日志</span>
               <svg 
@@ -995,27 +995,27 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
             <AnimatePresence>
               {showDetailedLogs && (
                 <motion.div
-                  className="bg-gray-900 text-gray-100 rounded-lg p-4 text-left max-h-[40vh] overflow-auto text-xs font-mono space-y-1"
+                  className="bg-card text-card-foreground rounded-lg p-4 text-left max-h-[40vh] overflow-auto text-xs font-mono space-y-1 border"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.3, ease: LOG_EASE }}
                 >
-                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
-                    <span className="text-gray-400">WebContainer 日志</span>
-                    <span className="text-gray-500">{logs.length} 条记录</span>
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-border">
+                    <span className="text-muted-foreground">WebContainer 日志</span>
+                    <span className="text-muted-foreground">{logs.length} 条记录</span>
                   </div>
                   <AnimatePresence initial={false}>
                     {logs.slice(-20).map((log, index) => (
                       <motion.div
                         key={`${log}-${index}`}
-                        className="whitespace-pre-wrap py-0.5 hover:bg-gray-800 px-1 rounded"
+                        className="whitespace-pre-wrap py-0.5 hover:bg-accent px-1 rounded"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                         transition={{ duration: 0.25, ease: LOG_EASE }}
                       >
-                        <span className="text-gray-500 mr-2">{String(index + 1).padStart(2, '0')}</span>
+                        <span className="text-muted-foreground mr-2">{String(index + 1).padStart(2, '0')}</span>
                         {log}
                       </motion.div>
                     ))}
@@ -1027,11 +1027,11 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
             {/* 简化的最新日志预览 - 始终显示 */}
             {!showDetailedLogs && logs.length > 0 && (
               <motion.div
-                className="bg-gray-100 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono truncate"
+                className="bg-muted rounded-lg px-3 py-2 text-xs text-muted-foreground font-mono truncate"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <span className="text-gray-400 mr-2">最新:</span>
+                <span className="text-muted-foreground mr-2">最新:</span>
                 {logs[logs.length - 1]}
               </motion.div>
             )}
@@ -1098,20 +1098,20 @@ function LoadingMiniGame() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 max-h-[480px] overflow-auto">
+    <div className="bg-background rounded-2xl shadow-lg p-4 sm:p-6 max-h-[480px] overflow-auto border">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-          <h2 className="text-base sm:text-lg font-medium text-gray-900">翻牌小游戏</h2>
+          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+          <h2 className="text-base sm:text-lg font-medium text-foreground">翻牌小游戏</h2>
         </div>
-        <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+        <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
           <div>
             步数:{' '}
-            <span className="font-medium text-gray-900">{moves}</span>
+            <span className="font-medium text-foreground">{moves}</span>
           </div>
           <div>
             配对:{' '}
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-foreground">
               {matchedPairs}/{totalPairs}
             </span>
           </div>
@@ -1140,8 +1140,8 @@ function LoadingMiniGame() {
             disabled={card.matched || card.flipped}
             className={`aspect-square rounded-xl text-2xl sm:text-3xl font-bold transition-all duration-300 transform flex items-center justify-center shadow-md hover:shadow-lg ${
               card.flipped || card.matched
-                ? 'bg-gradient-to-br from-blue-400 to-purple-500 text-white scale-105'
-                : 'bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:scale-105'
+                ? 'bg-primary text-primary-foreground scale-105'
+                : 'bg-muted hover:bg-accent hover:scale-105'
             } ${card.matched ? 'opacity-60' : ''} disabled:cursor-not-allowed`}
           >
             {card.flipped || card.matched ? card.icon : '?'}

@@ -98,8 +98,8 @@ export default function FileUploader({
         className={`
           border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
           ${isDragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100'
+            ? 'border-primary bg-primary/10'
+            : 'border-border hover:border-primary/50 bg-muted hover:bg-accent'
           }
           ${uploading ? 'pointer-events-none opacity-60' : ''}
         `}
@@ -114,11 +114,11 @@ export default function FileUploader({
           disabled={uploading}
         />
 
-        <Upload className="w-10 h-10 mx-auto mb-3 text-gray-400" />
-        <p className="text-sm font-medium text-gray-700 mb-1">
+        <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+        <p className="text-sm font-medium text-foreground mb-1">
           点击上传或拖拽文件到这里
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           单个文件最大 {formatFileSize(maxSize)}
         </p>
       </div>
@@ -130,23 +130,23 @@ export default function FileUploader({
             return (
               <div
                 key={`${file.name}-${index}`}
-                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200"
+                className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border"
               >
-                <File className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                <File className="w-5 h-5 text-muted-foreground flex-shrink-0" />
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {file.name}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {formatFileSize(file.size)}
                   </p>
 
                   {status && status.status === 'uploading' && (
                     <div className="mt-1">
-                      <div className="w-full bg-gray-200 rounded-full h-1">
+                      <div className="w-full bg-muted rounded-full h-1">
                         <div
-                          className="bg-blue-500 h-1 rounded-full transition-all"
+                          className="bg-primary h-1 rounded-full transition-all"
                           style={{ width: `${status.progress}%` }}
                         />
                       </div>
@@ -174,9 +174,9 @@ export default function FileUploader({
                       e.stopPropagation();
                       removeFile(index);
                     }}
-                    className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                    className="p-1 hover:bg-accent rounded transition-colors flex-shrink-0"
                   >
-                    <X className="w-4 h-4 text-gray-500" />
+                    <X className="w-4 h-4 text-muted-foreground" />
                   </button>
                 )}
               </div>

@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Search, Plus, Filter, Home, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useProject } from '../../hooks/useProject';
 import { ProjectCard } from '../project';
-import { FloatingBackground, floatingBackgroundPresets, FireBurnOverlay } from '../visual';
+import { FireBurnOverlay } from '../visual';
 import {
   capturePositions,
   applyFlipAnimation,
@@ -29,8 +29,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-const { defaultProjectsPageBlobs } = floatingBackgroundPresets;
 
 interface ProjectsPageProps {
   onCreateNew: () => void;
@@ -301,10 +299,10 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <div className="h-full flex items-center justify-center bg-muted">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          <p className="mt-4 text-gray-600">加载中...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">加载中...</p>
         </div>
       </div>
     );
@@ -313,8 +311,7 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
   const projectToDelete = projects.find(p => p.id === deleteConfirm);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative">
-      <FloatingBackground blobs={defaultProjectsPageBlobs} />
+    <div className="h-full flex flex-col overflow-hidden bg-background relative">
 
       <AlertDialog open={!!deleteConfirm && !!projectToDelete} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
         <AlertDialogContent>
@@ -357,7 +354,7 @@ export default function ProjectsPage({ onCreateNew, onProjectClick }: ProjectsPa
       </AlertDialog>
 
       {projects.length > 0 && (
-        <div className="sticky top-0 z-20 px-6 md:px-8 py-6 backdrop-blur-xl bg-white/60 border-b border-white/40">
+        <div className="sticky top-0 z-20 px-6 md:px-8 py-6 bg-background border-b border-border">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">

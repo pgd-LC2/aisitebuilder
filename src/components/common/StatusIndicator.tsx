@@ -16,7 +16,7 @@ const statusConfigs: Record<StatusType, StatusConfig> = {
   },
   thinking: {
     label: '思考中',
-    color: 'bg-blue-500',
+    color: 'bg-primary',
     animate: true,
   },
   building: {
@@ -31,7 +31,7 @@ const statusConfigs: Record<StatusType, StatusConfig> = {
   },
   idle: {
     label: '空闲',
-    color: 'bg-gray-500',
+    color: 'bg-muted-foreground',
     animate: false,
   },
 };
@@ -60,7 +60,7 @@ export default function StatusIndicator() {
           config.animate ? 'animate-pulse' : ''
         }`}
       />
-      <span className="text-xs text-gray-400">{config.label}</span>
+      <span className="text-xs text-muted-foreground">{config.label}</span>
     </div>
   );
 }

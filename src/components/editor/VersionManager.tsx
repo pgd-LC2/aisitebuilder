@@ -320,10 +320,10 @@ const findCodeInSnapshot = (
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl p-6 max-w-4xl w-full max-h-[80vh] flex items-center justify-center shadow-2xl">
+      <div className="bg-background rounded-xl p-6 max-w-4xl w-full max-h-[80vh] flex items-center justify-center shadow-2xl">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-          <p className="text-sm text-gray-600">加载版本历史...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+          <p className="text-sm text-muted-foreground">加载版本历史...</p>
         </div>
       </div>
     );
@@ -341,13 +341,13 @@ const findCodeInSnapshot = (
           onClose={() => setViewingCode(null)}
         />
       )}
-      <div className="bg-white rounded-xl max-w-6xl w-full max-h-[85vh] flex flex-col shadow-xl md:min-w-[1200px]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <div className="bg-background rounded-xl max-w-6xl w-full max-h-[85vh] flex flex-col shadow-xl md:min-w-[1200px]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <GitBranch className="w-5 h-5 text-blue-600" />
+            <GitBranch className="w-5 h-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">版本管理</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <h2 className="text-lg font-semibold text-foreground">版本管理</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 共 {versions.length} 个版本
               </p>
             </div>
@@ -365,9 +365,9 @@ const findCodeInSnapshot = (
         </div>
 
         <div className="flex-1 overflow-hidden flex">
-          <div className="w-64 border-r border-gray-200 overflow-y-auto bg-gray-50">
+          <div className="w-64 border-r border-border overflow-y-auto bg-muted">
             <div className="p-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-2">
                 版本列表
               </p>
               <div className="space-y-1">
@@ -386,8 +386,8 @@ const findCodeInSnapshot = (
                       className={`
                         relative p-3 rounded-lg cursor-pointer transition-all
                         ${isSelected
-                          ? 'bg-blue-50 border-2 border-blue-500'
-                          : 'bg-white border border-gray-200 hover:border-blue-300'
+                          ? 'bg-primary/10 border-2 border-primary'
+                          : 'bg-background border border-border hover:border-primary/50'
                         }
                       `}
                       whileHover={{ scale: 1.02 }}
@@ -396,7 +396,7 @@ const findCodeInSnapshot = (
                       <div className="flex items-center justify-between mb-1">
                         <span className={`
                           text-sm font-semibold
-                          ${isSelected ? 'text-blue-700' : 'text-gray-900'}
+                          ${isSelected ? 'text-primary' : 'text-foreground'}
                         `}>
                           v{version.version_number}
                         </span>
@@ -407,7 +407,7 @@ const findCodeInSnapshot = (
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="w-3 h-3" />
                         {formatDate(version.created_at)}
                       </div>
@@ -421,9 +421,9 @@ const findCodeInSnapshot = (
           <div className="flex-1 flex flex-col overflow-hidden">
             {selectedVersion && (
               <>
-                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="px-6 py-4 border-b border-border bg-muted">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-semibold text-foreground">
                       版本 v{selectedVersion.version_number}
                     </h3>
                     {selectedVersion.id === currentVersionId && (
@@ -433,7 +433,7 @@ const findCodeInSnapshot = (
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                     <Clock className="w-4 h-4" />
                     {formatDate(selectedVersion.created_at)}
                   </div>
@@ -467,17 +467,17 @@ const findCodeInSnapshot = (
                   {loadingFiles ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
-                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                        <p className="text-sm text-gray-600">加载文件列表...</p>
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                        <p className="text-sm text-muted-foreground">加载文件列表...</p>
                       </div>
                     </div>
                   ) : fileTree && fileTree.children && fileTree.children.length > 0 ? (
                     <div className="h-full w-full flex gap-6">
-                      <div className="flex-1 flex flex-col overflow-hidden bg-white border border-gray-200 rounded-xl">
-                        <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-4 py-3 border-b border-gray-200">
+                      <div className="flex-1 flex flex-col overflow-hidden bg-background border border-border rounded-xl">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted px-4 py-3 border-b border-border">
                           <button
                             onClick={() => setCurrentPath([])}
-                            className="hover:text-blue-600 transition-colors"
+                            className="hover:text-primary transition-colors"
                           >
                             根目录
                           </button>
@@ -486,7 +486,7 @@ const findCodeInSnapshot = (
                               <ChevronRight className="w-4 h-4" />
                               <button
                                 onClick={() => handleBreadcrumbClick(index + 1)}
-                                className="hover:text-blue-600 transition-colors"
+                                className="hover:text-primary transition-colors"
                               >
                                 {part}
                               </button>
@@ -494,26 +494,26 @@ const findCodeInSnapshot = (
                           ))}
                         </div>
 
-                        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                        <div className="flex-1 overflow-y-auto divide-y divide-border">
                           {currentFolder.children?.map((node) => (
                             <div
                               key={node.path}
                               onClick={() => node.type === 'folder' ? handleFolderClick(node.name) : handleFileClick(node.file!)}
                               className={`
                                 flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors
-                                ${selectedFile?.id === node.file?.id ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                                ${selectedFile?.id === node.file?.id ? 'bg-primary/10' : 'hover:bg-muted'}
                               `}
                             >
                               {node.type === 'folder' ? (
                                 <>
-                                  <Folder className="w-5 h-5 text-blue-500" />
-                                  <span className="text-sm font-medium text-gray-900">{node.name}</span>
+                                  <Folder className="w-5 h-5 text-primary" />
+                                  <span className="text-sm font-medium text-foreground">{node.name}</span>
                                 </>
                               ) : (
                                 <>
-                                  <FileText className="w-5 h-5 text-gray-400" />
-                                  <span className="text-sm text-gray-700">{node.name}</span>
-                                  <span className="ml-auto text-xs text-gray-500">
+                                  <FileText className="w-5 h-5 text-muted-foreground" />
+                                  <span className="text-sm text-foreground">{node.name}</span>
+                                  <span className="ml-auto text-xs text-muted-foreground">
                                     {fileService.formatFileSize(node.file?.file_size || 0)}
                                   </span>
                                 </>
@@ -525,17 +525,17 @@ const findCodeInSnapshot = (
 
                       <div className="w-80 flex-shrink-0">
                         {selectedFile ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 h-full flex flex-col">
+                          <div className="bg-muted border border-border rounded-xl p-4 h-full flex flex-col">
                             <div className="mb-3">
-                              <h4 className="text-sm font-semibold text-gray-900">{selectedFile.file_name}</h4>
-                              <p className="text-xs text-gray-500 mt-1">
+                              <h4 className="text-sm font-semibold text-foreground">{selectedFile.file_name}</h4>
+                              <p className="text-xs text-muted-foreground mt-1">
                                 {fileService.formatFileSize(selectedFile.file_size)} · {selectedFile.mime_type}
                               </p>
                             </div>
-                            <div className="text-xs text-gray-600 space-y-2">
+                            <div className="text-xs text-muted-foreground space-y-2">
                               <p>
                                 路径:{' '}
-                                <code className="bg-white px-2 py-1 rounded break-all block">
+                                <code className="bg-background px-2 py-1 rounded break-all block">
                                   {selectedFile.file_path}
                                 </code>
                               </p>
@@ -551,8 +551,8 @@ const findCodeInSnapshot = (
                             )}
                           </div>
                         ) : (
-                          <div className="h-full border border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-500 text-sm">
-                            <FileText className="w-10 h-10 mb-3 text-gray-300" />
+                          <div className="h-full border border-dashed border-border rounded-xl flex flex-col items-center justify-center text-muted-foreground text-sm">
+                            <FileText className="w-10 h-10 mb-3 text-muted-foreground/50" />
                             选择一个文件以查看详情
                           </div>
                         )}
@@ -561,8 +561,8 @@ const findCodeInSnapshot = (
                   ) : (
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center">
-                        <FileText className="w-12 h-12 mx-auto text-gray-400 mb-3" />
-                        <p className="text-sm text-gray-600">该版本没有文件</p>
+                        <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                        <p className="text-sm text-muted-foreground">该版本没有文件</p>
                       </div>
                     </div>
                   )}

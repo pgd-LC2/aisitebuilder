@@ -203,7 +203,7 @@ export default function ChatInput({
                   setSelectedMode('default');
                 }
               }}
-              className="rounded-full border bg-background/50 backdrop-blur-md"
+              className="rounded-full border bg-background"
               disabled={disabled || isSubmitting}
             >
               <ToggleGroupItem
