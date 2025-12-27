@@ -1,6 +1,7 @@
 import { ArrowLeft, Sparkles, Zap, Shield, Globe, Code, Layers, Cpu, Rocket } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FloatingBackground, floatingBackgroundPresets } from '../visual';
+import { Button } from '@/components/ui/button';
 
 const { defaultIntroPageBlobs } = floatingBackgroundPresets;
 
@@ -68,15 +69,14 @@ export default function IntroPage({ onBack }: IntroPageProps) {
             className="max-w-7xl mx-auto"
           >
             <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] px-6 py-3 flex items-center justify-between">
-              <motion.button
+              <Button
+                variant="outline"
                 onClick={onBack}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl backdrop-blur-md bg-white/50 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:bg-white/70 transition-all duration-200 text-gray-700"
+                className="gap-2 backdrop-blur-md bg-white/50 border-white/60 hover:bg-white/70"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="text-sm font-medium">返回首页</span>
-              </motion.button>
+              </Button>
               <div className="flex items-center gap-3">
                 <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
                 <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -116,24 +116,27 @@ export default function IntroPage({ onBack }: IntroPageProps) {
               </p>
 
               <div className="flex items-center justify-center gap-4 pt-4">
-                <motion.button
+                <Button
                   onClick={onBack}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-[0_8px_32px_rgba(59,130,246,0.35)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.45)] transition-all duration-300"
+                  size="lg"
+                  className="px-8 py-4 h-auto rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-[0_8px_32px_rgba(59,130,246,0.35)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.45)] transition-all duration-300"
                 >
                   立即开始构建
-                </motion.button>
-                <motion.a
-                  href="https://github.com/pgd-LC2/aisitebuilder"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-8 py-4 rounded-2xl backdrop-blur-md bg-white/60 border border-white/80 text-gray-700 font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:bg-white/80 transition-all duration-300"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  asChild
+                  className="px-8 py-4 h-auto rounded-2xl backdrop-blur-md bg-white/60 border-white/80 hover:bg-white/80"
                 >
-                  查看源码
-                </motion.a>
+                  <a
+                    href="https://github.com/pgd-LC2/aisitebuilder"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    查看源码
+                  </a>
+                </Button>
               </div>
             </motion.section>
 
@@ -217,14 +220,14 @@ export default function IntroPage({ onBack }: IntroPageProps) {
                 <p className="text-blue-100 text-lg">
                   加入数千名开发者的行列，体验 AI 驱动的下一代 Web 开发方式
                 </p>
-                <motion.button
+                <Button
                   onClick={onBack}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-8 py-4 rounded-2xl bg-white text-blue-600 font-semibold shadow-[0_8px_32px_rgba(0,0,0,0.15)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] transition-all duration-300"
+                  size="lg"
+                  variant="secondary"
+                  className="px-8 py-4 h-auto rounded-2xl bg-white text-blue-600 font-semibold shadow-[0_8px_32px_rgba(0,0,0,0.15)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] hover:bg-white/90 transition-all duration-300"
                 >
                   免费开始使用
-                </motion.button>
+                </Button>
               </div>
             </motion.section>
 

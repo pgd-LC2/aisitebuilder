@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Download, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { BuildLog } from '../../types/project';
 import { useBuildLogs } from '../../realtime';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 interface BuildLogPanelProps {
   projectId: string;
@@ -126,88 +131,85 @@ export default function BuildLogPanel({ projectId, onLogAdded }: BuildLogPanelPr
   };
 
   return (
-    <div>
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-2 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">构建日志</span>
-          {logs.length > 0 && (
-            <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-              {logs.length}
-            </span>
-          )}
-        </div>
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <CollapsibleTrigger asChild>
+        <Button
+          variant="ghost"
+          className="w-full px-4 py-2 flex items-center justify-between bg-muted/50 hover:bg-muted rounded-none h-auto"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">构建日志</span>
+            {logs.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {logs.length}
+              </Badge>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2">
-          {logs.length > 0 && (
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExportLogs();
-              }}
-              className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-              title="导出日志"
-            >
-              <Download className="w-4 h-4 text-gray-500" />
-            </div>
-          )}
-          {isExpanded ? (
-            <ChevronDown className="w-5 h-5 text-gray-500" />
-          ) : (
-            <ChevronUp className="w-5 h-5 text-gray-500" />
-          )}
-        </div>
-      </button>
+          <div className="flex items-center gap-2">
+            {logs.length > 0 && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleExportLogs();
+                }}
+                className="p-1.5 hover:bg-muted-foreground/20 rounded-lg transition-colors cursor-pointer"
+                title="导出日志"
+              >
+                <Download className="w-4 h-4 text-muted-foreground" />
+              </div>
+            )}
+            {isExpanded ? (
+              <ChevronDown className="w-5 h-5 text-muted-foreground" />
+            ) : (
+              <ChevronUp className="w-5 h-5 text-muted-foreground" />
+            )}
+          </div>
+        </Button>
+      </CollapsibleTrigger>
 
-      {isExpanded && (
-        <div className="bg-white">
+      <CollapsibleContent>
+        <div className="bg-background">
           {loading ? (
-            <div className="p-4 text-center text-gray-500">加载中...</div>
+            <div className="p-4 text-center text-muted-foreground">加载中...</div>
           ) : logs.length === 0 ? (
-            <div className="p-4 text-center text-gray-400">暂无日志</div>
+            <div className="p-4 text-center text-muted-foreground/70">暂无日志</div>
           ) : (
-            <div className="max-h-80 overflow-y-auto">
+            <ScrollArea className="max-h-80">
               {logs.map((log) => {
                 const Icon = logTypeIcons[log.log_type];
                 return (
                   <div
                     key={log.id}
-                    className="px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                    className="px-4 py-3 border-b hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-1 rounded-lg ${logTypeColors[log.log_type]}`}>
+                      <div className={cn("p-1 rounded-lg", logTypeColors[log.log_type])}>
                         <Icon className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-muted-foreground">
                             {formatTime(log.created_at)}
                           </span>
-                          <span
-                            className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                              log.log_type === 'info'
-                                ? 'bg-blue-100 text-blue-700'
-                                : log.log_type === 'success'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}
+                          <Badge
+                            variant={log.log_type === 'error' ? 'destructive' : log.log_type === 'success' ? 'default' : 'secondary'}
+                            className="text-xs px-1.5 py-0"
                           >
                             {log.log_type.toUpperCase()}
-                          </span>
+                          </Badge>
                         </div>
-                        <p className="text-sm text-gray-700 break-words">{log.message}</p>
+                        <p className="text-sm break-words">{log.message}</p>
                       </div>
                     </div>
                   </div>
                 );
               })}
               <div ref={logsEndRef} />
-            </div>
+            </ScrollArea>
           )}
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

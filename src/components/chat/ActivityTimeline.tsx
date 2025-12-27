@@ -36,6 +36,12 @@ import type {
   ErrorEvent,
   AgentPhase,
 } from '../../realtime/types';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface ActivityTimelineProps {
   projectId: string;
@@ -87,19 +93,19 @@ function BoltActionItem({
     
     return (
       <div className="flex items-center gap-2 py-1.5">
-        <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-        <span className="text-sm text-gray-700 font-medium">{config.label}</span>
+        <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <span className="text-sm font-medium">{config.label}</span>
         {filePath && (
           <button
             onClick={() => onFileSelect?.(filePath)}
-            className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-mono rounded hover:bg-gray-200 transition-colors truncate max-w-[200px]"
+            className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-mono rounded hover:bg-muted/80 transition-colors truncate max-w-[200px]"
             title={filePath}
           >
             {filePath}
           </button>
         )}
         {!event.payload.success && (
-          <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+          <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
         )}
       </div>
     );
@@ -111,11 +117,11 @@ function BoltActionItem({
     
     return (
       <div className="flex items-center gap-2 py-1.5">
-        <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-        <span className="text-sm text-gray-700 font-medium">{config.label}</span>
+        <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <span className="text-sm font-medium">{config.label}</span>
         <button
           onClick={() => onFileSelect?.(event.payload.path)}
-          className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-mono rounded hover:bg-gray-200 transition-colors truncate max-w-[200px]"
+          className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-mono rounded hover:bg-muted/80 transition-colors truncate max-w-[200px]"
           title={event.payload.path}
         >
           {event.payload.path}
@@ -140,13 +146,16 @@ function BoltPlanItem({
   children?: React.ReactNode;
 }) {
   const StatusIcon = isCompleted ? CheckCircle : isActive ? Loader2 : Circle;
-  const statusColor = isCompleted ? 'text-green-500' : isActive ? 'text-blue-500' : 'text-gray-300';
+  const statusColor = isCompleted ? 'text-green-500' : isActive ? 'text-primary' : 'text-muted-foreground/50';
   
   return (
     <div className="flex items-start gap-2 py-1">
-      <StatusIcon className={`w-4 h-4 ${statusColor} flex-shrink-0 mt-0.5 ${isActive ? 'animate-spin' : ''}`} />
+      <StatusIcon className={cn("w-4 h-4 flex-shrink-0 mt-0.5", statusColor, isActive && 'animate-spin')} />
       <div className="flex-1">
-        <span className={`text-sm ${isCompleted ? 'text-gray-700' : isActive ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+        <span className={cn(
+          "text-sm",
+          isCompleted ? 'text-foreground' : isActive ? 'font-medium' : 'text-muted-foreground'
+        )}>
           {event.payload.summary || phaseConfig[event.payload.phase]?.label || event.payload.phase}
         </span>
         {children}
@@ -158,13 +167,11 @@ function BoltPlanItem({
 // Bolt 风格的错误项
 function BoltErrorItem({ event }: { event: ErrorEvent }) {
   return (
-    <div className="flex items-start gap-2 py-2 px-3 rounded-lg bg-red-50 border-l-2 border-red-500">
-      <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        <span className="text-sm font-medium text-red-700">{event.payload.errorType}</span>
-        <p className="text-xs text-red-600 mt-0.5">{event.payload.message}</p>
-      </div>
-    </div>
+    <Alert variant="destructive" className="py-2">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle className="text-sm">{event.payload.errorType}</AlertTitle>
+      <AlertDescription className="text-xs">{event.payload.message}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -245,35 +252,37 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden my-2 flex flex-col max-h-[400px]">
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="bg-card rounded-lg border overflow-hidden my-2 flex flex-col max-h-[400px]">
       {/* Bolt 风格的 Actions Taken 头部 - 使用 sticky 定位保持在顶部 */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors sticky top-0 bg-white z-10 flex-shrink-0"
-      >
-        <div className="flex items-center gap-2">
-          <MessageCircle className="w-4 h-4 text-gray-500" />
-          <span className="text-sm text-gray-700">
-            {actionCount > 0 ? `${actionCount} actions taken` : 'Processing...'}
-          </span>
-          {currentPhase && (
-            <span className={`text-xs ${phaseConfig[currentPhase]?.color || 'text-gray-500'}`}>
-              ({phaseConfig[currentPhase]?.label || currentPhase})
+      <CollapsibleTrigger asChild>
+        <Button
+          variant="ghost"
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted transition-colors sticky top-0 bg-card z-10 flex-shrink-0 h-auto rounded-none"
+        >
+          <div className="flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm">
+              {actionCount > 0 ? `${actionCount} actions taken` : 'Processing...'}
             </span>
+            {currentPhase && (
+              <Badge variant="secondary" className="text-xs">
+                {phaseConfig[currentPhase]?.label || currentPhase}
+              </Badge>
+            )}
+            {!isConnected && (
+              <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-600">离线</Badge>
+            )}
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
           )}
-          {!isConnected && (
-            <span className="text-xs text-yellow-600">(离线)</span>
-          )}
-        </div>
-        {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-gray-400" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400" />
-        )}
-      </button>
+        </Button>
+      </CollapsibleTrigger>
 
-      {isExpanded && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-3 overflow-y-auto flex-1">
+      <CollapsibleContent>
+        <ScrollArea className="border-t px-4 py-3 space-y-3 flex-1 max-h-[300px]">
           {/* 计划列表（带状态指示器） */}
           {planItems.length > 0 && (
             <div className="space-y-1">
@@ -286,7 +295,7 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
                   />
                   {/* 显示该阶段的操作 */}
                   {item.actions.length > 0 && (
-                    <div className="ml-6 pl-2 border-l border-gray-200">
+                    <div className="ml-6 pl-2 border-l">
                       {item.actions.map((action) => (
                         <BoltActionItem
                           key={action.id}
@@ -316,7 +325,7 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
           
           {/* 错误事件 */}
           {errors.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-gray-100">
+            <div className="space-y-2 pt-2 border-t">
               {errors.map((error) => (
                 <BoltErrorItem key={error.id} event={error} />
               ))}
@@ -324,8 +333,8 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
           )}
           
           <div ref={timelineEndRef} />
-        </div>
-      )}
-    </div>
+        </ScrollArea>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { Mail, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ArrowLeft, User } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 type LoginTab = 'email' | 'username';
 
@@ -82,141 +89,138 @@ export default function LoginPage({ onSwitchToSignUp, onBack }: LoginPageProps) 
 
       <div className="w-full max-w-md relative z-10">
         {onBack && (
-          <button
+          <Button
+            variant="ghost"
             onClick={onBack}
-            className="flex items-center gap-2 mb-4 text-gray-600 hover:text-gray-900 transition-colors"
+            className="flex items-center gap-2 mb-4 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">返回主页</span>
-          </button>
+          </Button>
         )}
-        <div className="backdrop-blur-xl bg-white/70 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border border-white/50 p-8">
-          <div className="flex gap-6 mb-8 border-b border-gray-200/50 pb-4">
-            <button
-              onClick={() => setActiveTab('email')}
-              className={`text-base font-medium transition-colors relative ${
-                activeTab === 'email' 
-                  ? 'text-blue-500' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              邮箱登录
-              {activeTab === 'email' && (
-                <span className="absolute -bottom-4 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('username')}
-              className={`text-base font-medium transition-colors relative ${
-                activeTab === 'username' 
-                  ? 'text-blue-500' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              用户名登录
-              {activeTab === 'username' && (
-                <span className="absolute -bottom-4 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
-              )}
-            </button>
-          </div>
+        
+        <Card className="shadow-lg">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="text-2xl font-bold text-center">登录</CardTitle>
+            <CardDescription className="text-center">
+              选择登录方式开始使用
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LoginTab)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="email">邮箱登录</TabsTrigger>
+                <TabsTrigger value="username">用户名登录</TabsTrigger>
+              </TabsList>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="flex items-center gap-2 p-4 backdrop-blur-sm bg-red-50/80 border border-red-200/50 rounded-2xl text-red-700">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                <p className="text-sm">{error}</p>
-              </div>
-            )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <p className="text-sm">{error}</p>
+                  </div>
+                )}
 
-            {activeTab === 'email' ? (
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full pl-12 pr-4 py-4 backdrop-blur-sm bg-white/50 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all text-gray-700 placeholder-gray-400"
-                  placeholder="邮箱地址"
-                />
-              </div>
-            ) : (
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm font-medium">@</span>
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="w-full pl-12 pr-4 py-4 backdrop-blur-sm bg-white/50 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all text-gray-700 placeholder-gray-400"
-                  placeholder="用户名"
-                />
-              </div>
-            )}
+                <TabsContent value="email" className="mt-0 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">邮箱地址</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required={activeTab === 'email'}
+                        className="pl-10"
+                        placeholder="your@email.com"
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
 
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full pl-12 pr-4 py-4 backdrop-blur-sm bg-white/50 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all text-gray-700 placeholder-gray-400"
-                placeholder="密码"
-              />
-            </div>
+                <TabsContent value="username" className="mt-0 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">用户名</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required={activeTab === 'username'}
+                        className="pl-10"
+                        placeholder="用户名"
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
 
-            <label className="flex items-start gap-3 cursor-pointer group">
-              <div className="relative flex-shrink-0 mt-0.5">
-                <input
-                  type="checkbox"
-                  checked={agreedToTerms}
-                  onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-5 h-5 rounded-md border-2 border-gray-300 bg-white/50 backdrop-blur-sm peer-checked:bg-blue-500 peer-checked:border-blue-500 transition-all flex items-center justify-center">
-                  {agreedToTerms && (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
+                <div className="space-y-2">
+                  <Label htmlFor="password">密码</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="pl-10"
+                      placeholder="密码"
+                    />
+                  </div>
                 </div>
-              </div>
-              <span className="text-sm text-gray-600 leading-relaxed">
-                阅读并同意
-                <a href="#" className="text-blue-500 hover:text-blue-600 mx-1">用户协议</a>
-                、
-                <a href="#" className="text-blue-500 hover:text-blue-600 mx-1">付费服务协议</a>
-                和
-                <a href="#" className="text-blue-500 hover:text-blue-600 ml-1">隐私政策</a>
-              </span>
-            </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="relative w-full py-4 rounded-2xl backdrop-blur-sm bg-blue-500/90 hover:bg-blue-600/90 disabled:bg-gray-300/80 disabled:cursor-not-allowed text-white font-medium shadow-[0_4px_16px_rgba(59,130,246,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] border border-blue-400/30 transition-all duration-200 overflow-hidden group"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-500" />
-              <span className="relative z-10">{loading ? '登录中...' : '登录'}</span>
-            </button>
-          </form>
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="terms"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="terms"
+                    className={cn(
+                      "text-sm font-normal leading-relaxed cursor-pointer",
+                      !agreedToTerms && error && "text-destructive"
+                    )}
+                  >
+                    阅读并同意
+                    <a href="#" className="text-primary hover:underline mx-1">用户协议</a>
+                    、
+                    <a href="#" className="text-primary hover:underline mx-1">付费服务协议</a>
+                    和
+                    <a href="#" className="text-primary hover:underline ml-1">隐私政策</a>
+                  </Label>
+                </div>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              还没有账户？{' '}
-              <button
-                onClick={onSwitchToSignUp}
-                className="text-blue-500 hover:text-blue-600 font-medium transition-colors"
-              >
-                立即注册
-              </button>
-            </p>
-          </div>
-        </div>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading ? '登录中...' : '登录'}
+                </Button>
+              </form>
+            </Tabs>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                还没有账户？{' '}
+                <Button
+                  variant="link"
+                  onClick={onSwitchToSignUp}
+                  className="p-0 h-auto font-medium"
+                >
+                  立即注册
+                </Button>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

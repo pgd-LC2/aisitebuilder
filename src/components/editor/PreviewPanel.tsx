@@ -12,6 +12,8 @@ import {
 } from '../../lib/nodeModulesCache';
 import { useSettings } from '../../hooks/useSettings';
 import { webContainerManager } from '../../lib/webContainerManager';
+import { Button } from '@/components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile';
 type PanelMode = 'preview' | 'files';
@@ -711,115 +713,55 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
     <div className="flex flex-col h-full bg-gray-100">
       <div className="px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-            <button
-              onClick={() => setPanelMode('preview')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-2 ${
-                panelMode === 'preview'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
+          <ToggleGroup type="single" value={panelMode} onValueChange={(value) => value && setPanelMode(value as PanelMode)}>
+            <ToggleGroupItem value="preview" aria-label="预览" className="text-xs gap-2">
               <Eye className="w-3.5 h-3.5" />
               预览
-            </button>
-            <button
-              onClick={() => setPanelMode('files')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-2 ${
-                panelMode === 'files'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
+            </ToggleGroupItem>
+            <ToggleGroupItem value="files" aria-label="文件" className="text-xs gap-2">
               <FolderOpen className="w-3.5 h-3.5" />
               文件
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
 
           {panelMode === 'preview' && (
             <div className="flex items-center gap-2">
-              <motion.button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleReloadPreview}
                 disabled={previewStatus === 'unsupported'}
-                whileHover={{ scale: previewStatus === 'unsupported' ? 1 : 1.02 }}
-                whileTap={{ scale: previewStatus === 'unsupported' ? 1 : 0.96 }}
-                transition={PANEL_SPRING}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  previewStatus === 'unsupported'
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
-                }`}
                 title="重新加载预览画面"
               >
-                <RefreshCcw className="w-3.5 h-3.5" />
+                <RefreshCcw className="w-3.5 h-3.5 mr-1" />
                 刷新预览
-              </motion.button>
-              <motion.button
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleRestartDevServer}
                 disabled={isRestartDisabled}
-                whileHover={{ scale: isRestartDisabled ? 1 : 1.02 }}
-                whileTap={{ scale: isRestartDisabled ? 1 : 0.96 }}
-                transition={PANEL_SPRING}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  isRestartDisabled
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
-                }`}
                 title="重启 WebContainer 服务并重新渲染"
               >
-                <RefreshCcw className="w-3.5 h-3.5 rotate-180" />
+                <RefreshCcw className="w-3.5 h-3.5 rotate-180 mr-1" />
                 重启预览
-              </motion.button>
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-                <motion.button
-                  onClick={() => setViewportMode('desktop')}
-                  disabled={isRestartDisabled}
-                  whileTap={{ scale: isRestartDisabled ? 1 : 0.9 }}
-                  transition={PANEL_SPRING}
-                  className={`p-1.5 rounded transition-colors ${
-                    isRestartDisabled
-                      ? 'text-gray-300 cursor-not-allowed'
-                      : viewportMode === 'desktop'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="桌面视图"
-                >
+              </Button>
+              <ToggleGroup 
+                type="single" 
+                value={viewportMode} 
+                onValueChange={(value) => value && setViewportMode(value as ViewportMode)}
+                disabled={isRestartDisabled}
+              >
+                <ToggleGroupItem value="desktop" aria-label="桌面视图" title="桌面视图">
                   <Monitor className="w-4 h-4" />
-                </motion.button>
-                <motion.button
-                  onClick={() => setViewportMode('tablet')}
-                  disabled={isRestartDisabled}
-                  whileTap={{ scale: isRestartDisabled ? 1 : 0.9 }}
-                  transition={PANEL_SPRING}
-                  className={`p-1.5 rounded transition-colors ${
-                    isRestartDisabled
-                      ? 'text-gray-300 cursor-not-allowed'
-                      : viewportMode === 'tablet'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="平板视图"
-                >
+                </ToggleGroupItem>
+                <ToggleGroupItem value="tablet" aria-label="平板视图" title="平板视图">
                   <Tablet className="w-4 h-4" />
-                </motion.button>
-                <motion.button
-                  onClick={() => setViewportMode('mobile')}
-                  disabled={isRestartDisabled}
-                  whileTap={{ scale: isRestartDisabled ? 1 : 0.9 }}
-                  transition={PANEL_SPRING}
-                  className={`p-1.5 rounded transition-colors ${
-                    isRestartDisabled
-                      ? 'text-gray-300 cursor-not-allowed'
-                      : viewportMode === 'mobile'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="手机视图"
-                >
+                </ToggleGroupItem>
+                <ToggleGroupItem value="mobile" aria-label="手机视图" title="手机视图">
                   <Smartphone className="w-4 h-4" />
-                </motion.button>
-              </div>
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
           )}
         </div>

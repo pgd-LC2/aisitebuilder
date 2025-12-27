@@ -6,6 +6,11 @@ import { fileService } from '../../services/fileService';
 import { FileUploader } from '../common';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 const TEXTUAL_MIME_PREFIXES = ['text/', 'application/json', 'application/javascript', 'application/typescript', 'application/xml'];
 const TEXTUAL_MIME_SUFFIXES = ['+json', '+xml'];
@@ -494,43 +499,49 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
   return (
     <div className="h-full flex bg-white">
       <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-600 uppercase">文件</span>
+        <div className="px-3 py-2 border-b flex items-center justify-between">
+          <span className="text-xs font-medium text-muted-foreground uppercase">文件</span>
           <div className="flex items-center gap-1">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
               onClick={() => setShowUploader(!showUploader)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
               title="上传文件"
             >
-              <Upload className="w-3.5 h-3.5 text-gray-600" />
-            </button>
-            <button
+              <Upload className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
               onClick={() => setShowNewFileDialog(true)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
               title="新建文件"
             >
-              <FilePlus className="w-3.5 h-3.5 text-gray-600" />
-            </button>
+              <FilePlus className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
 
-        <div className="px-3 py-2 border-b border-gray-200">
+        <div className="px-3 py-2 border-b">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索文件..."
-              className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+              className="w-full pl-7 pr-7 h-7 text-xs"
             />
             {searchQuery && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-200 rounded"
               >
-                <X className="w-3 h-3 text-gray-500" />
-              </button>
+                <X className="w-3 h-3" />
+              </Button>
             )}
           </div>
           {searchQuery && (
@@ -704,90 +715,78 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
         )}
       </div>
 
-      {showNewFileDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <FilePlus className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">新建文件</h3>
-              </div>
-              <button
-                onClick={() => {
-                  setShowNewFileDialog(false);
-                  setNewFileName('');
-                  setNewFileContent('');
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+      <Dialog open={showNewFileDialog} onOpenChange={(open) => {
+        if (!open && !creatingFile) {
+          setShowNewFileDialog(false);
+          setNewFileName('');
+          setNewFileContent('');
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <FilePlus className="w-5 h-5 text-primary" />
+              新建文件
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="filename">文件名</Label>
+              <Input
+                id="filename"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="例如: index.html, styles.css, script.js"
                 disabled={creatingFile}
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
+              />
             </div>
 
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  文件名
-                </label>
-                <input
-                  type="text"
-                  value={newFileName}
-                  onChange={(e) => setNewFileName(e.target.value)}
-                  placeholder="例如: index.html, styles.css, script.js"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  disabled={creatingFile}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  文件内容（可选）
-                </label>
-                <textarea
-                  value={newFileContent}
-                  onChange={(e) => setNewFileContent(e.target.value)}
-                  placeholder="在这里输入文件内容..."
-                  rows={12}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 font-mono text-sm"
-                  disabled={creatingFile}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <button
-                onClick={() => {
-                  setShowNewFileDialog(false);
-                  setNewFileName('');
-                  setNewFileContent('');
-                }}
-                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+            <div className="space-y-2">
+              <Label htmlFor="filecontent">文件内容（可选）</Label>
+              <Textarea
+                id="filecontent"
+                value={newFileContent}
+                onChange={(e) => setNewFileContent(e.target.value)}
+                placeholder="在这里输入文件内容..."
+                rows={12}
+                className="font-mono text-sm"
                 disabled={creatingFile}
-              >
-                取消
-              </button>
-              <button
-                onClick={handleCreateNewFile}
-                disabled={!newFileName.trim() || creatingFile}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {creatingFile ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    创建中...
-                  </>
-                ) : (
-                  <>
-                    <FilePlus className="w-4 h-4" />
-                    创建文件
-                  </>
-                )}
-              </button>
+              />
             </div>
           </div>
-        </div>
-      )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNewFileDialog(false);
+                setNewFileName('');
+                setNewFileContent('');
+              }}
+              disabled={creatingFile}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleCreateNewFile}
+              disabled={!newFileName.trim() || creatingFile}
+            >
+              {creatingFile ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  创建中...
+                </>
+              ) : (
+                <>
+                  <FilePlus className="w-4 h-4 mr-2" />
+                  创建文件
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
