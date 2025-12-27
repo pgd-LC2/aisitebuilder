@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface InitializingPageProps {
   projectTitle: string;
@@ -107,61 +110,59 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" />
-              <h2 className="text-lg font-medium text-gray-900">翻牌小游戏</h2>
-            </div>
-            <div className="flex gap-4 text-sm">
-              <div className="text-gray-600">
-                步数: <span className="font-medium text-gray-900">{moves}</span>
+        <Card className="mb-6">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                翻牌小游戏
+              </CardTitle>
+              <div className="flex gap-4 text-sm">
+                <div className="text-muted-foreground">
+                  步数: <span className="font-medium text-foreground">{moves}</span>
+                </div>
+                <div className="text-muted-foreground">
+                  配对: <span className="font-medium text-foreground">{matchedPairs}/8</span>
+                </div>
               </div>
-              <div className="text-gray-600">
-                配对: <span className="font-medium text-gray-900">{matchedPairs}/8</span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {matchedPairs === 8 && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-center">
+                <p className="text-green-800 font-medium">
+                  恭喜完成！用了 {moves} 步
+                </p>
+                <Button
+                  onClick={initializeGame}
+                  size="sm"
+                  className="mt-2 bg-green-600 hover:bg-green-700"
+                >
+                  再玩一次
+                </Button>
               </div>
-            </div>
-          </div>
+            )}
 
-          {matchedPairs === 8 && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-center">
-              <p className="text-green-800 font-medium">
-                🎉 恭喜完成！用了 {moves} 步
-              </p>
-              <button
-                onClick={initializeGame}
-                className="mt-2 px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-              >
-                再玩一次
-              </button>
-            </div>
-          )}
-
-          <div className="grid grid-cols-4 gap-3">
-            {cards.map((card) => (
-              <button
-                key={card.id}
-                onClick={() => handleCardClick(card.id)}
-                disabled={card.matched || card.flipped}
-                className={`
-                  aspect-square rounded-xl text-4xl font-bold
-                  transition-all duration-300 transform
-                  ${
+            <div className="grid grid-cols-4 gap-3">
+              {cards.map((card) => (
+                <button
+                  key={card.id}
+                  onClick={() => handleCardClick(card.id)}
+                  disabled={card.matched || card.flipped}
+                  className={cn(
+                    "aspect-square rounded-xl text-4xl font-bold transition-all duration-300 transform shadow-md hover:shadow-lg flex items-center justify-center disabled:cursor-not-allowed",
                     card.flipped || card.matched
-                      ? 'bg-gradient-to-br from-blue-400 to-purple-500 text-white scale-105'
-                      : 'bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:scale-105'
-                  }
-                  ${card.matched ? 'opacity-60' : ''}
-                  disabled:cursor-not-allowed
-                  shadow-md hover:shadow-lg
-                  flex items-center justify-center
-                `}
-              >
-                {card.flipped || card.matched ? card.icon : '?'}
-              </button>
-            ))}
-          </div>
-        </div>
+                      ? "bg-gradient-to-br from-blue-400 to-purple-500 text-white scale-105"
+                      : "bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:scale-105",
+                    card.matched && "opacity-60"
+                  )}
+                >
+                  {card.flipped || card.matched ? card.icon : '?'}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full text-sm text-blue-700">

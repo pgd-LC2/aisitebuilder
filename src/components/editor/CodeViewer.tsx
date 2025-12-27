@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 interface CodeViewerProps {
   code: string;
@@ -78,54 +82,55 @@ export default function CodeViewer({ code, language, filename, onClose }: CodeVi
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">
-              {filename}
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              {getLanguageDisplay()} · {code.split('\n').length} 行
-            </p>
+    <Dialog open={true} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b bg-muted/50">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-base truncate">
+                {filename}
+              </DialogTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary" className="text-xs">
+                  {getLanguageDisplay()}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {code.split('\n').length} 行
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 ml-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCopy}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2 text-green-600" />
+                    <span className="text-green-600">已复制</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    <span>复制代码</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
+        </DialogHeader>
 
-          <div className="flex items-center gap-2 ml-4">
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4 text-green-600" />
-                  <span className="text-green-600">已复制</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>复制代码</span>
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto bg-gray-900">
-          <pre className="!m-0 !bg-transparent">
+        <ScrollArea className="flex-1 bg-gray-900">
+          <pre className="!m-0 !bg-transparent p-4">
             <code
               className={`language-${language}`}
               dangerouslySetInnerHTML={{ __html: highlightedCode || code }}
             />
           </pre>
-        </div>
-      </div>
-    </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 }

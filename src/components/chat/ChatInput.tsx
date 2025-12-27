@@ -2,6 +2,11 @@ import { Plus, Lightbulb, Play, ChevronDown, Send } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import QuickCommands, { QuickCommand } from './QuickCommands';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 export type InputMode = 'default' | 'plan' | 'build';
 
@@ -115,11 +120,7 @@ export default function ChatInput({
     }
   };
 
-  const handleModeSelect = (mode: InputMode) => {
-    setSelectedMode(prev => prev === mode ? 'default' : mode);
-  };
-
-  const handleBuildClick = () => {
+  const handleBuildClick= () => {
     setSelectedMode('build');
     handleSubmit('build');
   };
@@ -134,119 +135,127 @@ export default function ChatInput({
         onSelect={handleCommandSelect}
       />
 
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="p-4 pb-2">
           <div className="relative">
-            <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder=""
-            disabled={disabled || isSubmitting}
-            className="w-full outline-none text-gray-800 bg-transparent resize-none text-base leading-relaxed min-h-[40px] max-h-[200px] disabled:opacity-50 overflow-y-auto"
-            rows={1}
-          />
-          {!value && (
-            <div className="absolute left-0 top-0 pointer-events-none overflow-hidden">
-              <div
-                className={`transition-transform duration-300 ease-in-out ${
-                  isAnimating ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100'
-                }`}
-              >
-                <span className="text-gray-400 text-base">
-                  {currentPlaceholderText}
-                </span>
+            <Textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder=""
+              disabled={disabled || isSubmitting}
+              className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[40px] max-h-[200px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0"
+              rows={1}
+            />
+            {!value && (
+              <div className="absolute left-0 top-0 pointer-events-none overflow-hidden">
+                <div
+                  className={cn(
+                    "transition-transform duration-300 ease-in-out",
+                    isAnimating ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100'
+                  )}
+                >
+                  <span className="text-muted-foreground text-base">
+                    {currentPlaceholderText}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="p-3 border-t border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="添加附件"
-            disabled={disabled}
-          >
-            <Plus className="w-5 h-5 text-gray-500" />
-          </button>
-
-          {showAgentSelector && (
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+        <div className="p-3 border-t flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              title="添加附件"
               disabled={disabled}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#4285F4"/>
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4285F4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span className="text-sm text-gray-700 font-medium">Gemini</span>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            </button>
-          )}
-        </div>
+              <Plus className="w-5 h-5" />
+            </Button>
 
-        <div className="flex items-center gap-2">
-          {/* Plan / Build 分段按钮 - Liquid Glass 胶囊型设计 */}
-          <div className="inline-flex rounded-full backdrop-blur-md bg-white/15 border border-white/30 shadow-[0_4px_12px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.2)] overflow-hidden">
-            <motion.button
-              onClick={() => handleModeSelect('plan')}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={disabled || isSubmitting}
-              className={`relative flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-all duration-200 overflow-hidden ${
-                selectedMode === 'plan'
-                  ? 'bg-amber-500/20 text-amber-700 shadow-[inset_0_0_12px_rgba(245,158,11,0.15)]'
-                  : 'text-gray-600 hover:bg-white/20'
-              }`}
-            >
-              <Lightbulb className="w-4 h-4 relative z-10" />
-              <span className="relative z-10">Plan</span>
-            </motion.button>
-            <div className="w-px bg-white/20" />
-            <motion.button
-              onClick={() => handleModeSelect('build')}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={disabled || isSubmitting}
-              className={`relative flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-all duration-200 overflow-hidden ${
-                selectedMode === 'build'
-                  ? 'bg-green-500/20 text-green-700 shadow-[inset_0_0_12px_rgba(34,197,94,0.15)]'
-                  : 'text-gray-600 hover:bg-white/20'
-              }`}
-            >
-              <Play className="w-4 h-4 relative z-10" />
-              <span className="relative z-10">Build</span>
-            </motion.button>
+            {showAgentSelector && (
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2"
+                disabled={disabled}
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#4285F4"/>
+                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4285F4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="text-sm font-medium">Gemini</span>
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              </Button>
+            )}
           </div>
 
-          {variant === 'home' ? (
-            <motion.button
-              onClick={handleBuildClick}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={!value.trim() || disabled || isSubmitting}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+          <div className="flex items-center gap-2">
+            <ToggleGroup
+              type="single"
+              value={selectedMode === 'default' ? '' : selectedMode}
+              onValueChange={(value) => {
+                if (value) {
+                  setSelectedMode(value as InputMode);
+                } else {
+                  setSelectedMode('default');
+                }
+              }}
+              className="rounded-full border bg-background/50 backdrop-blur-md"
+              disabled={disabled || isSubmitting}
             >
-              {isSubmitting ? '创建中...' : 'Build now'}
-              {!isSubmitting && <Play className="w-4 h-4 fill-current" />}
-            </motion.button>
-          ) : (
-            <motion.button
-              onClick={() => handleSubmit(selectedMode)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={!value.trim() || disabled || isSubmitting}
-              className="w-9 h-9 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-            >
-              <Send className="w-4 h-4 text-white" />
-            </motion.button>
-          )}
+              <ToggleGroupItem
+                value="plan"
+                aria-label="Plan mode"
+                className={cn(
+                  "rounded-l-full px-4 data-[state=on]:bg-amber-500/20 data-[state=on]:text-amber-700",
+                  "flex items-center gap-1.5"
+                )}
+              >
+                <Lightbulb className="w-4 h-4" />
+                <span>Plan</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="build"
+                aria-label="Build mode"
+                className={cn(
+                  "rounded-r-full px-4 data-[state=on]:bg-green-500/20 data-[state=on]:text-green-700",
+                  "flex items-center gap-1.5"
+                )}
+              >
+                <Play className="w-4 h-4" />
+                <span>Build</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            {variant === 'home' ? (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button
+                  onClick={handleBuildClick}
+                  disabled={!value.trim() || disabled || isSubmitting}
+                  className="flex items-center gap-2"
+                >
+                  {isSubmitting ? '创建中...' : 'Build now'}
+                  {!isSubmitting && <Play className="w-4 h-4 fill-current" />}
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button
+                  onClick={() => handleSubmit(selectedMode)}
+                  disabled={!value.trim() || disabled || isSubmitting}
+                  size="icon"
+                  className="rounded-full"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </motion.div>
+            )}
+          </div>
         </div>
-        </div>
-      </div>
+      </Card>
     </div>
   );
 }

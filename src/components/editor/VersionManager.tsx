@@ -5,6 +5,7 @@ import { ProjectVersion, ProjectFile } from '../../types/project';
 import { versionService } from '../../services/versionService';
 import { fileService } from '../../services/fileService';
 import CodeViewer from './CodeViewer';
+import { Button } from '@/components/ui/button';
 
 interface VersionManagerProps {
   projectId: string;
@@ -353,19 +354,13 @@ const findCodeInSnapshot = (
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleCreateVersion}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
+            <Button onClick={handleCreateVersion}>
+              <Plus className="w-4 h-4 mr-2" />
               创建新版本
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="w-5 h-5" />
+            </Button>
           </div>
         </div>
 
@@ -445,23 +440,25 @@ const findCodeInSnapshot = (
 
                   <div className="flex flex-wrap gap-2">
                     {selectedVersion.id !== currentVersionId && (
-                      <button
+                      <Button
+                        size="sm"
                         onClick={() => handleRestore(selectedVersion)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw className="w-4 h-4 mr-2" />
                         回退到此版本
-                      </button>
+                      </Button>
                     )}
 
                     {versions.length > 1 && selectedVersion.id !== currentVersionId && (
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive border-destructive/50 hover:bg-destructive/10"
                         onClick={() => handleDelete(selectedVersion)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg transition-colors border border-red-200"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4 mr-2" />
                         删除版本
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -544,13 +541,13 @@ const findCodeInSnapshot = (
                               </p>
                             </div>
                             {selectedFile.file_category === 'code' && selectedVersion?.code_snapshot && (
-                              <button
+                              <Button
+                                className="mt-auto w-full"
                                 onClick={() => handleViewCode(selectedFile)}
-                                className="mt-auto flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
                               >
-                                <Code className="w-4 h-4" />
+                                <Code className="w-4 h-4 mr-2" />
                                 查看代码
-                              </button>
+                              </Button>
                             )}
                           </div>
                         ) : (

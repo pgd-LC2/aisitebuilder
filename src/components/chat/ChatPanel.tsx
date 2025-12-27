@@ -11,6 +11,8 @@ import ActivityTimeline from './ActivityTimeline';
 import ImplementationTrigger from './ImplementationTrigger';
 import { parseImplementReadyMarker } from '../../utils/implementReadyParser';
 import ChatInput, { InputMode } from './ChatInput';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface ChatPanelProps {
   projectFilesContext?: ProjectFilesContext;
@@ -361,7 +363,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
   }, [projectId, appendMessage, scrollToMessageTop, refreshMessages, projectFilesContext, enterBuildMode]);
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-muted/30">
       {/* 消息列表区域：使用 flex-col 确保消息从顶部开始显示（吸顶）
           关键布局：
           1. 外层容器 overflow-y-auto 负责滚动
@@ -375,13 +377,13 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
       >
         {loading ? (
           <div className="h-full flex items-center justify-center">
-            <p className="text-gray-500 text-sm">加载中...</p>
+            <p className="text-muted-foreground text-sm">加载中...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-2">
-              <p className="text-gray-500 text-sm">暂无对话</p>
-              <p className="text-gray-400 text-xs">输入你的指令开始编辑</p>
+              <p className="text-muted-foreground text-sm">暂无对话</p>
+              <p className="text-muted-foreground/70 text-xs">输入你的指令开始编辑</p>
             </div>
           </div>
         ) : (
@@ -407,11 +409,12 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                     className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                      className={cn(
+                        "max-w-[85%] rounded-xl px-3 py-2",
                         message.role === 'user'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-white text-gray-900 border border-gray-200'
-                      }`}
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-background border'
+                      )}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                         {displayContent}
@@ -484,11 +487,11 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
         </>
       )}
 
-      <div className="px-4 py-3 bg-gray-50">
+      <div className="px-4 py-3 bg-muted/30">
         {!isConnected && projectId && (
-          <div className="mb-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-xs text-yellow-700">连接中，请稍候...</p>
-          </div>
+          <Alert variant="default" className="mb-2 py-1.5 bg-yellow-50 border-yellow-200">
+            <AlertDescription className="text-xs text-yellow-700">连接中，请稍候...</AlertDescription>
+          </Alert>
         )}
         <ChatInput
           value={input}

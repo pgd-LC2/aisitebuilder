@@ -1,7 +1,11 @@
-import { X, Download, Share2, Trash2 } from 'lucide-react';
+import { Download, Share2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ProjectFile } from '../../types/project';
 import { fileService } from '../../services/fileService';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface FilePreviewProps {
   file: ProjectFile;
@@ -63,62 +67,61 @@ export default function FilePreview({ file, onClose, onDelete }: FilePreviewProp
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-base font-medium text-gray-900 truncate">
-              {file.file_name}
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fileService.formatFileSize(file.file_size)} · {file.mime_type}
-            </p>
-          </div>
+    <Dialog open={true} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-base truncate">
+                {file.file_name}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {fileService.formatFileSize(file.file_size)} · {file.mime_type}
+              </p>
+            </div>
 
-          <div className="flex items-center gap-1 ml-4">
-            <button
-              onClick={handleDownload}
-              disabled={loading}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-              title="下载"
-            >
-              <Download className="w-4 h-4 text-gray-600" />
-            </button>
-
-            <button
-              onClick={handleShare}
-              disabled={loading}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-              title="分享"
-            >
-              <Share2 className="w-4 h-4 text-gray-600" />
-            </button>
-
-            {onDelete && (
-              <button
-                onClick={handleDelete}
-                className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                title="删除"
+            <div className="flex items-center gap-1 ml-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleDownload}
+                disabled={loading}
+                title="下载"
               >
-                <Trash2 className="w-4 h-4 text-red-600" />
-              </button>
-            )}
+                <Download className="w-4 h-4" />
+              </Button>
 
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors ml-1"
-            >
-              <X className="w-4 h-4 text-gray-600" />
-            </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleShare}
+                disabled={loading}
+                title="分享"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDelete}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="删除"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        </DialogHeader>
 
-        <div className="flex-1 overflow-auto p-4 bg-gray-50">
+        <ScrollArea className="flex-1 p-4 bg-muted/50">
           {loading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                <p className="text-sm text-gray-600">加载中...</p>
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                <p className="text-sm text-muted-foreground">加载中...</p>
               </div>
             </div>
           )}
@@ -136,7 +139,7 @@ export default function FilePreview({ file, onClose, onDelete }: FilePreviewProp
           {!loading && isPdf && previewUrl && (
             <iframe
               src={previewUrl}
-              className="w-full h-full rounded-lg border border-gray-200"
+              className="w-full h-full rounded-lg border"
               title={file.file_name}
             />
           )}
@@ -148,49 +151,45 @@ export default function FilePreview({ file, onClose, onDelete }: FilePreviewProp
                   {fileService.getFileIcon(file.mime_type)}
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium">
                     {file.file_name}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     此文件类型暂不支持预览
                   </p>
                 </div>
-                <button
-                  onClick={handleDownload}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors"
-                >
+                <Button onClick={handleDownload}>
                   下载文件
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
+        </ScrollArea>
 
         {shareUrl && (
-          <div className="p-4 border-t border-gray-200 bg-blue-50">
-            <p className="text-xs text-gray-700 mb-2">
+          <div className="p-4 border-t bg-primary/5">
+            <p className="text-xs text-muted-foreground mb-2">
               分享链接已生成（7天有效）：
             </p>
             <div className="flex items-center gap-2">
-              <input
-                type="text"
+              <Input
                 value={shareUrl}
                 readOnly
-                className="flex-1 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg"
+                className="flex-1 text-xs"
               />
-              <button
+              <Button
+                size="sm"
                 onClick={() => {
                   navigator.clipboard.writeText(shareUrl);
                   alert('已复制到剪贴板');
                 }}
-                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg transition-colors"
               >
                 复制
-              </button>
+              </Button>
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

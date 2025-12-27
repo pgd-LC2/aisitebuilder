@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CommandIconType, QuickCommand, CommandCategory } from '../../types/quickCommands';
 import { defaultQuickCommands } from '../../data/quickCommands';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 export type { CommandIconType, QuickCommand, CommandCategory };
 
@@ -16,9 +18,9 @@ interface QuickCommandsProps {
 function renderCommandIcon(iconType: CommandIconType) {
   switch (iconType) {
     case 'clear':
-      return <Ban className="w-4 h-4 text-gray-500" />;
+      return <Ban className="w-4 h-4 text-muted-foreground" />;
     case 'create':
-      return <PlusSquare className="w-4 h-4 text-gray-500" />;
+      return <PlusSquare className="w-4 h-4 text-muted-foreground" />;
     case 'supabase':
       return (
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -111,14 +113,14 @@ export default function QuickCommands({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
           transition={{ duration: 0.15 }}
-          className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 flex w-[720px] max-h-[60vh]"
+          className="absolute bottom-full left-0 mb-2 bg-popover rounded-xl shadow-xl border overflow-hidden z-50 flex w-[720px] max-h-[60vh]"
           onMouseLeave={clearHoverWithDelay}
         >
           <div className="flex-1 flex flex-col min-w-0 max-w-[400px]">
-            <div className="flex-1 max-h-[400px] overflow-y-auto">
+            <ScrollArea className="flex-1 max-h-[400px]">
               {commands.map((category) => (
                 <div key={category.name}>
-                  <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <div className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     {category.name}
                   </div>
                   {category.commands.map((command) => (
@@ -126,50 +128,54 @@ export default function QuickCommands({
                       key={command.id}
                       onClick={() => handleCommandClick(command)}
                       onMouseEnter={() => setHoverCommand(command)}
-                      className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-blue-50 transition-colors text-left ${
-                        hoveredCommand?.id === command.id ? 'bg-blue-50' : ''
-                      }`}
+                      className={cn(
+                        "w-full px-4 py-2.5 flex items-center gap-3 hover:bg-accent transition-colors text-left",
+                        hoveredCommand?.id === command.id && 'bg-accent'
+                      )}
                     >
                       {renderCommandIcon(command.icon)}
-                      <span className={`text-sm flex-1 truncate ${hoveredCommand?.id === command.id ? 'text-blue-600' : 'text-gray-700'}`}>
+                      <span className={cn(
+                        "text-sm flex-1 truncate",
+                        hoveredCommand?.id === command.id ? 'text-primary' : 'text-foreground'
+                      )}>
                         {command.name}
                       </span>
                       {hoveredCommand?.id === command.id && (
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <Star className="w-4 h-4 text-gray-300 hover:text-yellow-400 cursor-pointer" />
-                          <MoreHorizontal className="w-4 h-4 text-gray-300" />
+                          <Star className="w-4 h-4 text-muted-foreground/50 hover:text-yellow-400 cursor-pointer" />
+                          <MoreHorizontal className="w-4 h-4 text-muted-foreground/50" />
                         </div>
                       )}
                     </button>
                   ))}
                 </div>
               ))}
-            </div>
+            </ScrollArea>
 
-            <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="px-4 py-2 bg-muted border-t flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Use Prompt</span>
-                <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">↵</kbd>
+                <kbd className="px-1.5 py-0.5 bg-muted-foreground/20 rounded text-muted-foreground">↵</kbd>
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Options</span>
-                <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">⌘</kbd>
-                <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-600">K</kbd>
+                <kbd className="px-1.5 py-0.5 bg-muted-foreground/20 rounded text-muted-foreground">⌘</kbd>
+                <kbd className="px-1.5 py-0.5 bg-muted-foreground/20 rounded text-muted-foreground">K</kbd>
               </div>
             </div>
           </div>
 
-          <div className="w-80 border-l border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="w-80 border-l bg-muted flex-shrink-0">
             {hoveredCommand ? (
               <div className="p-4">
-                <h4 className="font-medium text-gray-900 mb-3">{hoveredCommand.name}</h4>
-                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
+                <h4 className="font-medium mb-3">{hoveredCommand.name}</h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
                   {hoveredCommand.description}
                 </p>
               </div>
             ) : (
               <div className="p-4 flex items-center justify-center h-full">
-                <p className="text-sm text-gray-400 text-center">
+                <p className="text-sm text-muted-foreground/70 text-center">
                   将鼠标悬停在左侧指令上<br />查看详细信息
                 </p>
               </div>
