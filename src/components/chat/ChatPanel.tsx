@@ -429,7 +429,7 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                     {message.role === 'assistant' && messageImages[message.id] && messageImages[message.id].length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2 max-w-[85%]">
                         {messageImages[message.id].map((imagePath, index) => (
-                          <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 bg-white">
+                          <div key={index} className="relative rounded-lg overflow-hidden border border-border bg-background">
                             {imageBlobUrls[imagePath] ? (
                               <img
                                 src={imageBlobUrls[imagePath]}
@@ -442,8 +442,8 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
                                 }}
                               />
                             ) : (
-                              <div className="w-48 h-48 flex items-center justify-center bg-gray-100">
-                                <p className="text-xs text-gray-500">加载中...</p>
+                              <div className="w-48 h-48 flex items-center justify-center bg-muted">
+                                <p className="text-xs text-muted-foreground">加载中...</p>
                               </div>
                             )}
                           </div>

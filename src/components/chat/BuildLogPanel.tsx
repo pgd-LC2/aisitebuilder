@@ -20,9 +20,9 @@ const logTypeIcons = {
 };
 
 const logTypeColors = {
-  info: 'text-blue-500 bg-blue-50',
+  info: 'text-primary bg-primary/10',
   success: 'text-green-500 bg-green-50',
-  error: 'text-red-500 bg-red-50'
+  error: 'text-destructive bg-destructive/10'
 };
 
 /**

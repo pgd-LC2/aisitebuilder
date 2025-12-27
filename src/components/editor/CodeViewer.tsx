@@ -122,7 +122,7 @@ export default function CodeViewer({ code, language, filename, onClose }: CodeVi
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 bg-gray-900">
+        <ScrollArea className="flex-1 bg-[#2d2d2d]">
           <pre className="!m-0 !bg-transparent p-4">
             <code
               className={`language-${language}`}

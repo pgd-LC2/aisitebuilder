@@ -212,7 +212,7 @@ export default function UserProfilePanel({
                 >
                   <Avatar className="w-10 h-10">
                     <AvatarImage src={avatarUrl || undefined} alt="头像" />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-200 to-blue-300 text-white text-sm font-bold">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
                       {displayName.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>

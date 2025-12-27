@@ -29,7 +29,7 @@ function renderCommandIcon(iconType: CommandIconType) {
         </svg>
       );
     case 'accessibility':
-      return <Accessibility className="w-4 h-4 text-blue-500" />;
+      return <Accessibility className="w-4 h-4 text-primary" />;
     case 'seo':
       return <Search className="w-4 h-4 text-orange-500" />;
     case 'usability':

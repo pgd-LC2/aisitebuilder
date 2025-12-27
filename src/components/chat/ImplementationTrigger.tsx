@@ -28,7 +28,7 @@ export default function ImplementationTrigger({ planSummary, onImplement, disabl
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       className="my-4 mx-2"
     >
-      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+      <Card className="bg-primary/5 border-primary/20">
         <CardHeader className="pb-2">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">

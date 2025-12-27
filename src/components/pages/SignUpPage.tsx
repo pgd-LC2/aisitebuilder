@@ -156,31 +156,7 @@ export default function SignUpPage({ onSwitchToLogin, onBack }: SignUpPageProps)
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 px-4 relative overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-32 -right-32 w-96 h-96 opacity-50">
-            <img 
-              src="/images/gradient-flower.webp" 
-              alt="" 
-              className="w-full h-full object-cover blur-2xl scale-150 rotate-12"
-            />
-          </div>
-          <div className="absolute -bottom-32 -left-32 w-96 h-96 opacity-40">
-            <img 
-              src="/images/gradient-blue.webp" 
-              alt="" 
-              className="w-full h-full object-cover blur-xl scale-150 -rotate-12"
-            />
-          </div>
-          <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-80 h-80 opacity-35">
-            <img 
-              src="/images/gradient-wave.webp" 
-              alt="" 
-              className="w-full h-full object-cover blur-2xl scale-125 rotate-45"
-            />
-          </div>
-        </div>
-
+      <div className="min-h-screen flex items-center justify-center bg-background px-4 relative overflow-hidden">
         <div className="w-full max-w-md relative z-10">
           <Card className="shadow-lg text-center">
             <CardContent className="pt-6">
@@ -204,44 +180,13 @@ export default function SignUpPage({ onSwitchToLogin, onBack }: SignUpPageProps)
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-96 h-96 opacity-60">
-          <img 
-            src="/images/gradient-wave.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-2xl scale-150 rotate-12"
-          />
-        </div>
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 opacity-50">
-          <img 
-            src="/images/gradient-pink.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-xl scale-150 -rotate-12"
-          />
-        </div>
-        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-80 h-80 opacity-40">
-          <img 
-            src="/images/gradient-blue.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-2xl scale-125 rotate-45"
-          />
-        </div>
-        <div className="absolute bottom-1/4 right-1/4 w-72 h-72 opacity-35">
-          <img 
-            src="/images/gradient-flower.webp" 
-            alt="" 
-            className="w-full h-full object-cover blur-xl scale-110 -rotate-6"
-          />
-        </div>
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 relative overflow-hidden">
       <div className="w-full max-w-md relative z-10">
         {onBack && (
           <Button
             variant="ghost"
             onClick={onBack}
-            className="flex items-center gap-2 mb-4 text-gray-600 hover:text-gray-900"
+            className="flex items-center gap-2 mb-4 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm font-medium">返回主页</span>

@@ -73,7 +73,7 @@ const boltFileOpConfig: Record<string, { label: string; icon: React.ElementType 
 // 阶段配置
 const phaseConfig: Record<AgentPhase, { label: string; color: string }> = {
   planner: { label: '规划中', color: 'text-purple-600' },
-  coder: { label: '编码中', color: 'text-blue-600' },
+  coder: { label: '编码中', color: 'text-primary' },
   reviewer: { label: '审查中', color: 'text-green-600' },
   debugger: { label: '调试中', color: 'text-orange-600' },
 };

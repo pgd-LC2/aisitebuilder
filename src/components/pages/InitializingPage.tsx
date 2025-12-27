@@ -87,22 +87,22 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-            <h1 className="text-2xl font-semibold text-gray-900">正在初始化项目</h1>
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            <h1 className="text-2xl font-semibold text-foreground">正在初始化项目</h1>
           </div>
-          <p className="text-gray-600 mb-2">
-            <span className="font-medium text-gray-900">{projectTitle}</span>
+          <p className="text-muted-foreground mb-2">
+            <span className="font-medium text-foreground">{projectTitle}</span>
           </p>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             正在创建预设文件，请稍候...
           </p>
-          <div className="w-full max-w-md mx-auto h-3 bg-blue-100 rounded-full overflow-hidden">
+          <div className="w-full max-w-md mx-auto h-3 bg-primary/20 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 rounded-full animate-progress-indeterminate"
+              className="h-full bg-primary rounded-full animate-progress-indeterminate"
               style={{
                 width: '40%',
               }}
@@ -152,8 +152,8 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
                   className={cn(
                     "aspect-square rounded-xl text-4xl font-bold transition-all duration-300 transform shadow-md hover:shadow-lg flex items-center justify-center disabled:cursor-not-allowed",
                     card.flipped || card.matched
-                      ? "bg-gradient-to-br from-blue-400 to-purple-500 text-white scale-105"
-                      : "bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 hover:scale-105",
+                      ? "bg-primary text-primary-foreground scale-105"
+                      : "bg-muted hover:bg-accent hover:scale-105",
                     card.matched && "opacity-60"
                   )}
                 >
@@ -165,8 +165,8 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
         </Card>
 
         <div className="text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full text-sm text-blue-700">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-primary">
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
             等待初始化完成后自动进入编辑界面
           </div>
         </div>
