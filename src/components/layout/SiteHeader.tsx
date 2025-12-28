@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Search, Sun, Plus } from 'lucide-react';
+import { Search, Sun } from 'lucide-react';
 
 const navItems = [
   { label: 'Docs', href: '#' },
@@ -33,10 +33,6 @@ export default function SiteHeader() {
           <Button variant="ghost" size="icon" className="hidden md:inline-flex">
             <Sun className="h-4 w-4" />
             <span className="sr-only">切换主题</span>
-          </Button>
-          <Button size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Project
           </Button>
         </div>
       </div>
