@@ -2,16 +2,37 @@
 
 ## 项目结构与模块组织
 
-核心源码位于 `src/`：`src/routes` 负责顶层页面，`src/components` 存放可复用 UI，`src/utils` 提供被应用与测试共同复用的纯函数。静态资源与 HTML 外壳放在 `public/`，Supabase 的 SQL 脚本与种子数据位于 `supabase/`。自定义脚本（测试运行器、辅助任务）集中在 `scripts/`，端到端或集成级别的断言位于 `tests/`。Tailwind、PostCSS、Vite 等配置文件位于仓库根目录，便于审计与升级。
+核心源码位于 `src/`，采用模块化组织：
+
+- `src/components/` - UI 组件（按功能分类）
+  - `ui/` - Shadcn UI 基础组件（Button、Card、Dialog 等）
+  - `pages/` - 页面级组件（HomePage、LoginPage、ProjectsPage 等）
+  - `chat/` - 聊天相关组件（ChatPanel、ChatInput、BuildLogPanel 等）
+  - `editor/` - 编辑器组件（PreviewPanel、FileManagerPanel、CodeViewer 等）
+  - `project/` - 项目相关组件（ProjectCard）
+  - `user/` - 用户相关组件（UserProfilePanel）
+  - `common/` - 通用组件（StatusIndicator、FileUploader）
+  - `visual/` - 视觉效果组件（FloatingBackground、ParticleField 等）
+- `src/contexts/` - React Context（WorkflowContext、RealtimeContext 等）
+- `src/hooks/` - 自定义 Hooks
+- `src/services/` - 服务层（aiTaskService、projectService 等）
+- `src/realtime/` - 实时通信层（realtimeClient、订阅函数、Hooks）
+- `src/lib/` - 工具库（supabase 客户端、webContainerManager）
+- `src/types/` - TypeScript 类型定义
+- `src/utils/` - 纯函数工具
+
+后端位于 `supabase/`：`supabase/functions/` 存放 Edge Functions（Deno 运行时），`supabase/migrations/` 存放数据库迁移脚本。
+
+静态资源与 HTML 外壳放在 `public/`，自定义脚本集中在 `scripts/`，测试文件位于 `tests/`。Tailwind、PostCSS、Vite 等配置文件位于仓库根目录。
 
 ## 构建、测试与开发命令
 
-- `npm run dev`：在 `http://localhost:5000` 启动带 HMR 的 Vite 开发服务器（Replit 环境）。
+- `npm run dev`：在 `http://localhost:5173` 启动带 HMR 的 Vite 开发服务器。
 - `npm run build`：输出优化后的生产包到 `dist/`。
 - `npm run preview`：本地预览最新构建，验证生产路由行为。
 - `npm run lint`：根据 `eslint.config.js` 检查 `src/`、`tests/` 及配置文件的代码风格。
 - `npm run typecheck`：使用 `tsc --noEmit -p tsconfig.app.json` 执行严格类型检查。
-- `npm run test`：将 `src/utils` 与 `tests` 编译到 `test-dist/` 后，由 `scripts/run-tests.mjs` 运行自定义断言。
+- `npm run test`：使用 Vitest 运行单元测试（BDD 风格，AAA 模式）。
 
 ## 代码风格与命名约定
 
