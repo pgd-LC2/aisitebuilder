@@ -22,12 +22,10 @@
 | 文件 | 描述 |
 |------|------|
 | **task-workflow-architecture.md** | **任务与工作流架构（新人必读）** - chat/plan/build 三种模式的设计 |
-| **prompt_spec.md** | **Prompt 系统规范** - chat/plan/build 三种模式的 Prompt 设计 |
 | **realtime_architecture_v2.md** | **Realtime 订阅架构 v2** - Generation 和 CloseReason 机制 |
 | agent_events_spec.md | Agent 事件流规范 |
 | file_events_spec.md | 文件事件规范 |
 | process-ai-tasks-refactor.md | process-ai-tasks 边缘函数重构方案 |
-| realtime_architecture.md | Realtime 订阅架构 v1 |
 | realtime_channel_error_retry_spec.md | 实时通道错误重试规范 |
 | build-module-refactor-plan.md | Build 模块重构方案 |
 | **ui-modernization-plan.md** | **UI 现代化重构规划** - Geist 字体、Shadcn Blocks、视觉优化 |
@@ -38,6 +36,7 @@
 
 | 文件 | 描述 |
 |------|------|
+| realtime_architecture.md | Realtime 订阅架构 v1 |
 | baseline.md | AI Agent 提示词体系基线分析（2025-11-28） |
 | eval_report.md | Step 5 自我修复循环评估报告 |
 | prompt_eval_notes.md | Prompt 评估对比笔记 |
