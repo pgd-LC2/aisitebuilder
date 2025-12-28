@@ -6,8 +6,7 @@ import { ProjectProvider } from './contexts/ProjectContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { WorkflowProvider } from './contexts/WorkflowContext';
 import { logVersionInfo } from './utils/versionInfo';
-import 'geist/font/sans.css';
-import 'geist/font/mono.css';
+import './styles/geist.css';
 import './index.css';
 
 logVersionInfo();
