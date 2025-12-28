@@ -401,7 +401,7 @@ const findCodeInSnapshot = (
                           v{version.version_number}
                         </span>
                         {isCurrent && (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-medium rounded-full">
+                          <span className="px-2 py-0.5 bg-success/10 text-success text-[10px] font-medium rounded-full">
                             当前
                           </span>
                         )}
@@ -427,7 +427,7 @@ const findCodeInSnapshot = (
                       版本 v{selectedVersion.version_number}
                     </h3>
                     {selectedVersion.id === currentVersionId && (
-                      <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                      <span className="px-3 py-1 bg-success/10 text-success text-xs font-medium rounded-full">
                         当前版本
                       </span>
                     )}

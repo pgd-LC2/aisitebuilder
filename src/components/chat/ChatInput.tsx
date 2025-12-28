@@ -210,7 +210,7 @@ export default function ChatInput({
                 value="plan"
                 aria-label="Plan mode"
                 className={cn(
-                  "rounded-l-full px-4 data-[state=on]:bg-amber-500/20 data-[state=on]:text-amber-700",
+                  "rounded-l-full px-4 data-[state=on]:bg-warning/20 data-[state=on]:text-warning",
                   "flex items-center gap-1.5"
                 )}
               >
@@ -221,7 +221,7 @@ export default function ChatInput({
                 value="build"
                 aria-label="Build mode"
                 className={cn(
-                  "rounded-r-full px-4 data-[state=on]:bg-green-500/20 data-[state=on]:text-green-700",
+                  "rounded-r-full px-4 data-[state=on]:bg-success/20 data-[state=on]:text-success",
                   "flex items-center gap-1.5"
                 )}
               >

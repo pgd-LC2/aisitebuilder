@@ -160,8 +160,8 @@ export default function SignUpPage({ onSwitchToLogin, onBack }: SignUpPageProps)
         <div className="w-full max-w-md relative z-10">
           <Card className="shadow-lg text-center">
             <CardContent className="pt-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500 mb-4">
-                <CheckCircle className="w-8 h-8 text-white" />
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success mb-4">
+                <CheckCircle className="w-8 h-8 text-success-foreground" />
               </div>
               <CardTitle className="text-2xl font-bold mb-2">注册成功！</CardTitle>
               <CardDescription className="mb-6">你的账户已创建，现在可以登录了</CardDescription>

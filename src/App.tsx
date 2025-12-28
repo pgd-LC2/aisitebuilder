@@ -371,7 +371,7 @@ function App() {
                   currentProject.status === 'building'
                     ? 'bg-primary animate-pulse'
                     : currentProject.status === 'completed'
-                    ? 'bg-green-500'
+                    ? 'bg-success'
                     : currentProject.status === 'failed'
                     ? 'bg-destructive'
                     : 'bg-muted-foreground'

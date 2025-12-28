@@ -129,14 +129,14 @@ export default function InitializingPage({ projectTitle }: InitializingPageProps
           </CardHeader>
           <CardContent>
             {matchedPairs === 8 && (
-              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-center">
-                <p className="text-green-800 font-medium">
+              <div className="mb-6 p-4 bg-success/10 border border-success/30 rounded-xl text-center">
+                <p className="text-success font-medium">
                   恭喜完成！用了 {moves} 步
                 </p>
                 <Button
                   onClick={initializeGame}
                   size="sm"
-                  className="mt-2 bg-green-600 hover:bg-green-700"
+                  className="mt-2 bg-success hover:bg-success/90"
                 >
                   再玩一次
                 </Button>

@@ -154,18 +154,18 @@ export default function FileUploader({
                   )}
 
                   {status && status.status === 'error' && (
-                    <p className="text-xs text-red-600 mt-1">
+                    <p className="text-xs text-destructive mt-1">
                       {status.error || '上传失败'}
                     </p>
                   )}
                 </div>
 
                 {status?.status === 'success' && (
-                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
                 )}
 
                 {status?.status === 'error' && (
-                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
                 )}
 
                 {!status && !uploading && (
