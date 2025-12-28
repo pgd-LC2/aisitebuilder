@@ -286,22 +286,22 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
               whileTap={{ scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               onClick={() => toggleFolder(node.path)}
-              className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm ${
+              className={`flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer text-sm ${
                 depth === 0 ? '' : ''
               }`}
               style={{ paddingLeft: `${depth * 12 + 8}px` }}
             >
               {isExpanded ? (
-                <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               ) : (
-                <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               )}
               {isExpanded ? (
-                <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <FolderOpen className="w-4 h-4 text-primary flex-shrink-0" />
               ) : (
-                <Folder className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <Folder className="w-4 h-4 text-primary flex-shrink-0" />
               )}
-              <span className="text-gray-700 truncate">{node.name}</span>
+              <span className="text-foreground truncate">{node.name}</span>
             </motion.div>
           )}
           <AnimatePresence initial={false}>
@@ -328,12 +328,12 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
         transition={{ type: 'spring', stiffness: 300, damping: 26 }}
         key={node.file?.id}
         onClick={() => node.file && focusFile(node.file)}
-        className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm ${
-          isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+        className={`flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer text-sm ${
+          isSelected ? 'bg-primary/10 text-primary' : 'text-foreground'
         }`}
         style={{ paddingLeft: `${depth * 12 + 20}px` }}
       >
-        <File className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+        <File className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
         <span className={`truncate ${isSelected ? 'font-medium' : ''}`}>{node.name}</span>
       </motion.div>
     );
@@ -485,10 +485,10 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-50">
+      <div className="h-full flex items-center justify-center bg-muted">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-          <p className="text-sm text-gray-600">加载文件中...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+          <p className="text-sm text-muted-foreground">加载文件中...</p>
         </div>
       </div>
     );
@@ -497,8 +497,8 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
   const fileTree = buildFileTree();
 
   return (
-    <div className="h-full flex bg-white">
-      <div className="w-64 border-r border-gray-200 flex flex-col">
+    <div className="h-full flex bg-background">
+      <div className="w-64 border-r border-border flex flex-col">
         <div className="px-3 py-2 border-b flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground uppercase">文件</span>
           <div className="flex items-center gap-1">
@@ -552,19 +552,19 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
                     <motion.button
                       key={file.id}
                       onClick={() => focusFile(file)}
-                      className="w-full text-left text-xs px-2 py-1 rounded-lg flex items-center gap-2 bg-white/80 hover:bg-blue-50 border border-gray-200"
+                      className="w-full text-left text-xs px-2 py-1 rounded-lg flex items-center gap-2 bg-background hover:bg-accent border border-border"
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 8 }}
                       transition={{ duration: 0.25, delay: index * 0.05, ease: [0.4, 0, 0.2, 1] }}
                     >
-                      <File className="w-3.5 h-3.5 text-blue-500" />
+                      <File className="w-3.5 h-3.5 text-primary" />
                       <span className="truncate">{file.file_name}</span>
                     </motion.button>
                   ))
                 ) : (
                   <motion.div
-                    className="text-[11px] text-gray-500 bg-white/70 border border-dashed border-gray-300 rounded px-2 py-1"
+                    className="text-[11px] text-muted-foreground bg-muted border border-dashed border-border rounded px-2 py-1"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -578,7 +578,7 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
         </div>
 
         {showUploader && (
-          <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
+          <div className="px-3 py-2 border-b border-border bg-muted">
             <FileUploader
               onFilesSelected={handleFilesSelected}
               uploading={uploading}
@@ -590,16 +590,16 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
         <div className="flex-1 overflow-y-auto">
           {files.length === 0 ? (
             <div className="p-4 text-center">
-              <Folder className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-              <p className="text-xs text-gray-500">暂无文件</p>
+              <Folder className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-xs text-muted-foreground">暂无文件</p>
             </div>
           ) : fileTree.children && fileTree.children.length === 0 ? (
             <div className="p-4 text-center">
-              <Search className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-              <p className="text-xs text-gray-500">未找到匹配的文件</p>
+              <Search className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-xs text-muted-foreground">未找到匹配的文件</p>
               <button
                 onClick={() => setSearchQuery('')}
-                className="mt-2 text-xs text-blue-600 hover:text-blue-700"
+                className="mt-2 text-xs text-primary hover:text-primary/80"
               >
                 清除搜索
               </button>
@@ -615,13 +615,13 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
       <div className="flex-1 flex flex-col overflow-hidden">
         {selectedFile ? (
           <>
-            <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+            <div className="px-4 py-2 border-b border-border flex items-center justify-between bg-muted">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div className="flex items-center text-xs text-gray-500">
+                <div className="flex items-center text-xs text-muted-foreground">
                   {getBreadcrumb().map((part, index) => (
                     <div key={index} className="flex items-center">
                       {index > 0 && <ChevronRight className="w-3 h-3 mx-1" />}
-                      <span className={index === getBreadcrumb().length - 1 ? 'text-gray-900 font-medium' : ''}>
+                      <span className={index === getBreadcrumb().length - 1 ? 'text-foreground font-medium' : ''}>
                         {part}
                       </span>
                     </div>
@@ -631,10 +631,10 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
               <div className="flex items-center gap-1">
                 <button
                   onClick={handleDownloadFile}
-                  className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                  className="p-1.5 hover:bg-accent rounded transition-colors"
                   title="下载"
                 >
-                  <Download className="w-4 h-4 text-gray-600" />
+                  <Download className="w-4 h-4 text-muted-foreground" />
                 </button>
                 <button
                   onClick={handleDeleteFile}
@@ -646,31 +646,31 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
               </div>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white">
+            <div className="flex-1 overflow-auto bg-background">
               {loadingContent ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mb-2"></div>
-                    <p className="text-sm text-gray-600">加载中...</p>
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
+                    <p className="text-sm text-muted-foreground">加载中...</p>
                   </div>
                 </div>
               ) : isImageFile(selectedFile) ? (
-                <div className="flex items-center justify-center h-full bg-gray-50 p-4">
+                <div className="flex items-center justify-center h-full bg-muted p-4">
                   {fileUrl ? (
                     <img
                       src={fileUrl}
                       alt={selectedFile?.file_name || '图片预览'}
-                      className="max-w-full max-h-full object-contain shadow-lg border border-gray-200 bg-white rounded"
+                      className="max-w-full max-h-full object-contain shadow-lg border border-border bg-background rounded"
                     />
                   ) : (
-                    <p className="text-sm text-gray-500">无法加载图片预览</p>
+                    <p className="text-sm text-muted-foreground">无法加载图片预览</p>
                   )}
                 </div>
               ) : previewMessage ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <File className="w-12 h-12 mx-auto mb-3 text-gray-400 opacity-50" />
-                    <p className="text-sm text-gray-500">{previewMessage}</p>
+                    <File className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <p className="text-sm text-muted-foreground">{previewMessage}</p>
                   </div>
                 </div>
               ) : enableSyntaxHighlight ? (
@@ -692,10 +692,10 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
                   {fileContent || ' '}
                 </SyntaxHighlighter>
               ) : (
-                <pre className="p-4 text-sm font-mono leading-6 text-gray-800 whitespace-pre-wrap break-words">
+                <pre className="p-4 text-sm font-mono leading-6 text-foreground whitespace-pre-wrap break-words">
                   {fileContent.split('\n').map((line, index) => (
                     <div key={index} className="flex">
-                      <span className="inline-block w-12 text-right pr-4 text-gray-400 select-none flex-shrink-0">
+                      <span className="inline-block w-12 text-right pr-4 text-muted-foreground select-none flex-shrink-0">
                         {index + 1}
                       </span>
                       <span className="flex-1">{line || ' '}</span>
@@ -706,7 +706,7 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center">
               <File className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p className="text-sm">选择一个文件以查看内容</p>

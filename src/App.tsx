@@ -147,10 +147,10 @@ function App() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
+      <div className="h-screen flex items-center justify-center bg-muted">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          <p className="mt-4 text-gray-600">加载中...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">加载中...</p>
         </div>
       </div>
     );
@@ -186,13 +186,13 @@ function App() {
   const homeView = (
     <motion.div
       key="home-view"
-      className="h-screen flex flex-col overflow-hidden bg-white"
+      className="h-screen flex flex-col overflow-hidden bg-background"
       initial={{ opacity: 0, scale: 0.94, y: 40 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: -40 }}
       transition={{ type: 'spring', stiffness: 160, damping: 26 }}
     >
-      <header className="bg-white border-b border-gray-200 px-6 py-1.5 flex items-center justify-between">
+      <header className="bg-background border-b border-border px-6 py-1.5 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <img src="/favicon.svg" alt="AI BUILD" className="h-8 w-8" />
           <nav className="flex items-center gap-1">
@@ -203,8 +203,8 @@ function App() {
               transition={buttonSpring}
               className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                 currentView === 'home'
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >
               主页
@@ -222,8 +222,8 @@ function App() {
               transition={buttonSpring}
               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                 currentView === 'projects'
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >
               <FolderOpen className="w-4 h-4" />
@@ -239,15 +239,15 @@ function App() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               transition={buttonSpring}
-              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent px-3 py-1.5 rounded-lg transition-colors"
               title="个人信息"
             >
               <span>{user.email}</span>
-              <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
+              <div className="w-7 h-7 rounded-full overflow-hidden bg-primary flex-shrink-0">
                 {userProfile?.avatar_url ? (
                   <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-white text-xs font-bold">
+                  <div className="flex items-center justify-center h-full text-primary-foreground text-xs font-bold">
                     {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -259,7 +259,7 @@ function App() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               transition={buttonSpring}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+              className="px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg transition-colors"
             >
               登录
             </motion.button>
@@ -303,13 +303,13 @@ function App() {
   const buildingView = (
     <motion.div
       key="building-view"
-      className="h-screen flex flex-col bg-white overflow-hidden"
+      className="h-screen flex flex-col bg-background overflow-hidden"
       initial={{ opacity: 0, scale: 0.85, y: 60 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: -60 }}
       transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
     >
-      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+      <header className="bg-background border-b border-border px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <motion.button
             onClick={handleBackToHome}
@@ -328,15 +328,15 @@ function App() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.95 }}
                 transition={buttonSpring}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors flex-shrink-0"
                 title="版本管理"
               >
                 <GitBranch className="w-4 h-4" />
                 版本管理
               </motion.button>
-              <div className="w-px h-6 bg-gray-300 flex-shrink-0"></div>
+              <div className="w-px h-6 bg-border flex-shrink-0"></div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-base font-medium text-gray-900 truncate">
+                <h1 className="text-base font-medium text-foreground truncate">
                   {currentProject.title}
                 </h1>
               </div>
@@ -350,34 +350,34 @@ function App() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={buttonSpring}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent px-3 py-1.5 rounded-lg transition-colors"
             title="个人信息"
           >
             <span>{user?.email}</span>
-            <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-blue-200 to-blue-300 flex-shrink-0">
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-primary flex-shrink-0">
               {userProfile?.avatar_url ? (
                 <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
               ) : (
-                <div className="flex items-center justify-center h-full text-white text-xs font-bold">
+                <div className="flex items-center justify-center h-full text-primary-foreground text-xs font-bold">
                   {(userProfile?.display_name || userProfile?.username || user?.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
           </motion.button>
           {currentProject && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
               <div
                 className={`w-2 h-2 rounded-full ${
                   currentProject.status === 'building'
-                    ? 'bg-blue-500 animate-pulse'
+                    ? 'bg-primary animate-pulse'
                     : currentProject.status === 'completed'
                     ? 'bg-green-500'
                     : currentProject.status === 'failed'
-                    ? 'bg-red-500'
-                    : 'bg-gray-400'
+                    ? 'bg-destructive'
+                    : 'bg-muted-foreground'
                 }`}
               />
-              <span className="text-xs font-medium text-gray-700">
+              <span className="text-xs font-medium text-muted-foreground">
                 {getStatusText(currentProject.status)}
               </span>
             </div>
@@ -386,11 +386,11 @@ function App() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-[28%] min-w-[320px] max-w-[480px] border-r border-gray-200 flex-shrink-0 bg-gray-50">
+        <div className="w-[28%] min-w-[320px] max-w-[480px] border-r border-border flex-shrink-0 bg-muted">
           <ChatPanel projectFilesContext={projectFilesContext} />
         </div>
 
-        <div className="flex-1 bg-gray-100">
+        <div className="flex-1 bg-accent">
           <PreviewPanel currentVersionId={currentVersion?.id} />
         </div>
       </div>

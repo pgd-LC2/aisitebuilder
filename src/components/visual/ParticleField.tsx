@@ -40,7 +40,6 @@ export default function ParticleField({ count = 114, color = 'rgba(59,130,246,0.
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-transparent to-slate-900/30" />
       {particles.map(particle => (
         <motion.span
           key={particle.id}
