@@ -10,6 +10,33 @@ aisitebuilder/
 │   ├── components/                   # UI 组件（按功能分类）
 │   │   ├── index.ts                  # 统一导出入口
 │   │   │
+│   │   ├── ui/                       # Shadcn UI 基础组件
+│   │   │   ├── accordion.tsx         # 手风琴组件
+│   │   │   ├── alert-dialog.tsx      # 警告对话框
+│   │   │   ├── alert.tsx             # 警告提示
+│   │   │   ├── avatar.tsx            # 头像组件
+│   │   │   ├── badge.tsx             # 徽章组件
+│   │   │   ├── button.tsx            # 按钮组件
+│   │   │   ├── card.tsx              # 卡片组件
+│   │   │   ├── checkbox.tsx          # 复选框
+│   │   │   ├── collapsible.tsx       # 可折叠组件
+│   │   │   ├── command.tsx           # 命令面板
+│   │   │   ├── dialog.tsx            # 对话框
+│   │   │   ├── dropdown-menu.tsx     # 下拉菜单
+│   │   │   ├── input.tsx             # 输入框
+│   │   │   ├── label.tsx             # 标签
+│   │   │   ├── popover.tsx           # 弹出层
+│   │   │   ├── scroll-area.tsx       # 滚动区域
+│   │   │   ├── select.tsx            # 选择器
+│   │   │   ├── separator.tsx         # 分隔线
+│   │   │   ├── sonner.tsx            # Toast 通知
+│   │   │   ├── switch.tsx            # 开关
+│   │   │   ├── tabs.tsx              # 标签页
+│   │   │   ├── textarea.tsx          # 文本域
+│   │   │   ├── toggle.tsx            # 切换按钮
+│   │   │   ├── toggle-group.tsx      # 切换按钮组
+│   │   │   └── tooltip.tsx           # 工具提示
+│   │   │
 │   │   ├── pages/                    # 页面级组件
 │   │   │   ├── index.ts              # 页面组件导出
 │   │   │   ├── HomePage.tsx          # 首页
@@ -180,14 +207,20 @@ aisitebuilder/
 │   ├── README.md                     # 文档索引
 │   ├── testing-guide.md              # 测试指南
 │   ├── auto-test-generator.md        # 自动测试生成器文档
+│   ├── components-restructure-plan.md # 组件目录重构规划（已完成）
+│   ├── style-unification-plan.md     # 样式统一实施方案（已完成）
+│   ├── build-agent-upgrade-plan.md   # Build 智能体升级规划
 │   ├── specs/                        # 技术规范（当前使用）
 │   │   ├── task-workflow-architecture.md # 任务与工作流架构
 │   │   ├── prompt_spec.md            # Prompt 系统规范
 │   │   ├── process-ai-tasks-refactor.md # AI 任务处理重构方案
 │   │   ├── realtime_architecture.md  # 实时架构 v1
 │   │   ├── realtime_architecture_v2.md # 实时架构 v2
+│   │   ├── realtime_channel_error_retry_spec.md # 实时通道错误重试规范
+│   │   ├── build-module-refactor-plan.md # Build 模块重构方案
 │   │   ├── agent_events_spec.md      # Agent 事件规范
-│   │   └── file_events_spec.md       # 文件事件规范
+│   │   ├── file_events_spec.md       # 文件事件规范
+│   │   └── ui-modernization-plan.md  # UI 现代化重构规划
 │   └── legacy/                       # 历史文档（供参考）
 │       ├── baseline.md
 │       ├── eval_report.md
