@@ -21,7 +21,7 @@ const logTypeIcons = {
 
 const logTypeColors = {
   info: 'text-primary bg-primary/10',
-  success: 'text-green-500 bg-green-50',
+  success: 'text-success bg-success/10',
   error: 'text-destructive bg-destructive/10'
 };
 

@@ -23,6 +23,19 @@
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
+    
+    /* 成功状态 - 绿色 */
+    --success: 142.1 76.2% 36.3%;
+    --success-foreground: 0 0% 100%;
+    
+    /* 警告状态 - 琥珀色 */
+    --warning: 45.4 93.4% 47.5%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 48 96.5% 88.8%;
+    
+    /* 代码编辑器背景 */
+    --code-background: 0 0% 17.6%;
+    
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
@@ -49,6 +62,19 @@
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+    
+    /* 成功状态 - 绿色（暗色模式） */
+    --success: 142.1 70.6% 45.3%;
+    --success-foreground: 0 0% 100%;
+    
+    /* 警告状态 - 琥珀色（暗色模式） */
+    --warning: 45.4 93.4% 47.5%;
+    --warning-foreground: 0 0% 0%;
+    --warning-muted: 43.3 96.4% 56.3%;
+    
+    /* 代码编辑器背景（暗色模式） */
+    --code-background: 0 0% 12%;
+    
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;

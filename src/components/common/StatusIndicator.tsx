@@ -11,7 +11,7 @@ interface StatusConfig {
 const statusConfigs: Record<StatusType, StatusConfig> = {
   ready: {
     label: '就绪',
-    color: 'bg-green-500',
+    color: 'bg-success',
     animate: true,
   },
   thinking: {
@@ -21,12 +21,12 @@ const statusConfigs: Record<StatusType, StatusConfig> = {
   },
   building: {
     label: '构建中',
-    color: 'bg-yellow-500',
+    color: 'bg-warning',
     animate: true,
   },
   error: {
     label: '错误',
-    color: 'bg-red-500',
+    color: 'bg-destructive',
     animate: false,
   },
   idle: {

@@ -146,7 +146,7 @@ function BoltPlanItem({
   children?: React.ReactNode;
 }) {
   const StatusIcon = isCompleted ? CheckCircle : isActive ? Loader2 : Circle;
-  const statusColor = isCompleted ? 'text-green-500' : isActive ? 'text-primary' : 'text-muted-foreground/50';
+  const statusColor = isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-muted-foreground/50';
   
   return (
     <div className="flex items-start gap-2 py-1">
@@ -270,7 +270,7 @@ export default function ActivityTimeline({ projectId, taskId, maxEvents = 100, o
               </Badge>
             )}
             {!isConnected && (
-              <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-600">离线</Badge>
+              <Badge variant="outline" className="text-xs text-warning border-warning">离线</Badge>
             )}
           </div>
           {isExpanded ? (

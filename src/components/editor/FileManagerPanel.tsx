@@ -638,10 +638,10 @@ export default function FileManagerPanel({ projectId, versionId }: FileManagerPa
                 </button>
                 <button
                   onClick={handleDeleteFile}
-                  className="p-1.5 hover:bg-red-50 rounded transition-colors"
+                  className="p-1.5 hover:bg-destructive/10 rounded transition-colors"
                   title="删除"
                 >
-                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <Trash2 className="w-4 h-4 text-destructive" />
                 </button>
               </div>
             </div>

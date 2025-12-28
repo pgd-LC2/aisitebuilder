@@ -108,8 +108,8 @@ export default function CodeViewer({ code, language, filename, onClose }: CodeVi
               >
                 {copied ? (
                   <>
-                    <Check className="w-4 h-4 mr-2 text-green-600" />
-                    <span className="text-green-600">已复制</span>
+                    <Check className="w-4 h-4 mr-2 text-success" />
+                    <span className="text-success">已复制</span>
                   </>
                 ) : (
                   <>
@@ -122,7 +122,7 @@ export default function CodeViewer({ code, language, filename, onClose }: CodeVi
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 bg-[#2d2d2d]">
+        <ScrollArea className="flex-1 bg-code-background">
           <pre className="!m-0 !bg-transparent p-4">
             <code
               className={`language-${language}`}
