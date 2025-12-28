@@ -22,7 +22,7 @@
 | 文件 | 描述 |
 |------|------|
 | **task-workflow-architecture.md** | **任务与工作流架构（新人必读）** - chat/plan/build 三种模式的设计 |
-| **prompt_spec.md** | **Prompt 系统规范** - 五层 Prompt 架构设计 |
+| **prompt_spec.md** | **Prompt 系统规范** - chat/plan/build 三种模式的 Prompt 设计 |
 | **realtime_architecture_v2.md** | **Realtime 订阅架构 v2** - Generation 和 CloseReason 机制 |
 | agent_events_spec.md | Agent 事件流规范 |
 | file_events_spec.md | 文件事件规范 |
