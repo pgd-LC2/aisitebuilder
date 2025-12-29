@@ -25,7 +25,6 @@ interface PreviewPanelProps {
 
 const TEXT_MIME_PREFIXES = ['text/', 'application/json', 'application/javascript', 'application/typescript', 'application/xml'];
 const TEXT_MIME_SUFFIXES = ['+json', '+xml'];
-const MAX_PARALLEL_DOWNLOADS = 24;
 const LOADING_GAME_ICONS = ['🎨', '🚀', '💡', '⚡', '🎯', '🌟', '🔥', '💎'];
 const WORKSPACE_PRESERVE_DIRS = new Set(['node_modules', '.npm', '.pnpm-store', '.yarn']);
 const PANEL_SPRING: Transition = { type: 'spring', stiffness: 210, damping: 32 };
@@ -393,24 +392,9 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
 
   const downloadFilesConcurrently = useCallback(
     async (fileEntries: Array<{ file: ProjectFile; relativePath: string }>) => {
-      const results: Array<string | Uint8Array> = new Array(fileEntries.length);
-      let nextIndex = 0;
-
-      const worker = async () => {
-        while (true) {
-          const currentIndex = nextIndex;
-          nextIndex += 1;
-          if (currentIndex >= fileEntries.length) {
-            return;
-          }
-          results[currentIndex] = await downloadFileContent(fileEntries[currentIndex].file);
-        }
-      };
-
-      const workerCount = Math.min(MAX_PARALLEL_DOWNLOADS, fileEntries.length);
-      await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-      return results;
+      return Promise.all(
+        fileEntries.map(entry => downloadFileContent(entry.file))
+      );
     },
     [downloadFileContent]
   );

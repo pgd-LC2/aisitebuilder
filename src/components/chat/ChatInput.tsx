@@ -23,7 +23,7 @@ interface ChatInputProps {
 }
 
 const defaultPlaceholders = [
-  "How can Bolt help you today? (or /command)",
+  "我能帮助你什么 (或使用/调出命令)",
   '大地图游戏',
   '企业宣传网站',
   '在线课程平台',
@@ -44,9 +44,15 @@ export default function ChatInput({
   showAgentSelector = true,
   variant = 'home'
 }: ChatInputProps) {
+  const collapsedMaxHeight = 200;
+  const expandedMaxHeight = 420;
+  const collapsedMaxWidth = 672;
+  const expandedMaxWidth = 896;
+  const footerButtonClass = 'h-9';
+  const footerIconButtonClass = 'h-9 w-9';
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<InputMode>('default');
+  const [selectedMode, setSelectedMode] = useState<InputMode>('default');       
   const [showCommandMenu, setShowCommandMenu] = useState(false);
   const [canExpandInput, setCanExpandInput] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -56,12 +62,11 @@ export default function ChatInput({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    const collapsedMaxHeight = 200;
-    const maxHeight = isExpanded ? 360 : collapsedMaxHeight;
+    const maxHeight = isExpanded ? expandedMaxHeight : collapsedMaxHeight;
     const newHeight = Math.min(textarea.scrollHeight, maxHeight);
     textarea.style.height = `${newHeight}px`;
     setCanExpandInput(textarea.scrollHeight > collapsedMaxHeight);
-  }, [isExpanded]);
+  }, [collapsedMaxHeight, expandedMaxHeight, isExpanded]);
 
   useEffect(() => {
     adjustTextareaHeight();
@@ -139,55 +144,66 @@ export default function ChatInput({
         onSelect={handleCommandSelect}
       />
 
-      <Card className="overflow-hidden shadow-sm">
-        <div className="p-4 pb-2">
-          <div className="relative">
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder=""
-              disabled={disabled || isSubmitting}
-              className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[40px] max-h-[360px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0 pr-10"
-              rows={1}
-            />
-            {(canExpandInput || isExpanded) && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsExpanded((prev) => !prev)}
-                className="absolute right-0 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+      <motion.div
+        layout
+        initial={false}
+        animate={{ maxWidth: isExpanded ? expandedMaxWidth : collapsedMaxWidth }}
+        transition={{
+          layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+          maxWidth: { duration: 0.36, delay: 0.12, ease: [0.16, 1, 0.3, 1] }
+        }}
+        className="mx-auto w-full"
+      >
+        <Card className="overflow-hidden shadow-sm">
+          <div className="p-4 pb-5">
+            <div className="relative">
+              <Textarea
+                ref={textareaRef}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder=""
+                disabled={disabled || isSubmitting}
+                className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[48px] max-h-[360px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0 pr-10"
+                rows={1}
+              />
+              {(canExpandInput || isExpanded) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsExpanded((prev) => !prev)}
+                className="absolute right-0 top-0 z-20 h-8 w-8 rounded-md bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
                 title={isExpanded ? '收起输入框' : '展开输入框'}
               >
                 {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
             )}
-            {!value && (
-              <div className="absolute left-0 top-0 pointer-events-none overflow-hidden">
-                <div
-                  className={cn(
-                    "transition-transform duration-300 ease-in-out",
-                    isAnimating ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100'
-                  )}
-                >
-                  <span className="text-muted-foreground text-base">
-                    {currentPlaceholderText}
-                  </span>
+              {!value && (
+                <div className="absolute left-0 top-0 pointer-events-none overflow-hidden">
+                  <div
+                    className={cn(
+                      "transition-transform duration-300 ease-in-out",
+                      isAnimating ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100'
+                    )}
+                  >
+                    <span className="text-muted-foreground text-base">
+                      {currentPlaceholderText}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="p-3 border-t flex items-center justify-between">
+          <div className="p-2 border-t flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               title="添加附件"
               disabled={disabled}
+              className={footerIconButtonClass}
             >
               <Plus className="w-5 h-5" />
             </Button>
@@ -195,14 +211,18 @@ export default function ChatInput({
             {showAgentSelector && (
               <Button
                 variant="ghost"
-                className="flex items-center gap-2"
+                size="sm"
+                className={cn(
+                  "flex items-center gap-1.5 font-bold",
+                  footerButtonClass
+                )}
                 disabled={disabled}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#4285F4"/>
                   <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4285F4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <span className="text-sm font-medium">Gemini</span>
+                <span className="text-xs font-medium">Gemini</span>
                 <ChevronDown className="w-4 h-4 text-muted-foreground" />
               </Button>
             )}
@@ -219,30 +239,32 @@ export default function ChatInput({
                   setSelectedMode('default');
                 }
               }}
-              className="rounded-full border bg-background"
+              className="rounded-full border bg-background text-xs"
               disabled={disabled || isSubmitting}
             >
               <ToggleGroupItem
                 value="plan"
                 aria-label="Plan mode"
                 className={cn(
-                  "rounded-l-full px-4 data-[state=on]:bg-warning/20 data-[state=on]:text-warning",
+                  "rounded-l-full px-3 data-[state=on]:bg-warning/20 data-[state=on]:text-warning",
+                  footerButtonClass,
                   "flex items-center gap-1.5"
                 )}
               >
                 <Lightbulb className="w-4 h-4" />
-                <span>Plan</span>
+                <span className="text-xs">Plan</span>
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="build"
                 aria-label="Build mode"
                 className={cn(
-                  "rounded-r-full px-4 data-[state=on]:bg-success/20 data-[state=on]:text-success",
+                  "rounded-r-full px-3 data-[state=on]:bg-success/20 data-[state=on]:text-success",
+                  footerButtonClass,
                   "flex items-center gap-1.5"
                 )}
               >
                 <Play className="w-4 h-4" />
-                <span>Build</span>
+                <span className="text-xs">Build</span>
               </ToggleGroupItem>
             </ToggleGroup>
 
@@ -251,7 +273,8 @@ export default function ChatInput({
                 <Button
                   onClick={handleBuildClick}
                   disabled={!value.trim() || disabled || isSubmitting}
-                  className="flex items-center gap-2"
+                  size="sm"
+                  className={cn("flex items-center gap-1.5", footerButtonClass)}
                 >
                   {isSubmitting ? '创建中...' : 'Build now'}
                   {!isSubmitting && <Play className="w-4 h-4 fill-current" />}
@@ -262,8 +285,8 @@ export default function ChatInput({
                 <Button
                   onClick={() => handleSubmit(selectedMode)}
                   disabled={!value.trim() || disabled || isSubmitting}
-                  size="icon"
-                  className="rounded-full"
+                  size="sm"
+                  className={cn("rounded-full", footerButtonClass)}
                 >
                   <Send className="w-4 h-4" />
                 </Button>
@@ -271,7 +294,8 @@ export default function ChatInput({
             )}
           </div>
         </div>
-      </Card>
+        </Card>
+      </motion.div>
     </div>
   );
 }

@@ -36,27 +36,29 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
     <div className="flex h-full min-h-screen flex-col bg-background">
       <main className="flex flex-1 flex-col overflow-y-auto">
         <section className="relative flex flex-1 items-center justify-center px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-24">
-          <div className="relative z-10 w-full max-w-2xl space-y-8 text-center">
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                onClick={onIntroClick}
-                className="rounded-full gap-2"
-              >
-                <svg className="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="text-sm font-medium">Introducing aisitebuilder V1</span>
-              </Button>
-            </div>
+          <div className="relative z-10 w-full max-w-5xl space-y-8 text-center">
+            <div className="mx-auto max-w-2xl space-y-8">
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={onIntroClick}
+                  className="rounded-full gap-2"
+                >
+                  <svg className="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className="text-sm font-medium">Introducing aisitebuilder V1</span>
+                </Button>
+              </div>
 
-            <div className="space-y-4">
-              <h1 className="text-5xl font-bold tracking-tight text-foreground">
-                What will you <span className="text-primary italic font-extrabold">build</span> today?
-              </h1>
-              <p className="text-lg text-muted-foreground">
-                Create stunning apps & websites by chatting with AI.
-              </p>
+              <div className="space-y-4">
+                <h1 className="text-5xl font-bold tracking-tight text-foreground">
+                  What will you <span className="text-primary italic font-extrabold">build</span> today?
+                </h1>
+                <p className="text-lg text-muted-foreground">
+                  Create stunning apps & websites by chatting with AI.
+                </p>
+              </div>
             </div>
 
             <ChatInput
@@ -68,7 +70,7 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
               showAgentSelector={true}
             />
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <div className="mx-auto flex flex-wrap items-center justify-center gap-3 pt-2 max-w-2xl">
               <span className="text-sm text-muted-foreground">or import from</span>
               <Button variant="outline" className="rounded-full gap-2">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">

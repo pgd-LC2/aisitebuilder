@@ -187,7 +187,7 @@ function App() {
   const homeView = (
     <motion.div
       key="home-view"
-      className="h-screen flex flex-col overflow-hidden bg-background"
+      className="min-h-screen flex flex-col bg-background"
       initial={{ opacity: 0, scale: 0.94, y: 40 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: -40 }}
@@ -251,7 +251,7 @@ function App() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1">
         {currentView === 'home' ? (
           <HomePage
             onStartBuilding={handleStartBuilding}
