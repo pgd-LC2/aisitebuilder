@@ -135,7 +135,7 @@ export default function ChatInput({
         onSelect={handleCommandSelect}
       />
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-sm">
         <div className="p-4 pb-2">
           <div className="relative">
             <Textarea
