@@ -1,4 +1,4 @@
-import { Plus, Lightbulb, Play, ChevronDown, Send } from 'lucide-react';
+import { Plus, Lightbulb, Play, ChevronDown, Send, Maximize2, Minimize2 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import QuickCommands, { QuickCommand } from './QuickCommands';
@@ -48,16 +48,20 @@ export default function ChatInput({
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedMode, setSelectedMode] = useState<InputMode>('default');
   const [showCommandMenu, setShowCommandMenu] = useState(false);
+  const [canExpandInput, setCanExpandInput] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    const maxHeight = 200;
+    const collapsedMaxHeight = 200;
+    const maxHeight = isExpanded ? 360 : collapsedMaxHeight;
     const newHeight = Math.min(textarea.scrollHeight, maxHeight);
     textarea.style.height = `${newHeight}px`;
-  }, []);
+    setCanExpandInput(textarea.scrollHeight > collapsedMaxHeight);
+  }, [isExpanded]);
 
   useEffect(() => {
     adjustTextareaHeight();
@@ -145,9 +149,21 @@ export default function ChatInput({
               onKeyDown={handleKeyPress}
               placeholder=""
               disabled={disabled || isSubmitting}
-              className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[40px] max-h-[200px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0"
+              className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[40px] max-h-[360px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0 pr-10"
               rows={1}
             />
+            {(canExpandInput || isExpanded) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsExpanded((prev) => !prev)}
+                className="absolute right-0 top-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                title={isExpanded ? '收起输入框' : '展开输入框'}
+              >
+                {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            )}
             {!value && (
               <div className="absolute left-0 top-0 pointer-events-none overflow-hidden">
                 <div

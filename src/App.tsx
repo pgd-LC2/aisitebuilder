@@ -1,4 +1,4 @@
-import { FolderOpen, GitBranch } from 'lucide-react';
+import { GitBranch, Search } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
@@ -15,6 +15,7 @@ import { templateService } from './services/templateService';
 import { versionService } from './services/versionService';
 import { userProfileService } from './services/userProfileService';
 import { ProjectVersion } from './types/project';
+import { Button } from '@/components/ui/button';
 
 type ViewType = 'home' | 'projects' | 'building' | 'initializing' | 'intro';
 type AuthViewType = 'none' | 'login' | 'signup';
@@ -192,78 +193,61 @@ function App() {
       exit={{ opacity: 0, scale: 0.9, y: -40 }}
       transition={{ type: 'spring', stiffness: 160, damping: 26 }}
     >
-      <header className="bg-background border-b border-border px-6 py-1.5 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <img src="/favicon.svg" alt="AI BUILD" className="h-8 w-8" />
-          <nav className="flex items-center gap-1">
-            <motion.button
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 px-6 py-1.5 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between">
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
               onClick={() => setCurrentView('home')}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={buttonSpring}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                currentView === 'home'
-                  ? 'bg-accent text-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
+              className="flex items-center gap-2 font-semibold text-foreground"
             >
-              主页
-            </motion.button>
-            <motion.button
-              onClick={() => {
-                if (user) {
-                  setCurrentView('projects');
-                } else {
-                  setAuthView('login');
-                }
-              }}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={buttonSpring}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                currentView === 'projects'
-                  ? 'bg-accent text-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              <FolderOpen className="w-4 h-4" />
-              我的项目
-            </motion.button>
-          </nav>
-        </div>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">AI</span>
+              <span>aisitebuilder</span>
+            </button>
+            <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
+              <a href="#" className="transition-colors hover:text-foreground">
+                Docs
+              </a>
+            </nav>
+          </div>
 
-        <div className="flex items-center gap-4">
-          {user ? (
-            <motion.button
-              onClick={() => setShowProfilePanel(true)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={buttonSpring}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent px-3 py-1.5 rounded-lg transition-colors"
-              title="个人信息"
-            >
-              <span>{user.email}</span>
-              <div className="w-7 h-7 rounded-full overflow-hidden bg-primary flex-shrink-0">
-                {userProfile?.avatar_url ? (
-                  <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-primary-foreground text-xs font-bold">
-                    {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" className="hidden gap-2 md:flex">
+              <Search className="h-4 w-4" />
+              Search
+            </Button>
+            {user ? (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={buttonSpring}>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowProfilePanel(true)}
+                  className="flex items-center gap-2 text-sm"
+                  title="个人信息"
+                >
+                  <span className="hidden sm:inline">{user.email}</span>
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-primary flex-shrink-0">
+                    {userProfile?.avatar_url ? (
+                      <img src={userProfileService.getAvatarUrlWithTransform(userProfile.avatar_url, { width: 56, height: 56, quality: 80 }) || ''} alt="头像" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-primary-foreground text-xs font-bold">
+                        {(userProfile?.display_name || userProfile?.username || user.email?.split('@')[0] || 'U').charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </motion.button>
-          ) : (
-            <motion.button
-              onClick={() => setAuthView('login')}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={buttonSpring}
-              className="px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg transition-colors"
-            >
-              登录
-            </motion.button>
-          )}
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={buttonSpring}>
+                <Button
+                  onClick={() => setAuthView('login')}
+                  size="sm"
+                  className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-sm hover:from-primary/90 hover:to-primary/70"
+                >
+                  登录
+                </Button>
+              </motion.div>
+            )}
+          </div>
         </div>
       </header>
 

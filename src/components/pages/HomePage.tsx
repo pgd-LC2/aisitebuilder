@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useProject } from '../../hooks/useProject';
 import ChatInput, { InputMode } from '../chat/ChatInput';
 import { Button } from '@/components/ui/button';
-import SiteHeader from '@/components/layout/SiteHeader';
 import HomeShowcase from '@/components/blocks/HomeShowcase';
 
 interface HomePageProps {
@@ -35,8 +34,6 @@ export default function HomePage({ onStartBuilding, onViewAllProjects, onProject
 
   return (
     <div className="flex h-full min-h-screen flex-col bg-background">
-      <SiteHeader />
-
       <main className="flex flex-1 flex-col overflow-y-auto">
         <section className="relative flex flex-1 items-center justify-center px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-24">
           <div className="relative z-10 w-full max-w-2xl space-y-8 text-center">
