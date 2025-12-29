@@ -221,6 +221,9 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   const previewStatusRef = useRef<PreviewStatus>('idle');
   const previewUrlRef = useRef<string | null>(null);
   const reusedPrebuiltRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initializePreviewRef = useRef<(force?: boolean) => void>(() => undefined);
   const { currentProject } = useProject();
   const { preloadNodeModules } = useSettings();
 
@@ -259,6 +262,23 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
   useEffect(() => {
     previewUrlRef.current = previewUrl;
   }, [previewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    retryCountRef.current = 0;
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, [currentProject, currentVersionId]);
 
   const stopDevServer = useCallback(async () => {
     const process = webContainerManager.getDevServerProcess();
@@ -453,7 +473,14 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
     async (command: string, args: string[] = []) => {
       const instance = webContainerManager.getInstance();
       if (!instance) return { exitCode: 1 };
-      const process = await instance.spawn(command, args);
+      let process;
+      try {
+        process = await instance.spawn(command, args);
+      } catch (error) {
+        console.error(`${command} ${args.join(' ')} 进程中断:`, error);
+        appendLog(`${command} ${args.join(' ')} 进程中断，请重试`);
+        return { exitCode: 1 };
+      }
 
       process.output
         .pipeTo(
@@ -467,17 +494,58 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
           appendLog(`${command} ${args.join(' ')} 输出管道已结束`);
         });
 
-      const exitCode = await process.exit;
-      return { exitCode, process };
+      try {
+        const exitCode = await process.exit;
+        return { exitCode, process };
+      } catch (error) {
+        console.error(`${command} ${args.join(' ')} 进程中断:`, error);
+        appendLog(`${command} ${args.join(' ')} 进程中断，请重试`);
+        return { exitCode: 1 };
+      }
     },
     [appendLog]
+  );
+
+  const scheduleAutoRetry = useCallback(
+    (reason?: string) => {
+      if (!currentProject || !webcontainerReady) {
+        return;
+      }
+      if (retryCountRef.current >= 3) {
+        appendLog('自动重试已达上限');
+        return;
+      }
+      retryCountRef.current += 1;
+      const attempt = retryCountRef.current;
+      const delay = 1200 * attempt;
+      const detail = reason ? `：${reason}` : '';
+      const seconds = Math.round(delay / 100) / 10;
+      appendLog(`预览自动重试(${attempt}/3)${detail}，${seconds}s 后开始`);
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      retryTimeoutRef.current = setTimeout(() => {
+        initializePreviewRef.current(true);
+      }, delay);
+    },
+    [appendLog, currentProject, webcontainerReady]
   );
 
   const startDevServer = useCallback(async () => {
     const instance = webContainerManager.getInstance();
     if (!instance) return;
 
-    const process = await instance.spawn('npm', ['run', 'dev', '--', '--host', '0.0.0.0', '--port', '4173']);
+    let process;
+    try {
+      process = await instance.spawn('npm', ['run', 'dev', '--', '--host', '0.0.0.0', '--port', '4173']);
+    } catch (error) {
+      console.error('启动开发服务器失败:', error);
+      appendLog('开发服务器启动失败，请重试');
+      setPreviewStatus('error');
+      setPreviewError('开发服务器启动失败，请点击重启预览');
+      scheduleAutoRetry('开发服务器启动失败');
+      return;
+    }
     webContainerManager.setDevServerProcess(process);
     devServerStopRequestedRef.current = false;
 
@@ -494,17 +562,24 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
       });
 
     instance.on('server-ready', (_port, url) => {
+      retryCountRef.current = 0;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
       setPreviewUrl(url);
       setPreviewStatus('running');
       appendLog(`开发服务器已启动: ${url}`);
     });
 
-    process.exit.then(async code => {
+    process.exit
+      .then(async code => {
       if (devServerStopRequestedRef.current) {
         devServerStopRequestedRef.current = false;
         return;
       }
       if (code !== 0) {
+        scheduleAutoRetry('开发服务器异常退出');
         appendLog(`开发服务器异常退出 (code ${code})`);
         if (reusedPrebuiltRef.current && dependencyHashRef.current) {
           appendLog('检测到预制依赖可能损坏，已清除缓存，请重新启动预览以重新安装依赖');
@@ -519,8 +594,19 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
         setPreviewStatus('error');
         setPreviewError('开发服务器启动失败，请点击重启预览');
       }
-    });
-  }, [appendLog]);
+    })
+      .catch(error => {
+        if (devServerStopRequestedRef.current) {
+          devServerStopRequestedRef.current = false;
+          return;
+        }
+        console.error('开发服务器进程中断:', error);
+        appendLog('开发服务器进程中断，请重试');
+        setPreviewStatus('error');
+        setPreviewError('预览进程被中断，请点击重启预览');
+        scheduleAutoRetry('开发服务器进程中断');
+      });
+  }, [appendLog, scheduleAutoRetry]);
 
   const initializePreview = useCallback(
     async (force = false) => {
@@ -631,6 +717,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
         setPreviewStatus('error');
         const message = err instanceof Error ? err.message : '初始化预览失败';
         setPreviewError(message);
+        scheduleAutoRetry(message);
       } finally {
         initializingRef.current = false;
       }
@@ -652,6 +739,10 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
       writeFilesToWebcontainer
     ]
   );
+
+  useEffect(() => {
+    initializePreviewRef.current = initializePreview;
+  }, [initializePreview]);
 
   useEffect(() => {
     if (currentProject && webcontainerReady) {
@@ -880,8 +971,8 @@ function PreviewLoadingScreen({ status, error, logs, projectName, installMode, i
 
           {/* 友好提示 - 小白能看懂 */}
           {statusConfig.tip && (
-            <div className="inline-block px-4 py-2 bg-warning-muted border border-warning rounded-lg">
-              <p className="text-warning-foreground text-xs">{statusConfig.tip}</p>
+            <div className="inline-block px-4 py-2 bg-warning/10 border border-warning/30 rounded-lg">
+              <p className="text-foreground text-xs">{statusConfig.tip}</p>
             </div>
           )}
 

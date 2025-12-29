@@ -92,14 +92,16 @@ supabase secrets list                   # 查看密钥
 
 ### MCP 工具（CLI 不支持的功能）
 
-| MCP 工具 | 用途 |
-|----------|------|
-| `execute_sql` | 执行 SQL 查询（DML） |
-| `get_logs` | 获取日志 |
-| `get_advisors` | 安全/性能建议 |
+| MCP 工具         | 用途                 |
+| ---------------- | -------------------- |
+| `execute_sql`  | 执行 SQL 查询（DML） |
+| `get_logs`     | 获取日志             |
+| `get_advisors` | 安全/性能建议        |
 
 ## 语言与代理说明
 
 本文件要求所有协作者与自动化 Agent 在此仓库上下文中永远使用中文交流；即便收到其他语言的输入，也必须转换为中文回复，以确保沟通一致。
 
 每一次更新文件结束，进行验证（npm run lint 和 npm run typecheck）并进行修复，直到没有报错为止。
+
+在完成任务之后 给用户提交一个github comment的提交短句(如faet: ......)
