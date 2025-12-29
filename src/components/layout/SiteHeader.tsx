@@ -1,11 +1,8 @@
 import { Button } from '@/components/ui/button';
-import { Search, Sun } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 const navItems = [
   { label: 'Docs', href: '#' },
-  { label: 'Components', href: '#' },
-  { label: 'Blocks', href: '#' },
-  { label: 'Directory', href: '#' },
 ];
 
 export default function SiteHeader() {
@@ -30,9 +27,11 @@ export default function SiteHeader() {
             <Search className="h-4 w-4" />
             Search
           </Button>
-          <Button variant="ghost" size="icon" className="hidden md:inline-flex">
-            <Sun className="h-4 w-4" />
-            <span className="sr-only">切换主题</span>
+          <Button
+            size="sm"
+            className="hidden bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 md:inline-flex"
+          >
+            登录
           </Button>
         </div>
       </div>

@@ -63,7 +63,7 @@ export default function ProjectCard({ project, onClick, onDelete }: ProjectCardP
   return (
     <Card
       onClick={onClick}
-      className="group relative cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg"
+      className="group relative cursor-pointer transition-shadow transition-colors hover:shadow-md hover:border-primary/20"
     >
       {onDelete && (
         <div className="absolute top-4 right-4 z-10">
@@ -102,7 +102,10 @@ export default function ProjectCard({ project, onClick, onDelete }: ProjectCardP
         </p>
 
         <div className="flex items-center justify-between pt-3 border-t">
-          <Badge variant={statusVariant[project.status] || 'secondary'}>
+          <Badge
+            variant={statusVariant[project.status] || 'secondary'}
+            className="text-xs"
+          >
             {statusLabels[project.status]}
           </Badge>
 
