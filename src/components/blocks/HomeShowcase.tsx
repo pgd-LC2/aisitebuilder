@@ -41,7 +41,7 @@ export default function HomeShowcase({ recentProjects, onViewAllProjects, onProj
   const hasRecentProjects = recentProjects.length > 0;
 
   return (
-    <section className="border-t border-border bg-muted/30 py-8">
+    <section className="mt-10 border-t border-border bg-muted/30 pb-8 pt-12">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
