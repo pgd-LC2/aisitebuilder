@@ -53,8 +53,10 @@ vi.mock('../../src/contexts/SettingsContext', () => ({
 }));
 
 // Mock utilities and services
-vi.mock('../../src/utils/titleGenerator', () => ({
-  generateTitle: vi.fn(),
+vi.mock('../../src/services/titleService', () => ({
+  titleService: {
+    generateTitle: vi.fn(),
+  },
 }));
 vi.mock('../../src/services/buildLogService', () => ({
   buildLogService: {
@@ -269,8 +271,10 @@ describe('App component', () => {
       error: null,
     });
 
-    vi.mock('../../src/utils/titleGenerator', () => ({
-      generateTitle: vi.fn().mockReturnValue('Generated Title'),
+    vi.mock('../../src/services/titleService', () => ({
+      titleService: { 
+        generateTitle: vi.fn().mockResolvedValue({ data: { title: 'Generated Title' }, error: null }),
+      },
     }));
     vi.mock('../../src/services/buildLogService', () => ({
       buildLogService: { addBuildLog },
@@ -316,8 +320,10 @@ describe('App component', () => {
       error: 'Template error',
     });
 
-    vi.mock('../../src/utils/titleGenerator', () => ({
-      generateTitle: vi.fn().mockReturnValue('Generated Title'),
+    vi.mock('../../src/services/titleService', () => ({
+      titleService: { 
+        generateTitle: vi.fn().mockResolvedValue({ data: { title: 'Generated Title' }, error: null }),
+      },
     }));
     vi.mock('../../src/services/buildLogService', () => ({
       buildLogService: { addBuildLog },

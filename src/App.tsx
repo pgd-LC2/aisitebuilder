@@ -9,7 +9,7 @@ import { PreviewPanel, VersionManager } from './components/editor';
 import { HomePage, ProjectsPage, LoginPage, SignUpPage, InitializingPage, IntroPage } from './components/pages';
 import { UserProfilePanel } from './components/user';
 import { ParticleField } from './components/visual';
-import { generateTitle } from './utils/titleGenerator';
+import { titleService } from './services/titleService';
 import { buildLogService } from './services/buildLogService';
 import { templateService } from './services/templateService';
 import { versionService } from './services/versionService';
@@ -80,7 +80,14 @@ function App() {
     }
 
     try {
-      const title = generateTitle(prompt);
+      // 使用 AI 生成项目标题
+      const { data: titleData, error: titleError } = await titleService.generateTitle(prompt);
+      if (titleError || !titleData) {
+        console.error('AI 生成标题失败:', titleError);
+        alert('生成项目标题失败，请重试');
+        return;
+      }
+      const title = titleData.title;
       const { data, error } = await createProject(title, prompt);
 
       if (!error && data) {

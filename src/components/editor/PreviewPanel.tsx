@@ -733,6 +733,7 @@ export default function PreviewPanel({ currentVersionId }: PreviewPanelProps) {
       preloadNodeModules,
       resetWebcontainer,
       runProcess,
+      scheduleAutoRetry,
       startDevServer,
       stopDevServer,
       webcontainerReady,

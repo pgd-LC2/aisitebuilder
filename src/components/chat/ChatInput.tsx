@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 
 export type InputMode = 'default' | 'plan' | 'build';
 
+const MAX_INPUT_LENGTH = 100000;
+
 interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -20,6 +22,7 @@ interface ChatInputProps {
   isSubmitting?: boolean;
   showAgentSelector?: boolean;
   variant?: 'home' | 'chat';
+  maxLength?: number;
 }
 
 const defaultPlaceholders = [
@@ -42,7 +45,8 @@ export default function ChatInput({
   disabled = false,
   isSubmitting = false,
   showAgentSelector = true,
-  variant = 'home'
+  variant = 'home',
+  maxLength = MAX_INPUT_LENGTH
 }: ChatInputProps) {
   const collapsedMaxHeight = 200;
   const expandedMaxHeight = 420;
@@ -160,12 +164,18 @@ export default function ChatInput({
               <Textarea
                 ref={textareaRef}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  if (newValue.length <= maxLength) {
+                    onChange(newValue);
+                  }
+                }}
                 onKeyDown={handleKeyPress}
                 placeholder=""
                 disabled={disabled || isSubmitting}
                 className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[48px] max-h-[360px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0 pr-10"
                 rows={1}
+                maxLength={maxLength}
               />
               {(canExpandInput || isExpanded) && (
                 <Button
