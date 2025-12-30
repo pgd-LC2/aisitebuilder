@@ -1,11 +1,12 @@
-import { Plus, Lightbulb, Play, ChevronDown, Send, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, Lightbulb, Play, ChevronDown, Send, Maximize2, Minimize2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import QuickCommands, { QuickCommand } from './QuickCommands';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 export type InputMode = 'default' | 'plan' | 'build';
@@ -61,6 +62,9 @@ export default function ChatInput({
   const [canExpandInput, setCanExpandInput] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // 检测是否超过字数限制
+  const isOverLimit = value.length > maxLength;
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -148,6 +152,27 @@ export default function ChatInput({
         onSelect={handleCommandSelect}
       />
 
+      {/* 字数超限警告 */}
+      <AnimatePresence>
+        {isOverLimit && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="max-w-[672px] mx-auto mb-3"
+          >
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>字数超出限制</AlertTitle>
+              <AlertDescription>
+                输入内容已达到 {maxLength.toLocaleString()} 字符上限，请精简内容后再发送。
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.div
         layout
         initial={false}
@@ -164,18 +189,12 @@ export default function ChatInput({
               <Textarea
                 ref={textareaRef}
                 value={value}
-                onChange={(e) => {
-                  const newValue = e.target.value;
-                  if (newValue.length <= maxLength) {
-                    onChange(newValue);
-                  }
-                }}
+                onChange={(e) => onChange(e.target.value)}
                 onKeyDown={handleKeyPress}
                 placeholder=""
                 disabled={disabled || isSubmitting}
                 className="w-full border-0 bg-transparent resize-none text-base leading-relaxed min-h-[48px] max-h-[360px] focus-visible:ring-0 focus-visible:ring-offset-0 p-0 pr-10"
                 rows={1}
-                maxLength={maxLength}
               />
               {(canExpandInput || isExpanded) && (
                 <Button
@@ -282,7 +301,7 @@ export default function ChatInput({
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   onClick={handleBuildClick}
-                  disabled={!value.trim() || disabled || isSubmitting}
+                  disabled={!value.trim() || disabled || isSubmitting || isOverLimit}
                   size="sm"
                   className={cn("flex items-center gap-1.5", footerButtonClass)}
                 >
@@ -294,7 +313,7 @@ export default function ChatInput({
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   onClick={() => handleSubmit(selectedMode)}
-                  disabled={!value.trim() || disabled || isSubmitting}
+                  disabled={!value.trim() || disabled || isSubmitting || isOverLimit}
                   size="sm"
                   className={cn("rounded-full", footerButtonClass)}
                 >
