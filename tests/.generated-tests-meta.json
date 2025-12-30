@@ -19,12 +19,6 @@
       "generatedAt": "2025-12-08T11:36:30.961Z",
       "model": "inception/mercury-coder"
     },
-    "src/utils/titleGenerator.ts": {
-      "sourceHash": "46d3492980d242d0",
-      "testPath": "tests/generated/utils/titleGenerator.test.ts",
-      "generatedAt": "2025-12-08T11:36:34.898Z",
-      "model": "inception/mercury-coder"
-    },
     "src/App.tsx": {
       "sourceHash": "04ebff7b08a342b0",
       "testPath": "tests/generated/App.test.tsx",
