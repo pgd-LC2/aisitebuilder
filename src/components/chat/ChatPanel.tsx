@@ -489,8 +489,11 @@ export default function ChatPanel({ projectFilesContext }: ChatPanelProps) {
 
       <div className="px-4 py-3 bg-muted/30">
         {!isConnected && projectId && (
-          <Alert variant="default" className="mb-2 py-1.5 bg-warning-muted border-warning">
-            <AlertDescription className="text-xs text-warning-foreground">连接中，请稍候...</AlertDescription>
+          <Alert variant="default" className="mb-2 py-2 bg-primary/10 border-primary/30">
+            <AlertDescription className="text-xs text-primary flex items-center gap-2">
+              <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              正在连接实时服务...
+            </AlertDescription>
           </Alert>
         )}
         <ChatInput
