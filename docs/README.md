@@ -1,5 +1,17 @@
 # 文档目录
 
+## knowledge/ - 知识库文档（必读）
+
+从 Devin 知识库中提取的与 aisitebuilder 项目直接相关的知识文档。**在项目中工作时，必须先访问 `docs` 文件夹查看相关文档内容。**
+
+| 文件 | 描述 |
+|------|------|
+| **[README.md](knowledge/README.md)** | **知识库文档索引** - 所有知识文档的目录 |
+| **[development-standards.md](knowledge/development-standards.md)** | **开发规范** - 项目结构、代码风格、开发流程 |
+| **[ai-prompt-system.md](knowledge/ai-prompt-system.md)** | **AI Prompt 系统架构** - v3 统一交互模式架构 |
+| **[edge-function-architecture.md](knowledge/edge-function-architecture.md)** | **Edge Function 模块化架构** - `_shared/ai/` 目录结构 |
+| **[realtime-architecture-constraints.md](knowledge/realtime-architecture-constraints.md)** | **实时功能架构约束** - Step1 Realtime 架构约束 |
+
 ## 重构规划与实施方案
 
 | 文件 | 状态 | 描述 |
