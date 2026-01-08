@@ -210,6 +210,12 @@ aisitebuilder/
 │   ├── components-restructure-plan.md # 组件目录重构规划（已完成）
 │   ├── style-unification-plan.md     # 样式统一实施方案（已完成）
 │   ├── build-agent-upgrade-plan.md   # Build 智能体升级规划
+│   ├── knowledge/                    # 知识库文档（必读）
+│   │   ├── README.md                 # 知识库文档索引
+│   │   ├── development-standards.md  # 开发规范
+│   │   ├── ai-prompt-system.md       # AI Prompt 系统架构
+│   │   ├── edge-function-architecture.md # Edge Function 模块化架构
+│   │   └── ...                       # 更多知识文档
 │   ├── specs/                        # 技术规范（当前使用）
 │   │   ├── task-workflow-architecture.md # 任务与工作流架构
 │   │   ├── prompt_spec.md            # Prompt 系统规范
@@ -378,10 +384,12 @@ node tools/deploy-edge-function.cjs --help
 
 如果你是新加入的工程师，请务必阅读以下文档以快速了解系统架构：
 
-1. **[任务与工作流架构](docs/specs/task-workflow-architecture.md)**：详细说明任务类型（Task Type）和工作流模式（Workflow Mode）的设计，这是理解系统核心概念的关键文档。
+1. **[知识库文档](docs/knowledge/README.md)**：从 Devin 知识库中提取的项目相关知识，包含开发规范、架构设计、调试指南等。**在项目中工作时，必须先访问 `docs` 文件夹查看相关文档内容。**
 
-2. **[Prompt 系统规范](docs/specs/prompt_spec.md)**：五层 Prompt 架构的详细说明。
+2. **[任务与工作流架构](docs/specs/task-workflow-architecture.md)**：详细说明任务类型（Task Type）和工作流模式（Workflow Mode）的设计，这是理解系统核心概念的关键文档。
 
-3. **[process-ai-tasks 重构方案](docs/specs/process-ai-tasks-refactor.md)**：AI 任务处理 Edge Function 的设计文档。
+3. **[Prompt 系统规范](docs/specs/prompt_spec.md)**：五层 Prompt 架构的详细说明。
+
+4. **[process-ai-tasks 重构方案](docs/specs/process-ai-tasks-refactor.md)**：AI 任务处理 Edge Function 的设计文档。
 
 更多技术文档请查看 [docs/README.md](docs/README.md)。

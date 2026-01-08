@@ -98,6 +98,18 @@ supabase secrets list                   # 查看密钥
 | `get_logs`     | 获取日志             |
 | `get_advisors` | 安全/性能建议        |
 
+## 文档访问要求
+
+**重要**：在 `aisitebuilder` 项目中工作时，必须先访问 `docs` 文件夹查看相关文档内容。
+
+`docs/knowledge/` 目录包含从 Devin 知识库中提取的项目相关知识，涵盖：
+- 开发规范
+- 架构设计
+- 调试指南
+- 外部服务集成说明
+
+详细文档索引请查看 [docs/knowledge/README.md](docs/knowledge/README.md)。
+
 ## 语言与代理说明
 
 本文件要求所有协作者与自动化 Agent 在此仓库上下文中永远使用中文交流；即便收到其他语言的输入，也必须转换为中文回复，以确保沟通一致。
